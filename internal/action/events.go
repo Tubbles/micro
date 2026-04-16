@@ -158,6 +158,19 @@ func (m MouseEvent) Name() string {
 	return ""
 }
 
+// eventEscSeq returns the raw escape sequence associated with a tcell
+// event, if any. Upstream tcell no longer exposes EscSeq on the
+// Event interface; only EventKey and EventRaw carry source bytes.
+func eventEscSeq(event tcell.Event) string {
+	switch e := event.(type) {
+	case *tcell.EventKey:
+		return e.EscSeq()
+	case *tcell.EventRaw:
+		return e.EscSeq()
+	}
+	return ""
+}
+
 // ConstructEvent takes a tcell event and returns a micro
 // event. Note that tcell events can't express certain
 // micro events such as key sequences. This function is

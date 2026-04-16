@@ -153,11 +153,11 @@ func (t *TermPane) HandleEvent(event tcell.Event) {
 			clipboard.Write(t.GetSelection(t.GetView().Width), clipboard.ClipboardReg)
 			InfoBar.Message("Copied selection to clipboard")
 		} else if t.Status != shell.TTDone {
-			t.WriteString(event.EscSeq())
+			t.WriteString(eventEscSeq(event))
 		}
 	} else if _, ok := event.(*tcell.EventPaste); ok {
 		if t.Status != shell.TTDone {
-			t.WriteString(event.EscSeq())
+			t.WriteString(eventEscSeq(event))
 		}
 	} else if e, ok := event.(*tcell.EventMouse); !ok || t.State.Mode(terminal.ModeMouseMask) {
 		// t.WriteString(event.EscSeq())
