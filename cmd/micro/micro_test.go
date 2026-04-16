@@ -93,7 +93,8 @@ func startup(args []string) (tcell.SimulationScreen, error) {
 		return nil, err
 	}
 
-	s.InjectResize()
+	w, h := s.Size()
+	s.PostEvent(tcell.NewEventResize(w, h))
 	handleEvent()
 
 	return s, nil
