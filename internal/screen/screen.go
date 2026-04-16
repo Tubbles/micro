@@ -220,7 +220,11 @@ func Init() error {
 		return err
 	}
 
-	Screen.SetPaste(config.GetGlobalOption("paste").(bool))
+	if config.GetGlobalOption("paste").(bool) {
+		Screen.EnablePaste()
+	} else {
+		Screen.DisablePaste()
+	}
 
 	// restore TERM
 	if modifiedTerm {
