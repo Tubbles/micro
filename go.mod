@@ -38,4 +38,4 @@ replace layeh.com/gopher-luar v1.0.11 => github.com/layeh/gopher-luar v1.0.11
 
 go 1.24.0
 
-replace github.com/micro-editor/tcell/v2 => github.com/Tubbles/tcell/v2 v2.2.2-0.20260416231957-1521cce6fbe6
+replace github.com/micro-editor/tcell/v2 => github.com/Tubbles/tcell/v2 v2.2.2-0.20260416232544-c9b506daa482
