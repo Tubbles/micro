@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/Tubbles/tcell/v3"
+	"github.com/Tubbles/tcell/v3/vt"
 	"github.com/micro-editor/micro/v2/internal/config"
 )
 
@@ -217,4 +218,38 @@ func Init() error {
 	Events = Screen.EventQ()
 
 	return nil
+}
+
+// InitMockScreen initializes a terminfo-backed tcell.Screen wired to a
+// vt.MockTerm for use in tests. The returned MockTerm is the test-side
+// handle for injecting keys/mouse/raw-bytes; the tcell.Screen is
+// installed as screen.Screen and its EventQ() is aliased to
+// screen.Events, so the rest of micro drives it unchanged.
+//
+// Uses OptTerm("xterm-256color") to pin terminfo lookup rather than
+// relying on $TERM, which may be unset or "dumb" in CI.
+//
+// This replaces the v2-era InitSimScreen helper: tcell v3 removed
+// SimulationScreen, and vt.MockTerm is the blessed upstream mock.
+// Note that the vt package docstring flags its API as still under
+// development, so test-only use is deliberate.
+func InitMockScreen() (vt.MockTerm, error) {
+	drawChan = make(chan bool, 8)
+
+	mt := vt.NewMockTerm()
+	s, err := tcell.NewTerminfoScreenFromTty(mt, tcell.OptTerm("xterm-256color"))
+	if err != nil {
+		return nil, err
+	}
+	if err := s.Init(); err != nil {
+		return nil, err
+	}
+	Screen = s
+	Events = Screen.EventQ()
+
+	if config.GetGlobalOption("mouse").(bool) {
+		Screen.EnableMouse()
+	}
+
+	return mt, nil
 }
