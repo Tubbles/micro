@@ -476,8 +476,23 @@ func (h *BufPane) HandleEvent(event tcell.Event) {
 		// the payload as a stream of EventKey between EventPaste
 		// Start/End. Accumulate rather than dispatching so plugin
 		// hooks and macro recording fire once at End, not per key.
+		//
+		// tcell v3 promotes control bytes to dedicated Key codes
+		// with empty Str. Map only the three that realistically
+		// appear in clipboard text (TAB, CR, LF) back to their
+		// source bytes; everything else is dropped silently so odd
+		// control chars can't sneak into the buffer.
 		if h.inPaste {
-			h.pasteBuf.WriteString(e.Str())
+			switch e.Key() {
+			case tcell.KeyTab:
+				h.pasteBuf.WriteByte('\t')
+			case tcell.KeyEnter:
+				h.pasteBuf.WriteByte('\r')
+			case tcell.KeyCtrlJ:
+				h.pasteBuf.WriteByte('\n')
+			default:
+				h.pasteBuf.WriteString(e.Str())
+			}
 			break
 		}
 		ke := keyEvent(e)
