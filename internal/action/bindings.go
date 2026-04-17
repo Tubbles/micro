@@ -93,10 +93,6 @@ func BindKey(k, v string, bind func(e Event, a string)) {
 		return
 	}
 
-	if strings.HasPrefix(k, "\x1b") {
-		screen.RegisterRawSeq(k)
-	}
-
 	bind(event, v)
 
 	// switch e := event.(type) {
@@ -218,7 +214,7 @@ modSearch:
 		return KeyEvent{
 			code: tcell.KeyRune,
 			mod:  modifiers,
-			r:    rune(k[0]),
+			str:  k,
 		}, true
 	}
 
@@ -361,10 +357,6 @@ func UnbindKey(k string) error {
 			}
 		}
 
-		if strings.HasPrefix(k, "\x1b") {
-			screen.UnregisterRawSeq(k)
-		}
-
 		defaults := DefaultBindings("buffer")
 		if a, ok := defaults[k]; ok {
 			BindKey(k, a, Binder["buffer"])
@@ -477,7 +469,11 @@ var keyEvents = map[string]tcell.Key{
 	"F62":            tcell.KeyF62,
 	"F63":            tcell.KeyF63,
 	"F64":            tcell.KeyF64,
-	"CtrlSpace":      tcell.KeyCtrlSpace,
+	// NOTE: "CtrlSpace", "CtrlLeftSq", "CtrlBackslash", "CtrlRightSq",
+	// "CtrlCarat", "CtrlUnderscore" were removed by tcell v3 (CHANGESv3.md).
+	// Those bindings now arrive as KeyRune + ModCtrl with the relevant
+	// rune; micro needs a rune+mod binding path to restore them.
+	// Tracked in work/phase-g-future-improvements.md.
 	"CtrlA":          tcell.KeyCtrlA,
 	"CtrlB":          tcell.KeyCtrlB,
 	"CtrlC":          tcell.KeyCtrlC,
@@ -504,11 +500,6 @@ var keyEvents = map[string]tcell.Key{
 	"CtrlX":          tcell.KeyCtrlX,
 	"CtrlY":          tcell.KeyCtrlY,
 	"CtrlZ":          tcell.KeyCtrlZ,
-	"CtrlLeftSq":     tcell.KeyCtrlLeftSq,
-	"CtrlBackslash":  tcell.KeyCtrlBackslash,
-	"CtrlRightSq":    tcell.KeyCtrlRightSq,
-	"CtrlCarat":      tcell.KeyCtrlCarat,
-	"CtrlUnderscore": tcell.KeyCtrlUnderscore,
 	"Tab":            tcell.KeyTab,
 	"Esc":            tcell.KeyEsc,
 	"Escape":         tcell.KeyEscape,
