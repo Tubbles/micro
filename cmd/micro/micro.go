@@ -1,6 +1,7 @@
 package main
 
 import (
+	stderrors "errors"
 	"flag"
 	"fmt"
 	"io"
@@ -450,19 +451,9 @@ func main() {
 		config.SetAutoTime(a)
 	}
 
-	screen.Events = make(chan tcell.Event)
-
-	// Here is the event loop which runs in a separate thread
-	go func() {
-		for {
-			screen.Lock()
-			e := screen.Screen.PollEvent()
-			screen.Unlock()
-			if e != nil {
-				screen.Events <- e
-			}
-		}
-	}()
+	// screen.Events is populated by screen.Init() with the tcell v3
+	// EventQ() channel; the former manual PollEvent goroutine is
+	// no longer needed (tcell v3 drives its own reader loop).
 
 	// clear the drawchan so we don't redraw excessively
 	// if someone requested a redraw before we started displaying
@@ -525,7 +516,7 @@ func DoEvent() {
 	if e, ok := event.(*tcell.EventError); ok {
 		log.Println("tcell event error: ", e.Error())
 
-		if e.Err() == io.EOF {
+		if stderrors.Is(e, io.EOF) {
 			// shutdown due to terminal closing/becoming inaccessible
 			exit(0)
 		}
