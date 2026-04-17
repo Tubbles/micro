@@ -25,7 +25,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/shell"
 	"github.com/micro-editor/micro/v2/internal/util"
-	"github.com/micro-editor/tcell/v2"
+	"github.com/Tubbles/tcell/v3"
 	lua "github.com/yuin/gopher-lua"
 )
 

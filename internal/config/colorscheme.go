@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/micro-editor/tcell/v2"
+	"github.com/Tubbles/tcell/v3"
 )
 
 // DefStyle is Micro's default style

@@ -3,7 +3,7 @@ package config
 import (
 	"testing"
 
-	"github.com/micro-editor/tcell/v2"
+	"github.com/Tubbles/tcell/v3"
 	"github.com/stretchr/testify/assert"
 )
 

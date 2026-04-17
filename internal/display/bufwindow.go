@@ -9,7 +9,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/config"
 	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/util"
-	"github.com/micro-editor/tcell/v2"
+	"github.com/Tubbles/tcell/v3"
 )
 
 // The BufWindow provides a way of displaying a certain section of a buffer.

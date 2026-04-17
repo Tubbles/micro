@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/micro-editor/micro/v2/internal/config"
-	"github.com/micro-editor/tcell/v2"
+	"github.com/Tubbles/tcell/v3"
 )
 
 // Screen is the tcell screen we use to draw to the terminal
