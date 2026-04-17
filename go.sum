@@ -1,5 +1,7 @@
 github.com/Tubbles/tcell/v3 v3.2.1-0.20260417151939-c7dab4904a1c h1:D/Pde5TvHA9CoHoVXDLQhzZ+b70n8en+iftrBr/IBDc=
 github.com/Tubbles/tcell/v3 v3.2.1-0.20260417151939-c7dab4904a1c/go.mod h1:ty8VXYwQ3rYrTaKeRmro33zNxX3/N1rGKJh/AcYRXB8=
+github.com/Tubbles/tcell/v3 v3.2.1-0.20260417161615-8e1c02f60f9f h1:0WmG+szK2gEPSUFWJz3iwA8TMqiy7dMmhyPN7M36y08=
+github.com/Tubbles/tcell/v3 v3.2.1-0.20260417161615-8e1c02f60f9f/go.mod h1:ty8VXYwQ3rYrTaKeRmro33zNxX3/N1rGKJh/AcYRXB8=
 github.com/blang/semver v3.5.1+incompatible h1:cQNTCjp13qL8KC3Nbxr/y2Bqb63oX6wdnnjpJbkM4JQ=
 github.com/blang/semver v3.5.1+incompatible/go.mod h1:kRBLl5iJ+tD4TcOOxsy/0fnwebNt5EWlYSAyrTnjyyk=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=

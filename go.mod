@@ -1,7 +1,7 @@
 module github.com/micro-editor/micro/v2
 
 require (
-	github.com/Tubbles/tcell/v3 v3.2.1-0.20260417151939-c7dab4904a1c
+	github.com/Tubbles/tcell/v3 v3.2.1-0.20260417161615-8e1c02f60f9f
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/dustin/go-humanize v1.0.0
 	github.com/go-errors/errors v1.0.1
