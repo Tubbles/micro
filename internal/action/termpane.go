@@ -131,6 +131,41 @@ func (t *TermPane) Unsplit() {
 	MainTab().SetActive(len(MainTab().Panes) - 1)
 }
 
+// normalizedTermKey returns the legacy KeyCtrl* value for a Ctrl+<letter>
+// event even when it arrived via the CSI-u keyboard protocol as
+// KeyRune+ModCtrl+single-letter-Str. For any other event it returns
+// e.Key() unchanged. Child shells and readline speak the legacy byte
+// protocol, so this lets termpane's Ctrl+letter checks and byte
+// forwarding match regardless of the outer terminal's encoding.
+func normalizedTermKey(e *tcell.EventKey) tcell.Key {
+	if e.Key() != tcell.KeyRune || e.Modifiers() != tcell.ModCtrl {
+		return e.Key()
+	}
+	s := e.Str()
+	if len(s) != 1 {
+		return e.Key()
+	}
+	b := s[0]
+	switch {
+	case b >= 'a' && b <= 'z':
+		return tcell.KeyCtrlA + tcell.Key(b-'a')
+	case b >= 'A' && b <= 'Z':
+		return tcell.KeyCtrlA + tcell.Key(b-'A')
+	}
+	return e.Key()
+}
+
+// termPtyBytes returns the byte sequence to forward to the child pty for
+// a key event. Ctrl+<letter> combinations (whether legacy or CSI-u on
+// the input side) become their single legacy byte; everything else falls
+// through to the raw source escape stamped on the event.
+func termPtyBytes(e *tcell.EventKey, nk tcell.Key) string {
+	if nk >= tcell.KeyCtrlA && nk <= tcell.KeyCtrlZ {
+		return string([]byte{byte(nk) - 0x40})
+	}
+	return eventEscSeq(e)
+}
+
 // HandleEvent handles a tcell event by forwarding it to the terminal emulator
 // If the event is a mouse event and the program running in the emulator
 // does not have mouse support, the emulator will support selections and
@@ -176,19 +211,20 @@ func (t *TermPane) HandleEvent(event tcell.Event) {
 			return
 		}
 
+		nk := normalizedTermKey(e)
 		if t.Status == shell.TTDone {
-			switch e.Key() {
+			switch nk {
 			case tcell.KeyEscape, tcell.KeyCtrlQ, tcell.KeyEnter:
 				t.Close()
 				t.Quit()
 			default:
 			}
 		}
-		if e.Key() == tcell.KeyCtrlC && t.HasSelection() {
+		if nk == tcell.KeyCtrlC && t.HasSelection() {
 			clipboard.Write(t.GetSelection(t.GetView().Width), clipboard.ClipboardReg)
 			InfoBar.Message("Copied selection to clipboard")
 		} else if t.Status != shell.TTDone {
-			t.WriteString(eventEscSeq(event))
+			t.WriteString(termPtyBytes(e, nk))
 		}
 	} else if e, ok := event.(*tcell.EventMouse); !ok || t.State.Mode(terminal.ModeMouseMask) {
 		// t.WriteString(event.EscSeq())
