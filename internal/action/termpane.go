@@ -3,13 +3,14 @@ package action
 import (
 	"errors"
 	"runtime"
+	"strings"
 
+	"github.com/Tubbles/tcell/v3"
 	"github.com/micro-editor/micro/v2/internal/clipboard"
 	"github.com/micro-editor/micro/v2/internal/config"
 	"github.com/micro-editor/micro/v2/internal/display"
 	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/shell"
-	"github.com/Tubbles/tcell/v3"
 	"github.com/micro-editor/terminal"
 )
 
@@ -57,6 +58,17 @@ type TermPane struct {
 	mouseReleased bool
 	id            uint64
 	tab           *Tab
+
+	// pasteBuf accumulates the bracketed-paste frame (opening
+	// \x1b[200~, per-key source bytes, closing \x1b[201~) between
+	// EventPaste{Start} and EventPaste{End}. tcell v3 no longer
+	// delivers paste payload via EventPaste.Text(); it streams
+	// EventKey events between Start and End. We reassemble them
+	// and forward the whole frame to the pty as one write so the
+	// child shell's own bracketed-paste detection fires and skips
+	// alias expansion, readline edit, and completion.
+	pasteBuf strings.Builder
+	inPaste  bool
 }
 
 func NewTermPane(x, y, w, h int, t *shell.Terminal, id uint64, tab *Tab) (*TermPane, error) {
@@ -124,7 +136,30 @@ func (t *TermPane) Unsplit() {
 // does not have mouse support, the emulator will support selections and
 // copy-paste
 func (t *TermPane) HandleEvent(event tcell.Event) {
+	if ep, ok := event.(*tcell.EventPaste); ok {
+		if t.Status == shell.TTDone {
+			return
+		}
+		if ep.Start() {
+			t.pasteBuf.Reset()
+			t.pasteBuf.WriteString("\x1b[200~")
+			t.inPaste = true
+		} else {
+			t.pasteBuf.WriteString("\x1b[201~")
+			t.WriteString(t.pasteBuf.String())
+			t.pasteBuf.Reset()
+			t.inPaste = false
+		}
+		return
+	}
+
 	if e, ok := event.(*tcell.EventKey); ok {
+		if t.inPaste {
+			if t.Status != shell.TTDone {
+				t.pasteBuf.WriteString(eventEscSeq(e))
+			}
+			return
+		}
 		ke := keyEvent(e)
 		action, more := TermBindings.NextEvent(ke, nil)
 
@@ -153,10 +188,6 @@ func (t *TermPane) HandleEvent(event tcell.Event) {
 			clipboard.Write(t.GetSelection(t.GetView().Width), clipboard.ClipboardReg)
 			InfoBar.Message("Copied selection to clipboard")
 		} else if t.Status != shell.TTDone {
-			t.WriteString(eventEscSeq(event))
-		}
-	} else if _, ok := event.(*tcell.EventPaste); ok {
-		if t.Status != shell.TTDone {
 			t.WriteString(eventEscSeq(event))
 		}
 	} else if e, ok := event.(*tcell.EventMouse); !ok || t.State.Mode(terminal.ModeMouseMask) {
