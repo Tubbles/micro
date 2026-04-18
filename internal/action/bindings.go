@@ -15,7 +15,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/config"
 	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/util"
-	"github.com/micro-editor/tcell/v2"
+	"github.com/Tubbles/tcell/v3"
 )
 
 var Binder = map[string]func(e Event, action string){
@@ -91,10 +91,6 @@ func BindKey(k, v string, bind func(e Event, a string)) {
 	if err != nil {
 		screen.TermMessage(err)
 		return
-	}
-
-	if strings.HasPrefix(k, "\x1b") {
-		screen.RegisterRawSeq(k)
 	}
 
 	bind(event, v)
@@ -174,17 +170,32 @@ modSearch:
 		return KeyEvent{}, false
 	}
 
-	// Control is handled in a special way, since the terminal sends explicitly
-	// marked escape sequences for control keys
-	// We should check for Control keys first
+	// When Ctrl is one of the modifiers, two things to handle:
+	//   1. The historical CtrlSpace / CtrlLeftSq / CtrlBackslash /
+	//      CtrlRightSq / CtrlCarat / CtrlUnderscore aliases. tcell v3
+	//      dropped the matching Key constants, so route them through
+	//      ctrlNameAliases to the rune+mod path below.
+	//   2. tcell's NewEventKey only folds {KeyRune, letter, ModCtrl}
+	//      back to a KeyCtrlX constant when mod == ModCtrl exactly
+	//      (key.go:282-291). So return the KeyCtrlX form only in that
+	//      case; for Ctrl+Shift+letter / Ctrl+Alt+letter / Ctrl+rune,
+	//      kitty CSI-u and the legacy paths both deliver the event as
+	//      {KeyRune, str, mod} and we fall through to the rune branch.
 	if modifiers&tcell.ModCtrl != 0 {
-		// see if the key is in bindingKeys with the Ctrl prefix.
-		k = string(unicode.ToUpper(rune(k[0]))) + k[1:]
-		if code, ok := keyEvents["Ctrl"+k]; ok {
-			return KeyEvent{
-				code: code,
-				mod:  modifiers,
-			}, true
+		if r, ok := ctrlNameAliases[k]; ok {
+			k = string(r)
+		} else {
+			// Allow Ctrl-q / Ctrl-Q / Ctrl-up / Ctrl-Up to be written
+			// either way.
+			k = string(unicode.ToUpper(rune(k[0]))) + k[1:]
+		}
+		if modifiers == tcell.ModCtrl {
+			if code, ok := keyEvents["Ctrl"+k]; ok {
+				return KeyEvent{
+					code: code,
+					mod:  modifiers,
+				}, true
+			}
 		}
 	}
 
@@ -215,10 +226,19 @@ modSearch:
 
 	// If we were given one character, then we've got a rune.
 	if len(k) == 1 {
+		str := k
+		// Both kitty's CSI-u disambiguate path (which encodes the
+		// unshifted base keycode + modifier mask) and tcell's legacy
+		// byte-path normalisation in NewEventKey deliver lowercase
+		// letters when Ctrl is held. Lowercase the bound rune so
+		// CtrlShiftP matches the "p" that kitty actually sends.
+		if modifiers&tcell.ModCtrl != 0 {
+			str = strings.ToLower(str)
+		}
 		return KeyEvent{
 			code: tcell.KeyRune,
 			mod:  modifiers,
-			r:    rune(k[0]),
+			str:  str,
 		}, true
 	}
 
@@ -361,10 +381,6 @@ func UnbindKey(k string) error {
 			}
 		}
 
-		if strings.HasPrefix(k, "\x1b") {
-			screen.UnregisterRawSeq(k)
-		}
-
 		defaults := DefaultBindings("buffer")
 		if a, ok := defaults[k]; ok {
 			BindKey(k, a, Binder["buffer"])
@@ -378,6 +394,23 @@ func UnbindKey(k string) error {
 		return writeFile(filename, txt)
 	}
 	return e
+}
+
+// ctrlNameAliases lets bindings.json keep using the historical long
+// names (CtrlSpace, CtrlUnderscore, ...) that tcell v3 dropped as
+// dedicated Key constants. Inside the Ctrl branch of findSingleEvent
+// these are rewritten to the corresponding rune so they fall through
+// to the rune+mod emission path.
+//
+// Note: CtrlLeftSq parses but never fires, because tcell consumes
+// 0x1B as the start of an escape sequence. That matches v2 behaviour.
+var ctrlNameAliases = map[string]rune{
+	"Space":      ' ',
+	"LeftSq":     '[',
+	"Backslash":  '\\',
+	"RightSq":    ']',
+	"Carat":      '^',
+	"Underscore": '_',
 }
 
 var mouseEvents = map[string]tcell.ButtonMask{
@@ -477,7 +510,11 @@ var keyEvents = map[string]tcell.Key{
 	"F62":            tcell.KeyF62,
 	"F63":            tcell.KeyF63,
 	"F64":            tcell.KeyF64,
-	"CtrlSpace":      tcell.KeyCtrlSpace,
+	// CtrlSpace / CtrlLeftSq / CtrlBackslash / CtrlRightSq / CtrlCarat /
+	// CtrlUnderscore are intentionally absent: tcell v3 dropped the
+	// matching Key constants. findSingleEvent translates those names
+	// via ctrlNameAliases (above) and emits {KeyRune, char, ModCtrl}
+	// instead, which is the form tcell actually delivers under v3.
 	"CtrlA":          tcell.KeyCtrlA,
 	"CtrlB":          tcell.KeyCtrlB,
 	"CtrlC":          tcell.KeyCtrlC,
@@ -504,11 +541,6 @@ var keyEvents = map[string]tcell.Key{
 	"CtrlX":          tcell.KeyCtrlX,
 	"CtrlY":          tcell.KeyCtrlY,
 	"CtrlZ":          tcell.KeyCtrlZ,
-	"CtrlLeftSq":     tcell.KeyCtrlLeftSq,
-	"CtrlBackslash":  tcell.KeyCtrlBackslash,
-	"CtrlRightSq":    tcell.KeyCtrlRightSq,
-	"CtrlCarat":      tcell.KeyCtrlCarat,
-	"CtrlUnderscore": tcell.KeyCtrlUnderscore,
 	"Tab":            tcell.KeyTab,
 	"Esc":            tcell.KeyEsc,
 	"Escape":         tcell.KeyEscape,

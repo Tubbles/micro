@@ -6,7 +6,7 @@ import (
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/display"
-	"github.com/micro-editor/tcell/v2"
+	"github.com/Tubbles/tcell/v3"
 )
 
 type RawPane struct {
@@ -44,7 +44,7 @@ func (h *RawPane) HandleEvent(event tcell.Event) {
 		h.Buf.Insert(h.Cursor.Loc, fmt.Sprintf(": %s", e.Name()))
 	}
 
-	h.Buf.Insert(h.Cursor.Loc, fmt.Sprintf(": %q\n", event.EscSeq()))
+	h.Buf.Insert(h.Cursor.Loc, fmt.Sprintf(": %q\n", eventEscSeq(event)))
 
 	h.Relocate()
 }
