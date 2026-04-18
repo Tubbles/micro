@@ -108,6 +108,39 @@ func (h *BufPane) MousePress(e *tcell.EventMouse) bool {
 	return true
 }
 
+// MouseSelectTo extends the current selection (or starts a new one
+// anchored at the cursor position) to the click location. Intended to
+// be bound to Shift-MouseLeft so users can click to adjust the far end
+// of a selection without losing the anchor.
+func (h *BufPane) MouseSelectTo(e *tcell.EventMouse) bool {
+	b := h.Buf
+	mx, my := e.Position()
+	if my >= h.BufView().Y+h.BufView().Height {
+		return false
+	}
+	mouseLoc := h.LocFromVisual(buffer.Loc{X: mx, Y: my})
+
+	if b.NumCursors() > 1 {
+		b.ClearCursors()
+		h.Relocate()
+		h.Cursor = h.Buf.GetActiveCursor()
+	}
+
+	if !h.Cursor.HasSelection() {
+		h.Cursor.OrigSelection[0] = h.Cursor.Loc
+	}
+	h.Cursor.Loc = mouseLoc
+	h.Cursor.SelectTo(mouseLoc)
+
+	h.DoubleClick = false
+	h.TripleClick = false
+	h.lastClickTime = time.Now()
+	h.Cursor.StoreVisualX()
+	h.lastLoc = mouseLoc
+	h.Relocate()
+	return true
+}
+
 func (h *BufPane) MouseDrag(e *tcell.EventMouse) bool {
 	mx, my := e.Position()
 	// ignore drag on the status line
