@@ -8,7 +8,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/display"
 	"github.com/micro-editor/micro/v2/internal/info"
 	"github.com/micro-editor/micro/v2/internal/util"
-	"github.com/micro-editor/tcell/v2"
+	"github.com/Tubbles/tcell/v3"
 )
 
 type InfoKeyAction func(*InfoPane)
@@ -91,8 +91,9 @@ func (h *InfoPane) HandleEvent(event tcell.Event) {
 		done := h.DoKeyEvent(ke)
 		hasYN := h.HasYN
 		if e.Key() == tcell.KeyRune && hasYN {
-			y := e.Rune() == 'y' || e.Rune() == 'Y'
-			n := e.Rune() == 'n' || e.Rune() == 'N'
+			s := e.Str()
+			y := s == "y" || s == "Y"
+			n := s == "n" || s == "N"
 			if y || n {
 				h.YNResp = y
 				h.DonePrompt(false)
@@ -102,7 +103,7 @@ func (h *InfoPane) HandleEvent(event tcell.Event) {
 			}
 		}
 		if e.Key() == tcell.KeyRune && !done && !hasYN {
-			h.DoRuneInsert(e.Rune())
+			h.DoRuneInsert(e.Str())
 			done = true
 		}
 		if done && h.HasPrompt && !hasYN {
