@@ -329,6 +329,7 @@ Suspend (Unix only)
 ScrollUp
 ScrollDown
 SpawnMultiCursor
+SpawnMultiCursorAll
 SpawnMultiCursorUp
 SpawnMultiCursorDown
 SpawnMultiCursorSelect
