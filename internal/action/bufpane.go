@@ -890,6 +890,7 @@ var BufKeyActions = map[string]BufKeyAction{
 	"ScrollUp":                  (*BufPane).ScrollUpAction,
 	"ScrollDown":                (*BufPane).ScrollDownAction,
 	"SpawnMultiCursor":          (*BufPane).SpawnMultiCursor,
+	"SpawnMultiCursorAll":       (*BufPane).SpawnMultiCursorAll,
 	"SpawnMultiCursorUp":        (*BufPane).SpawnMultiCursorUp,
 	"SpawnMultiCursorDown":      (*BufPane).SpawnMultiCursorDown,
 	"SpawnMultiCursorSelect":    (*BufPane).SpawnMultiCursorSelect,
