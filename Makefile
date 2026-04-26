@@ -44,6 +44,9 @@ fetch-tags:
 generate:
 	GOOS=$(shell go env GOHOSTOS) GOARCH=$(shell go env GOHOSTARCH) go generate ./runtime
 
+stubs:
+	cd tools/genstubs && go run . -repo $(CURDIR) -out runtime/meta/library
+
 testgen:
 	mkdir -p tools/vscode-tests
 	cd tools/vscode-tests && \
