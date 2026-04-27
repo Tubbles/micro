@@ -136,14 +136,20 @@ func (c *typeCloser) process(t types.Type) {
 				continue
 			}
 			if f.Embedded() {
-				// Track for @class inheritance, but also flatten.
+				// Track for @class inheritance, but also flatten. Only
+				// record the embedded name when the type is in an
+				// allowed package; otherwise the inheritance line ends
+				// up referencing a class we never emit, and LuaLS
+				// flags it as undefined.
 				ft := f.Type()
 				if pt, ok := ft.(*types.Pointer); ok {
 					ft = pt.Elem()
 				}
 				if nt, ok := ft.(*types.Named); ok {
-					rec.embedded = append(rec.embedded, nt.Obj().Name())
-					c.seed(ft)
+					if nt.Obj().Pkg() != nil && isAllowedPackage(nt.Obj().Pkg().Path()) {
+						rec.embedded = append(rec.embedded, nt.Obj().Name())
+						c.seed(ft)
+					}
 				}
 				continue
 			}
