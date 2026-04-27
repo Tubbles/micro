@@ -1350,6 +1350,43 @@ func (h *BufPane) JumpToPrevMessage() bool {
 	return true
 }
 
+// ShowFullMessage opens a transient buffer in a new tab listing every
+// Message currently under the cursor in full, with severity prefix,
+// owner, and Loc range. Useful when the info bar truncated a long
+// diagnostic.
+func (h *BufPane) ShowFullMessage() bool {
+	cur := h.Cursor.Loc
+	under := h.Buf.MessagesUnderLoc(cur)
+	if len(under) == 0 {
+		InfoBar.Message("No messages here")
+		return false
+	}
+	var sb strings.Builder
+	for i, m := range under {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString(fmt.Sprintf("%s [%s] (%d:%d-%d:%d): %s",
+			messageSeverityLabel(m.Kind), m.Owner,
+			m.Start.Y+1, m.Start.X+1, m.End.Y+1, m.End.X+1, m.Msg))
+	}
+	buf := buffer.NewBufferFromString(sb.String(), "Messages here", buffer.BTScratch)
+	h.AddTab()
+	MainTab().CurPane().OpenBuffer(buf)
+	return true
+}
+
+func messageSeverityLabel(k buffer.MsgType) string {
+	switch k {
+	case buffer.MTError:
+		return "[E]"
+	case buffer.MTWarning:
+		return "[W]"
+	default:
+		return "[I]"
+	}
+}
+
 // Undo undoes the last action
 func (h *BufPane) Undo() bool {
 	if !h.Buf.Undo() {
