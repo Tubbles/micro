@@ -2,7 +2,7 @@
 -- Regenerate with: make stubs
 ---@meta _
 
----@class Job : Cmd
+---@class Job
 ---@field Stdin any
 local Job = {}
 
