@@ -1295,6 +1295,61 @@ func (h *BufPane) DiffPrevious() bool {
 	return true
 }
 
+// JumpToNextMessage advances to the next under-cursor Message in document
+// order. When multiple messages overlap the cursor, successive presses
+// cycle through them in slice order without moving the cursor; once at the
+// last, the cursor moves to the next message anchor in the buffer and the
+// info bar shows the first message there. Wraps to the first message
+// overall when called past the last anchor.
+func (h *BufPane) JumpToNextMessage() bool {
+	if len(h.Buf.Messages) == 0 {
+		InfoBar.Message("No messages in buffer")
+		return false
+	}
+	cur := h.Cursor.Loc
+	under := h.Buf.MessagesUnderLoc(cur)
+	if h.activeMsgIdx+1 < len(under) {
+		h.activeMsgIdx++
+		return true
+	}
+	next, ok := smallestStartGT(h.Buf.Messages, cur)
+	if !ok {
+		next = smallestStart(h.Buf.Messages)
+		InfoBar.Message("Wrapped to first message")
+	}
+	h.pendingMsgIdx = 0
+	h.Cursor.GotoLoc(next)
+	h.Relocate()
+	return true
+}
+
+// JumpToPrevMessage is the mirror of JumpToNextMessage.
+func (h *BufPane) JumpToPrevMessage() bool {
+	if len(h.Buf.Messages) == 0 {
+		InfoBar.Message("No messages in buffer")
+		return false
+	}
+	cur := h.Cursor.Loc
+	if h.activeMsgIdx > 0 {
+		h.activeMsgIdx--
+		return true
+	}
+	prev, ok := largestStartLT(h.Buf.Messages, cur)
+	if !ok {
+		prev = largestStart(h.Buf.Messages)
+		InfoBar.Message("Wrapped to last message")
+	}
+	prevUnder := h.Buf.MessagesUnderLoc(prev)
+	if len(prevUnder) > 0 {
+		h.pendingMsgIdx = len(prevUnder) - 1
+	} else {
+		h.pendingMsgIdx = 0
+	}
+	h.Cursor.GotoLoc(prev)
+	h.Relocate()
+	return true
+}
+
 // Undo undoes the last action
 func (h *BufPane) Undo() bool {
 	if !h.Buf.Undo() {
