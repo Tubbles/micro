@@ -74,10 +74,9 @@ func emitAliases(cfg *config, actions []string) error {
 	}
 	b.WriteString("\n")
 
-	// Buffer-type and message-type aliases — they're modeled as integer
-	// enums on the Go side. The constants themselves are emitted as
-	// fields on the relevant module classes.
-	b.WriteString("---@alias BufType integer\n")
+	// Integer-enum aliases for the BT*/MT*/RT* constants. BufType is
+	// deliberately omitted: it's a struct on the Go side, and the
+	// closure walker emits a proper @class for it.
 	b.WriteString("---@alias MessageType integer\n")
 	b.WriteString("---@alias RTFiletype integer\n")
 	b.WriteString("---@alias OptionValue string|number|boolean\n")

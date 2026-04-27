@@ -2,8 +2,7 @@
 -- Regenerate with: make stubs
 ---@meta _
 
--- Also flattens (Go embeds): UIWindow
----@class Tab : Node
+---@class Tab : UIWindow
 ---@field Panes Pane[]
 local Tab = {}
 

@@ -135,7 +135,6 @@
 ---|"WordLeft"
 ---|"WordRight"
 
----@alias BufType integer
 ---@alias MessageType integer
 ---@alias RTFiletype integer
 ---@alias OptionValue string|number|boolean
