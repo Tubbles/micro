@@ -934,6 +934,7 @@ var BufKeyActions = map[string]BufKeyAction{
 	"DiffPrevious":              (*BufPane).DiffPrevious,
 	"JumpToNextMessage":         (*BufPane).JumpToNextMessage,
 	"JumpToPrevMessage":         (*BufPane).JumpToPrevMessage,
+	"ShowFullMessage":           (*BufPane).ShowFullMessage,
 	"Center":                    (*BufPane).Center,
 	"Undo":                      (*BufPane).Undo,
 	"Redo":                      (*BufPane).Redo,
