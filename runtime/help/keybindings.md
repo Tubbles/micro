@@ -325,6 +325,8 @@ VSplit
 HSplit
 MovePaneToNext
 MovePaneToPrevious
+NextLeafSplit
+PreviousLeafSplit
 ToggleMacro
 PlayMacro
 Suspend (Unix only)
@@ -373,6 +375,15 @@ in tree (display) order. Three cases drive the behavior:
 
 The buffer (cursor, undo history, unsaved edits, viewport) and, for
 terminal panes, the running pty are preserved across moves.
+
+`NextLeafSplit` and `PreviousLeafSplit` are read-only counterparts that
+move focus through the same tree-order sequence inside the current tab,
+without restructuring anything. They return false at the edge of the
+tab, so they can be chained with `NextTab`/`PreviousTab` for a wrap to
+the adjacent tab. For example: `"Alt-Right": "NextLeafSplit|NextTab"`.
+Unlike the existing `NextSplit` and `PreviousSplit`, which step by
+`tab.Panes` slice index (creation order), these walk the split tree
+and so produce the same ordering as `MovePaneToNext`.
 
 You can also bind some mouse actions (these must be bound to mouse buttons)
 

@@ -873,6 +873,8 @@ var BufKeyActions = map[string]BufKeyAction{
 	"HSplit":                    (*BufPane).HSplitAction,
 	"MovePaneToNext":            (*BufPane).MovePaneToNext,
 	"MovePaneToPrevious":        (*BufPane).MovePaneToPrevious,
+	"NextLeafSplit":             (*BufPane).NextLeafSplit,
+	"PreviousLeafSplit":         (*BufPane).PreviousLeafSplit,
 	"ToggleMacro":               (*BufPane).ToggleMacro,
 	"PlayMacro":                 (*BufPane).PlayMacro,
 	"Suspend":                   (*BufPane).Suspend,
