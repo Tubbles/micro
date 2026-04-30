@@ -293,6 +293,19 @@ func (t *TermPane) NextSplit() {
 	t.tab.SetActive(a)
 }
 
+// MovePaneToNext shifts this terminal pane one slot forward through the
+// global pane sequence (see (*BufPane).MovePaneToNext for the full
+// semantics). The running pty is preserved; the pane is moved, not
+// recreated.
+func (t *TermPane) MovePaneToNext() {
+	movePaneInTabList(t.tab, t.tab.GetPane(t.id), +1)
+}
+
+// MovePaneToPrevious is the reverse of MovePaneToNext.
+func (t *TermPane) MovePaneToPrevious() {
+	movePaneInTabList(t.tab, t.tab.GetPane(t.id), -1)
+}
+
 // HandleCommand handles a command for the term pane
 func (t *TermPane) HandleCommand(input string) {
 	InfoBar.Error("Commands are unsupported in term for now")
@@ -300,7 +313,9 @@ func (t *TermPane) HandleCommand(input string) {
 
 // TermKeyActions contains the list of all possible key actions the termpane could execute
 var TermKeyActions = map[string]TermKeyAction{
-	"Exit":        (*TermPane).Exit,
-	"CommandMode": (*TermPane).CommandMode,
-	"NextSplit":   (*TermPane).NextSplit,
+	"Exit":               (*TermPane).Exit,
+	"CommandMode":        (*TermPane).CommandMode,
+	"NextSplit":          (*TermPane).NextSplit,
+	"MovePaneToNext":     (*TermPane).MovePaneToNext,
+	"MovePaneToPrevious": (*TermPane).MovePaneToPrevious,
 }
