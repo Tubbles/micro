@@ -606,6 +606,10 @@ func (h *BufPane) execAction(action BufAction, name string, te *tcell.EventMouse
 		h.Buf.HasSuggestions = false
 	}
 
+	if bigJumpActions[name] {
+		Jumps.Push(h.ID(), h.Buf.SharedBuffer, h.Cursor.Loc)
+	}
+
 	if !h.PluginCB("pre"+name, te) {
 		return false
 	}
@@ -899,6 +903,9 @@ var BufKeyActions = map[string]BufKeyAction{
 	"SkipMultiCursorBack":       (*BufPane).SkipMultiCursorBack,
 	"JumpToMatchingBrace":       (*BufPane).JumpToMatchingBrace,
 	"JumpLine":                  (*BufPane).JumpLine,
+	"JumpBack":                  (*BufPane).JumpBack,
+	"JumpForward":               (*BufPane).JumpForward,
+	"PushJump":                  (*BufPane).PushJump,
 	"Deselect":                  (*BufPane).Deselect,
 	"ClearInfo":                 (*BufPane).ClearInfo,
 	"None":                      (*BufPane).None,
