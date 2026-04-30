@@ -150,6 +150,17 @@ func (t *TabList) Display() {
 }
 
 func (t *TabList) SetActive(a int) {
+	// t.Active() can be stale (point past t.List) when the previously
+	// active tab was just removed, e.g. RemoveTab clamping the active
+	// index, or finalizeAfterMove dropping an emptied source tab.
+	// In that case there is no live "outgoing" tab to record. Push itself
+	// also no-ops under suppression, so we only need the bounds check.
+	cur := t.Active()
+	if cur != a && cur >= 0 && cur < len(t.List) {
+		if bp := t.List[cur].CurPane(); bp != nil {
+			Jumps.Push(bp.ID(), bp.Buf.SharedBuffer, bp.Cursor.Loc)
+		}
+	}
 	t.TabWindow.SetActive(a)
 
 	for i, p := range t.List {
@@ -339,6 +350,15 @@ func (t *Tab) HandleEvent(event tcell.Event) {
 
 // SetActive changes the currently active pane to the specified index
 func (t *Tab) SetActive(i int) {
+	// t.active can be stale (point past the slice) when the previously
+	// active pane was just removed, e.g. Unsplit -> RemovePane -> SetActive.
+	// In that case there is no live "outgoing" pane to record. Push itself
+	// also no-ops under suppression, so we only need the bounds check.
+	if t.active != i && t.active >= 0 && t.active < len(t.Panes) {
+		if bp, ok := t.Panes[t.active].(*BufPane); ok {
+			Jumps.Push(bp.ID(), bp.Buf.SharedBuffer, bp.Cursor.Loc)
+		}
+	}
 	t.active = i
 	for j, p := range t.Panes {
 		if j == i {
