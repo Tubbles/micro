@@ -2087,6 +2087,20 @@ func (h *BufPane) LastSplit() bool {
 	return true
 }
 
+// MovePaneToNext shifts the active pane one slot forward through the
+// global pane sequence (every tab's leaves taken in tree order). It
+// either swaps with the next leaf inside the same tab, hops the pane
+// into the next tab as the leftmost vsplit, or extends the tab list
+// with a fresh tab past the end.
+func (h *BufPane) MovePaneToNext() bool {
+	return movePaneInTabList(h.tab, h.tab.GetPane(h.splitID), +1)
+}
+
+// MovePaneToPrevious is the reverse of MovePaneToNext.
+func (h *BufPane) MovePaneToPrevious() bool {
+	return movePaneInTabList(h.tab, h.tab.GetPane(h.splitID), -1)
+}
+
 var curmacro []any
 var recordingMacro bool
 
