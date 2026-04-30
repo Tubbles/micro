@@ -75,29 +75,10 @@ func (eh *EventHandler) DoTextEvent(t *TextEvent, useUndo bool) {
 	}
 	end := t.Deltas[0].End
 
+	move := func(loc Loc) Loc {
+		return ShiftLoc(loc, start, end, t.EventType, lastnl, textX, eh.buf.LineArray)
+	}
 	for _, c := range eh.cursors {
-		move := func(loc Loc) Loc {
-			if t.EventType == TextEventInsert {
-				if start.Y != loc.Y && loc.GreaterThan(start) {
-					loc.Y += end.Y - start.Y
-				} else if loc.Y == start.Y && loc.GreaterEqual(start) {
-					loc.Y += end.Y - start.Y
-					if lastnl >= 0 {
-						loc.X += textX - start.X
-					} else {
-						loc.X += textX
-					}
-				}
-				return loc
-			} else {
-				if loc.Y != end.Y && loc.GreaterThan(end) {
-					loc.Y -= end.Y - start.Y
-				} else if loc.Y == end.Y && loc.GreaterEqual(end) {
-					loc = loc.MoveLA(-DiffLA(start, end, eh.buf.LineArray), eh.buf.LineArray)
-				}
-				return loc
-			}
-		}
 		c.Loc = move(c.Loc)
 		c.CurSelection[0] = move(c.CurSelection[0])
 		c.CurSelection[1] = move(c.CurSelection[1])
@@ -107,9 +88,56 @@ func (eh *EventHandler) DoTextEvent(t *TextEvent, useUndo bool) {
 		c.StoreVisualX()
 	}
 
+	for _, fn := range OnTextEditListeners {
+		fn(eh.buf, start, end, t.EventType, lastnl, textX)
+	}
+
 	if useUndo {
 		eh.updateTrailingWs(t)
 	}
+}
+
+// ShiftLoc adjusts loc to follow a text event with the given start/end span and
+// type. It is the position-tracking primitive shared between live cursors and
+// any external listener (e.g. the action package's jump list).
+func ShiftLoc(loc, start, end Loc, eventType, lastnl, textX int, la *LineArray) Loc {
+	if eventType == TextEventInsert {
+		if start.Y != loc.Y && loc.GreaterThan(start) {
+			loc.Y += end.Y - start.Y
+		} else if loc.Y == start.Y && loc.GreaterEqual(start) {
+			loc.Y += end.Y - start.Y
+			if lastnl >= 0 {
+				loc.X += textX - start.X
+			} else {
+				loc.X += textX
+			}
+		}
+		return loc
+	}
+	if loc.Y != end.Y && loc.GreaterThan(end) {
+		loc.Y -= end.Y - start.Y
+	} else if loc.Y == end.Y && loc.GreaterEqual(end) {
+		loc = loc.MoveLA(-DiffLA(start, end, la), la)
+	}
+	return loc
+}
+
+// OnTextEditListeners are invoked, in registration order, after each
+// successful single-delta DoTextEvent (Insert / Remove via the Insert,
+// Remove, and undo/redo paths) once the live cursors have been adjusted.
+// Listeners that hold their own Loc values can use the passed parameters
+// with ShiftLoc to keep those values in sync. Multi-delta paths
+// (MultipleReplace and other Execute-direct callers) bypass this hook for
+// the same reason they bypass cursor adjustment, so listeners that care
+// about those paths must hook in elsewhere.
+var OnTextEditListeners []func(b *SharedBuffer, start, end Loc, eventType, lastnl, textX int)
+
+// RegisterOnTextEditListener appends fn to the OnTextEdit pipeline. There
+// is no remove API: listeners are expected to live for the duration of the
+// process. Idempotent calls (registering the same fn twice) will fire it
+// twice; callers must dedupe themselves if that matters.
+func RegisterOnTextEditListener(fn func(b *SharedBuffer, start, end Loc, eventType, lastnl, textX int)) {
+	OnTextEditListeners = append(OnTextEditListeners, fn)
 }
 
 // ExecuteTextEvent runs a text event
