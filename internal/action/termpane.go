@@ -306,6 +306,17 @@ func (t *TermPane) MovePaneToPrevious() {
 	movePaneInTabList(t.tab, t.tab.GetPane(t.id), -1)
 }
 
+// NextLeafSplit moves focus to the next pane in tree (display) order
+// inside the current tab. See (*BufPane).NextLeafSplit for details.
+func (t *TermPane) NextLeafSplit() {
+	nextLeafSplit(t.tab, t.id, +1)
+}
+
+// PreviousLeafSplit is the reverse of NextLeafSplit.
+func (t *TermPane) PreviousLeafSplit() {
+	nextLeafSplit(t.tab, t.id, -1)
+}
+
 // HandleCommand handles a command for the term pane
 func (t *TermPane) HandleCommand(input string) {
 	InfoBar.Error("Commands are unsupported in term for now")
@@ -318,4 +329,6 @@ var TermKeyActions = map[string]TermKeyAction{
 	"NextSplit":          (*TermPane).NextSplit,
 	"MovePaneToNext":     (*TermPane).MovePaneToNext,
 	"MovePaneToPrevious": (*TermPane).MovePaneToPrevious,
+	"NextLeafSplit":      (*TermPane).NextLeafSplit,
+	"PreviousLeafSplit":  (*TermPane).PreviousLeafSplit,
 }

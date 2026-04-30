@@ -6,6 +6,33 @@ import (
 	"github.com/micro-editor/micro/v2/internal/views"
 )
 
+// nextLeafSplit moves the active pane within srcTab to the leaf one slot
+// forward (dir=+1) or backward (dir=-1) in tree (display) order.
+// Returns false at the edges of the tab so callers can chain with a
+// tab-switch fallback.
+func nextLeafSplit(srcTab *Tab, currentID uint64, dir int) bool {
+	if srcTab == nil {
+		return false
+	}
+	leaves := collectLeafIDs(srcTab.Node)
+	cur := -1
+	for i, id := range leaves {
+		if id == currentID {
+			cur = i
+			break
+		}
+	}
+	if cur < 0 {
+		return false
+	}
+	target := cur + dir
+	if target < 0 || target >= len(leaves) {
+		return false
+	}
+	srcTab.SetActive(srcTab.GetPane(leaves[target]))
+	return true
+}
+
 // movePaneInTabList shifts the active pane one slot forward (dir=+1) or
 // backward (dir=-1) through the global pane sequence: every tab's leaves
 // taken in tree-order, concatenated. Three cases drive the behavior.

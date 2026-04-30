@@ -2101,6 +2101,20 @@ func (h *BufPane) MovePaneToPrevious() bool {
 	return movePaneInTabList(h.tab, h.tab.GetPane(h.splitID), -1)
 }
 
+// NextLeafSplit moves focus to the next pane in tree (display) order
+// inside the current tab. Returns false at the last leaf so the caller
+// can chain with a tab-switch fallback. Unlike NextSplit, which steps
+// by tab.Panes slice index (creation order), this walks the split
+// tree, matching the ordering used by MovePaneToNext.
+func (h *BufPane) NextLeafSplit() bool {
+	return nextLeafSplit(h.tab, h.splitID, +1)
+}
+
+// PreviousLeafSplit is the reverse of NextLeafSplit.
+func (h *BufPane) PreviousLeafSplit() bool {
+	return nextLeafSplit(h.tab, h.splitID, -1)
+}
+
 var curmacro []any
 var recordingMacro bool
 
