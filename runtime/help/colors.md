@@ -198,6 +198,7 @@ Here is a list of the colorscheme groups that you can use:
 * error-message (Color of error messages in the bottom line of the screen)
 * match-brace (Color of matching brackets when `matchbracestyle` is set to `highlight`)
 * hlsearch (Color of highlighted search results when `hlsearch` is enabled)
+* hlselection (Color of highlighted selection / word-under-cursor matches when `hlselection` is enabled. Falls back to `hlsearch` when not defined.)
 * tab-error (Color of tab vs space errors when `hltaberrors` is enabled)
 * trailingws (Color of trailing whitespaces when `hltrailingws` is enabled)
 
