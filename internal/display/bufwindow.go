@@ -219,6 +219,11 @@ func (w *BufWindow) Clear() {
 // Returns true if the window location is moved
 func (w *BufWindow) Relocate() bool {
 	b := w.Buf
+	// Refresh the hlselection match query before any rendering. Relocate
+	// is the natural single-point hook: every cursor move, selection
+	// change, and post-edit redraw funnels through here, so the query
+	// stays in sync without per-action wiring.
+	b.UpdateHLSelection()
 	height := w.bufHeight
 	ret := false
 	activeC := w.Buf.GetActiveCursor()
@@ -622,9 +627,19 @@ func (w *BufWindow) displayBuffer() {
 			}
 
 			if highlight {
+				hlPainted := false
 				if w.Buf.HighlightSearch && w.Buf.SearchMatch(bloc) {
 					style = config.DefStyle.Reverse(true)
 					if s, ok := config.Colorscheme["hlsearch"]; ok {
+						style = s
+					}
+					hlPainted = true
+				}
+				if !hlPainted && w.Buf.HLSelection && w.Buf.HLSelectionAt(bloc) {
+					style = config.DefStyle.Reverse(true)
+					if s, ok := config.Colorscheme["hlselection"]; ok {
+						style = s
+					} else if s, ok := config.Colorscheme["hlsearch"]; ok {
 						style = s
 					}
 				}
