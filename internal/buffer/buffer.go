@@ -198,6 +198,7 @@ func (b *SharedBuffer) MarkModified(start, end int) {
 
 	for i := start; i <= end; i++ {
 		b.LineArray.invalidateSearchMatches(i)
+		b.LineArray.invalidateHLSelection(i)
 	}
 }
 
