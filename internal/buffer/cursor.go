@@ -362,6 +362,33 @@ func (c *Cursor) SelectWord() {
 	c.Loc = c.CurSelection[1]
 }
 
+// WordUnder returns the word the cursor is currently inside, without
+// mutating the cursor or its selection. Returns (word, true) when the
+// cursor sits on a word character, ("", false) otherwise (empty line,
+// whitespace, or punctuation).
+func (c *Cursor) WordUnder() (string, bool) {
+	if len(c.buf.LineBytes(c.Y)) == 0 {
+		return "", false
+	}
+	if !util.IsWordChar(c.RuneUnder(c.X)) {
+		return "", false
+	}
+
+	forward, backward := c.X, c.X
+
+	for backward > 0 && util.IsWordChar(c.RuneUnder(backward-1)) {
+		backward--
+	}
+
+	lineLen := util.CharacterCount(c.buf.LineBytes(c.Y)) - 1
+	for forward < lineLen && util.IsWordChar(c.RuneUnder(forward+1)) {
+		forward++
+	}
+
+	end := Loc{forward, c.Y}.Move(1, c.buf)
+	return string(c.buf.Substr(Loc{backward, c.Y}, end)), true
+}
+
 // AddWordToSelection adds the word the cursor is currently on
 // to the selection
 func (c *Cursor) AddWordToSelection() {
