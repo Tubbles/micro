@@ -636,11 +636,16 @@ func (w *BufWindow) displayBuffer() {
 					hlPainted = true
 				}
 				if !hlPainted && w.Buf.HLSelection && w.Buf.HLSelectionAt(bloc) {
-					style = config.DefStyle.Reverse(true)
 					if s, ok := config.Colorscheme["hlselection"]; ok {
-						style = s
+						// Overlay merge: keep the syntax-token style on
+						// dimensions the directive did not specify, so a
+						// `,bg`-only or attr-only color-link does not
+						// repaint the underlying foreground or attrs.
+						style = config.MergeOverlay(style, s, config.ColorschemeMasks["hlselection"])
 					} else if s, ok := config.Colorscheme["hlsearch"]; ok {
 						style = s
+					} else {
+						style = config.DefStyle.Reverse(true)
 					}
 				}
 
