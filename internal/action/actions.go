@@ -1273,6 +1273,77 @@ func (h *BufPane) FindPrevious() bool {
 	return true
 }
 
+// FindNextWord searches forwards for the word currently under the
+// cursor (or the active single-line selection text), without opening a
+// prompt. The query is picked using the same logic as `hlselection`, so
+// the cursor jumps to one of the highlighted matches by construction.
+// Returns false (no-op) when the cursor is on whitespace / punctuation
+// with no selection, or when the selection spans multiple lines.
+func (h *BufPane) FindNextWord() bool {
+	return h.findWord(true)
+}
+
+// FindPreviousWord is the backward counterpart of FindNextWord.
+func (h *BufPane) FindPreviousWord() bool {
+	return h.findWord(false)
+}
+
+func (h *BufPane) findWord(down bool) bool {
+	query, wholeWord, span, ok := h.Cursor.WordOrSelection()
+	if !ok {
+		return false
+	}
+
+	pattern := query
+	useRegex := false
+	if wholeWord {
+		// Mirror line_array.go HLSelectionMatch: regex with
+		// QuoteMeta'd query wrapped in \b…\b, so word-mode finds
+		// exactly what hlselection highlights.
+		pattern = `\b` + regexp.QuoteMeta(query) + `\b`
+		useRegex = true
+	}
+
+	// Mirror FindNext: when there is a selection, search past its far
+	// end so we don't immediately re-match the current selection.
+	searchLoc := h.Cursor.Loc
+	if h.Cursor.HasSelection() {
+		if down {
+			searchLoc = h.Cursor.CurSelection[1]
+		} else {
+			searchLoc = h.Cursor.CurSelection[0]
+		}
+	}
+
+	match, found, err := h.Buf.FindNext(pattern, h.Buf.Start(), h.Buf.End(), searchLoc, down, useRegex)
+	if err != nil {
+		InfoBar.Error(err)
+		return false
+	}
+	// If the first hit is the very span the cursor sits on (cursor at
+	// start of the word in word-mode, or wrap-around back onto the
+	// current selection), advance once and re-search so the action
+	// always moves to a *different* occurrence when one exists.
+	if found && match == span {
+		nextFrom := match[1]
+		if !down {
+			nextFrom = match[0]
+		}
+		match, found, _ = h.Buf.FindNext(pattern, h.Buf.Start(), h.Buf.End(), nextFrom, down, useRegex)
+	}
+
+	if found {
+		h.Cursor.SetSelectionStart(match[0])
+		h.Cursor.SetSelectionEnd(match[1])
+		h.Cursor.OrigSelection[0] = h.Cursor.CurSelection[0]
+		h.Cursor.OrigSelection[1] = h.Cursor.CurSelection[1]
+		h.GotoLoc(h.Cursor.CurSelection[1])
+	} else {
+		h.Cursor.ResetSelection()
+	}
+	return true
+}
+
 // DiffNext searches forward until the beginning of the next block of diffs
 func (h *BufPane) DiffNext() bool {
 	cur := h.Cursor.Loc.Y
