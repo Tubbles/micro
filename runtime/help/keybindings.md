@@ -260,6 +260,8 @@ Find
 FindLiteral
 FindNext
 FindPrevious
+FindNextWord
+FindPreviousWord
 DiffNext
 DiffPrevious
 Center
@@ -353,6 +355,14 @@ consecutive lines to the clipboard just by pressing `Ctrl-k` multiple times,
 without selecting them. If you want the more traditional behavior i.e. just
 rewrite the clipboard every time, you can use `CopyLine,DeleteLine` action
 instead of `CutLine`.
+
+The `FindNextWord` and `FindPreviousWord` actions search for the word
+currently under the cursor (or, if there is an active single-line selection,
+that selection's text), without opening a prompt. The query is picked using
+the same logic as the `hlselection` setting, so the cursor jumps between the
+matches that `hlselection` highlights. Word-mode searches are whole-word
+(`\b…\b`); selection-mode searches are literal substrings. Neither action
+has a default binding.
 
 You can also bind some mouse actions (these must be bound to mouse buttons)
 
