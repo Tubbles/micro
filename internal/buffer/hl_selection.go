@@ -17,19 +17,9 @@ func (b *Buffer) UpdateHLSelection() {
 
 	if b.HLSelection {
 		if c := b.GetActiveCursor(); c != nil {
-			if c.HasSelection() {
-				s, e := c.CurSelection[0], c.CurSelection[1]
-				if s.GreaterThan(e) {
-					s, e = e, s
-				}
-				if s.Y == e.Y {
-					query = string(b.Substr(s, e))
-				}
-				// Multi-line selection leaves query empty,
-				// disabling the highlight.
-			} else if w, ok := c.WordUnder(); ok {
-				query = w
-				wholeWord = true
+			if q, w, _, ok := c.WordOrSelection(); ok {
+				query = q
+				wholeWord = w
 			}
 		}
 	}
