@@ -189,7 +189,11 @@ Here are the available options:
    cursor is highlighted instead with whole-word boundaries. Multi-line
    selections disable the highlight. Case sensitivity follows the `ignorecase`
    option. The colour comes from the `hlselection` colorscheme group, falling
-   back to `hlsearch` when a scheme does not define it.
+   back to `hlsearch` when a scheme does not define it. The `hlselection`
+   group is applied as an overlay: any field its `color-link` directive
+   leaves blank (foreground, background, or attributes like `bold`) keeps
+   the value from the underlying syntax-token style, so a `",#88C0D0"`
+   directive paints only the background and preserves token foregrounds.
 
     default value: `false`
 
