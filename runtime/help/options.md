@@ -328,6 +328,13 @@ Here are the available options:
 
     default value: `[]` (empty list)
 
+* `quittoscratch`: when enabled, the `Quit` action replaces the last
+   remaining buffer with an empty scratch buffer instead of exiting micro.
+   Hitting `Quit` again on that empty scratch buffer will exit as normal.
+   `QuitAll` is unaffected and always exits.
+
+    default value: `false`
+
 * `readonly`: when enabled, disallows edits to the buffer. It is recommended
    to only ever set this option locally using `setlocal`.
 
