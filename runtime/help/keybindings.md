@@ -325,6 +325,10 @@ LastSplit
 Unsplit
 VSplit
 HSplit
+MovePaneToNext
+MovePaneToPrevious
+NextLeafSplit
+PreviousLeafSplit
 ToggleMacro
 PlayMacro
 Suspend (Unix only)
@@ -356,6 +360,33 @@ consecutive lines to the clipboard just by pressing `Ctrl-k` multiple times,
 without selecting them. If you want the more traditional behavior i.e. just
 rewrite the clipboard every time, you can use `CopyLine,DeleteLine` action
 instead of `CutLine`.
+
+The `MovePaneToNext` and `MovePaneToPrevious` actions shift the active pane
+one slot through the global pane sequence formed by every tab's leaves taken
+in tree (display) order. Three cases drive the behavior:
+
+- If there is an adjacent leaf in the same tab, the pane swaps visual
+  positions with it (the pane stays active in the same slice slot, but
+  draws into the swapped leaf).
+- If the active pane is at the edge of its tab and an adjacent tab exists,
+  the pane is detached and re-attached as a vsplit on the adjacent tab's
+  edge leaf. If the source tab loses its last pane, it is removed.
+- If the active pane is at the global edge and its tab has more than one
+  pane, a fresh tab is created beyond the edge and the pane is moved into
+  it. When the source tab has only one pane (the active one), the action
+  is a no-op since the result would be the same shape.
+
+The buffer (cursor, undo history, unsaved edits, viewport) and, for
+terminal panes, the running pty are preserved across moves.
+
+`NextLeafSplit` and `PreviousLeafSplit` are read-only counterparts that
+move focus through the same tree-order sequence inside the current tab,
+without restructuring anything. They return false at the edge of the
+tab, so they can be chained with `NextTab`/`PreviousTab` for a wrap to
+the adjacent tab. For example: `"Alt-Right": "NextLeafSplit|NextTab"`.
+Unlike the existing `NextSplit` and `PreviousSplit`, which step by
+`tab.Panes` slice index (creation order), these walk the split tree
+and so produce the same ordering as `MovePaneToNext`.
 
 You can also bind some mouse actions (these must be bound to mouse buttons)
 
