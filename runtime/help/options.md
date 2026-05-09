@@ -166,7 +166,9 @@ Here are the available options:
    (opened via the `FileExplorerAtCwd` and `FileExplorerAtFile` actions)
    includes dotfiles and dot-directories in the listing. When `false`,
    entries whose name begins with `.` are filtered out. The setting is
-   read each time the picker opens.
+   read each time the picker opens; pressing `Ctrl-h` while the picker
+   is open toggles visibility for that session without changing the
+   stored option.
 
     default value: `false`
 

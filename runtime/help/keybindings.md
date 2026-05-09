@@ -360,8 +360,10 @@ filesystem root. Selecting a file opens it: if it is already open in some
 pane, focus jumps there; otherwise, if the invoking pane holds an unused
 scratch buffer (no file path and unmodified), the file replaces it in
 place; otherwise it opens in a new tab. The `filemanager.showhidden`
-option controls whether dotfiles appear in the listing. Neither action is
-bound by default; add entries in `bindings.json` to use them.
+option controls whether dotfiles appear in the listing by default;
+pressing `Ctrl-h` while the picker is open toggles visibility for that
+session. Neither action is bound by default; add entries in
+`bindings.json` to use them.
 
 
 The `CutLine` action cuts the current line and adds it to the previously cut
