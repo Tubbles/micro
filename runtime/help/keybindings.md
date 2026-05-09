@@ -288,6 +288,8 @@ Paste
 PastePrimary
 SelectAll
 OpenFile
+FileExplorerAtCwd
+FileExplorerAtFile
 Start
 End
 PageUp
@@ -368,6 +370,24 @@ also records your current cursor so `JumpForward` can return to it. Entries
 whose pane has been closed are skipped silently. `PushJump` records the
 current cursor as a manual breadcrumb for the same list. None of these are
 bound by default; add entries in `bindings.json` to use them.
+
+The `FileExplorerAtCwd` and `FileExplorerAtFile` actions open a centred
+picker showing the directory listing. `FileExplorerAtCwd` starts at the
+current working directory; `FileExplorerAtFile` starts at the directory of
+the active buffer's file (falling back to the current working directory
+when the buffer has no file path). Use `Up`/`Down`/`PageUp`/`PageDown`/
+`Home`/`End` or the mouse wheel to move the highlight, `Enter` or
+double-click to activate, `Esc` or click outside the picker to cancel.
+A `../` entry navigates to the parent directory unless already at a
+filesystem root. Selecting a file opens it: if it is already open in some
+pane, focus jumps there; otherwise, if the invoking pane holds an unused
+scratch buffer (no file path and unmodified), the file replaces it in
+place; otherwise it opens in a new tab. The `filemanager.showhidden`
+option controls whether dotfiles appear in the listing by default;
+pressing `Ctrl-h` while the picker is open toggles visibility for that
+session. Neither action is bound by default; add entries in
+`bindings.json` to use them.
+
 
 The `CutLine` action cuts the current line and adds it to the previously cut
 lines in the clipboard since the last paste (rather than just replaces the
