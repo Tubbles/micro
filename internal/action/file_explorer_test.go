@@ -129,6 +129,34 @@ func TestListDir_ErrorOnMissingDir(t *testing.T) {
 	}
 }
 
+func TestResolveQueryPath(t *testing.T) {
+	sep := string(filepath.Separator)
+	cur := "/tmp/here"
+	cases := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{"relative file", "x.txt", "/tmp/here/x.txt"},
+		{"relative subdir without slash", "sub", "/tmp/here/sub"},
+		{"relative subdir with slash", "sub" + sep, "/tmp/here/sub" + sep},
+		{"parent shorthand", ".." + sep, "/tmp" + sep},
+		{"absolute path", "/etc/hosts", "/etc/hosts"},
+		{"dot-dot in middle", "a/../b", "/tmp/here/b"},
+	}
+	for _, c := range cases {
+		// Skip absolute-path case on Windows — POSIX-shaped fixtures
+		// are not portable, and the helper itself is platform-agnostic.
+		if filepath.VolumeName(c.query) != "" {
+			continue
+		}
+		if got := resolveQueryPath(cur, c.query); got != c.want {
+			t.Errorf("resolveQueryPath(%q, %q) = %q, want %q",
+				cur, c.query, got, c.want)
+		}
+	}
+}
+
 func TestIndexOfLabel(t *testing.T) {
 	dir := t.TempDir()
 	makeFile(t, filepath.Join(dir, "a.txt"))
