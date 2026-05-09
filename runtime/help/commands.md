@@ -86,6 +86,15 @@ quotes here but these are not necessary when entering the command in micro.
 * `showkey 'key'`: Show the action(s) bound to a given key. For example
    running `> showkey Ctrl-c` will display `Copy`.
 
+* `runaction 'action'`: runs the named buffer action once, as if its
+   keybinding had been pressed. The name is the action identifier used in
+   `bindings.json`, for example `> runaction DuplicateLine` or
+   `> runaction CursorEnd`. Action names are case-sensitive and the
+   command bar tab-completes them. Per-cursor actions (those listed in
+   `MultiActions`) run once per cursor, matching how a real keybinding
+   would behave with multiple cursors. Mouse actions cannot be invoked
+   this way because they require a mouse event payload.
+
 * `run 'sh-command'`: runs the given shell command in the background. The
    command's output will be displayed in one line when it finishes running.
 
