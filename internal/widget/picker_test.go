@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/micro-editor/tcell/v2"
+	"github.com/Tubbles/tcell/v3"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -52,15 +52,15 @@ func mockScreenSize(t *testing.T) {
 }
 
 func key(k tcell.Key) *tcell.EventKey {
-	return tcell.NewEventKey(k, 0, tcell.ModNone, "")
+	return tcell.NewEventKey(k, "", tcell.ModNone)
 }
 
 func runeKey(r rune) *tcell.EventKey {
-	return tcell.NewEventKey(tcell.KeyRune, r, tcell.ModNone, "")
+	return tcell.NewEventKey(tcell.KeyRune, string(r), tcell.ModNone)
 }
 
 func mouse(x, y int, btn tcell.ButtonMask) *tcell.EventMouse {
-	return tcell.NewEventMouse(x, y, btn, tcell.ModNone, "")
+	return tcell.NewEventMouse(x, y, btn, tcell.ModNone)
 }
 
 func TestPickerArrowsClampNoWrap(t *testing.T) {
@@ -175,7 +175,7 @@ func TestPickerBackspaceRemovesAtCaret(t *testing.T) {
 	h.p.HandleEvent(runeKey('b'))
 	h.p.HandleEvent(runeKey('c'))
 	h.p.HandleEvent(key(tcell.KeyLeft))   // caret at 2 (between b and c)
-	h.p.HandleEvent(key(tcell.KeyBackspace2))
+	h.p.HandleEvent(key(tcell.KeyBackspace))
 	if h.p.query != "ac" {
 		t.Fatalf("backspace mid: query=%q, want ac", h.p.query)
 	}
@@ -184,7 +184,7 @@ func TestPickerBackspaceRemovesAtCaret(t *testing.T) {
 	}
 	// Backspace at caret 0 is a no-op.
 	h.p.HandleEvent(key(tcell.KeyHome))
-	h.p.HandleEvent(key(tcell.KeyBackspace2))
+	h.p.HandleEvent(key(tcell.KeyBackspace))
 	if h.p.query != "ac" || h.p.qcur != 0 {
 		t.Fatalf("backspace at start: query=%q qcur=%d, want ac/0",
 			h.p.query, h.p.qcur)
@@ -325,7 +325,7 @@ func TestPickerBackspaceRestoresFullList(t *testing.T) {
 	if len(h.p.matches) != 0 {
 		t.Fatalf("'z' should match nothing in [a,b], got %d", len(h.p.matches))
 	}
-	h.p.HandleEvent(key(tcell.KeyBackspace2))
+	h.p.HandleEvent(key(tcell.KeyBackspace))
 	if h.p.matches != nil {
 		t.Fatalf("after backspace to empty query, matches must be nil")
 	}
@@ -397,7 +397,14 @@ func TestPickerPasteBatchesFilterRecompute(t *testing.T) {
 	}
 	t.Cleanup(func() { fuzzyFind = old })
 
-	h.p.HandleEvent(tcell.NewEventPaste("alp", ""))
+	// v3 streams a paste as Start, EventKey runes, End. The picker
+	// must defer the filter recompute until End, so a 3-char paste
+	// runs the matcher once, not three times.
+	h.p.HandleEvent(tcell.NewEventPaste(true))
+	h.p.HandleEvent(runeKey('a'))
+	h.p.HandleEvent(runeKey('l'))
+	h.p.HandleEvent(runeKey('p'))
+	h.p.HandleEvent(tcell.NewEventPaste(false))
 
 	if calls != 1 {
 		t.Fatalf("paste of 3 chars: filter ran %d times, want 1", calls)
@@ -410,10 +417,19 @@ func TestPickerPasteBatchesFilterRecompute(t *testing.T) {
 	}
 }
 
-func TestPickerPasteSkipsControlBytes(t *testing.T) {
+func TestPickerPasteSkipsControlKeys(t *testing.T) {
 	mockScreenSize(t)
 	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
-	h.p.HandleEvent(tcell.NewEventPaste("a\nb\tc", ""))
+	// v3's input parser turns \n into KeyEnter and \t into KeyTab in
+	// the middle of a paste stream. The picker drops non-rune keys
+	// while pasting so an embedded newline doesn't activate.
+	h.p.HandleEvent(tcell.NewEventPaste(true))
+	h.p.HandleEvent(runeKey('a'))
+	h.p.HandleEvent(key(tcell.KeyEnter))
+	h.p.HandleEvent(runeKey('b'))
+	h.p.HandleEvent(key(tcell.KeyTab))
+	h.p.HandleEvent(runeKey('c'))
+	h.p.HandleEvent(tcell.NewEventPaste(false))
 	if h.p.query != "abc" {
 		t.Fatalf("paste with controls: query=%q, want abc", h.p.query)
 	}

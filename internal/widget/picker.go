@@ -5,7 +5,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/micro-editor/tcell/v2"
+	"github.com/Tubbles/tcell/v3"
 	"github.com/sahilm/fuzzy"
 
 	"github.com/micro-editor/micro/v2/internal/screen"
@@ -80,6 +80,13 @@ type Picker struct {
 	query   string
 	qcur    int
 	matches []fuzzy.Match
+
+	// pasting is true between EventPaste{Start} and EventPaste{End}.
+	// While set, recomputeFilter is a no-op so a long paste doesn't
+	// re-run the matcher per character; on End the filter recomputes
+	// once. handleKey also drops non-rune keys while pasting so a
+	// pasted "\n" doesn't trigger activate() mid-paste.
+	pasting bool
 
 	lastClickTime time.Time
 	lastClickRow  int
@@ -174,19 +181,29 @@ func (p *Picker) HandleEvent(ev tcell.Event) bool {
 	case *tcell.EventMouse:
 		p.handleMouse(e)
 	case *tcell.EventPaste:
-		// tcell v2 delivers a paste as one event with the full text.
-		// (v3 streams it as EventKeys between Start/End markers; the
-		// integration branch handles that translation when the widget
-		// package is bumped to v3.) Skip non-printable bytes; a query
-		// line never contains tabs or newlines.
-		if p.opts.Query {
-			p.insertString(e.Text())
+		// tcell v3 streams a paste as Start, EventKey rune events,
+		// End. The picker accumulates the runes through the regular
+		// handleKey path and defers the filter recompute to End so a
+		// long paste doesn't re-run fuzzy.Find per character.
+		if e.Start() {
+			p.pasting = true
+		} else {
+			p.pasting = false
+			if p.opts.Query {
+				p.recomputeFilter()
+			}
 		}
 	}
 	return true
 }
 
 func (p *Picker) handleKey(e *tcell.EventKey) {
+	// During bracketed paste only literal rune events flow into the
+	// query; control keys (Enter, Esc, arrows...) are dropped so a
+	// pasted newline doesn't activate or close the picker.
+	if p.pasting && e.Key() != tcell.KeyRune {
+		return
+	}
 	if p.opts.Query {
 		p.handleKeyQuery(e)
 		return
@@ -243,12 +260,20 @@ func (p *Picker) handleKeyQuery(e *tcell.EventKey) {
 		if p.qcur < utf8.RuneCountInString(p.query) {
 			p.qcur++
 		}
-	case tcell.KeyBackspace, tcell.KeyBackspace2:
+	case tcell.KeyBackspace:
+		// In v3 KeyBackspace2 (0x7f) is translated to KeyBackspace at
+		// the input layer, so this single case covers Backspace from
+		// any terminal.
 		p.deleteBeforeCaret()
 	case tcell.KeyDelete:
 		p.deleteAtCaret()
 	case tcell.KeyRune:
-		p.insertRune(e.Rune())
+		// v3 reports keystrokes as a grapheme cluster string rather
+		// than a single rune. Take the first rune; multi-rune
+		// clusters are truncated on the keystroke path.
+		if rs := []rune(e.Str()); len(rs) > 0 {
+			p.insertRune(rs[0])
+		}
 	}
 }
 
@@ -261,27 +286,6 @@ func (p *Picker) insertRune(r rune) {
 	off := byteOffsetForRune(p.query, p.qcur)
 	p.query = p.query[:off] + string(r) + p.query[off:]
 	p.qcur++
-	p.recomputeFilter()
-}
-
-// insertString appends s at the caret and refreshes the filter
-// once. Skips control bytes that have no place in a query line.
-func (p *Picker) insertString(s string) {
-	off := byteOffsetForRune(p.query, p.qcur)
-	added := 0
-	var inserted []byte
-	for _, r := range s {
-		if r < 0x20 || r == 0x7f {
-			continue
-		}
-		inserted = append(inserted, []byte(string(r))...)
-		added++
-	}
-	if added == 0 {
-		return
-	}
-	p.query = p.query[:off] + string(inserted) + p.query[off:]
-	p.qcur += added
 	p.recomputeFilter()
 }
 
@@ -315,7 +319,14 @@ func (p *Picker) deleteAtCaret() {
 // When the query is non-empty but produces no matches, matches is a
 // non-nil empty slice — the distinction lets activate() detect the
 // "type-and-Enter to commit a free-form string" case.
+//
+// While p.pasting is true the call is a no-op; HandleEvent runs a
+// single recompute on EventPaste{End} once the full block has been
+// inserted into the query.
 func (p *Picker) recomputeFilter() {
+	if p.pasting {
+		return
+	}
 	if p.query == "" {
 		p.matches = nil
 	} else {
