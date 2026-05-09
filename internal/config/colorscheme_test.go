@@ -135,7 +135,7 @@ func TestMergeOverlayBgOnly(t *testing.T) {
 
 	got := MergeOverlay(base, overlay, mask)
 
-	fg, bg, attr := got.Decompose()
+	fg, bg, attr := got.GetForeground(), got.GetBackground(), got.GetAttributes()
 	assert.Equal(t, tcell.NewRGBColor(10, 20, 30), fg)
 	assert.Equal(t, tcell.NewRGBColor(99, 99, 99), bg)
 	assert.NotEqual(t, 0, attr&tcell.AttrBold)
@@ -152,7 +152,7 @@ func TestMergeOverlayNoOpWhenMaskEmpty(t *testing.T) {
 
 	got := MergeOverlay(base, overlay, StyleMask{})
 
-	fg, bg, attr := got.Decompose()
+	fg, bg, attr := got.GetForeground(), got.GetBackground(), got.GetAttributes()
 	assert.Equal(t, tcell.NewRGBColor(10, 20, 30), fg)
 	assert.Equal(t, tcell.NewRGBColor(40, 50, 60), bg)
 	assert.NotEqual(t, 0, attr&tcell.AttrItalic)
@@ -165,9 +165,9 @@ func TestMergeOverlayAttrsAreAdditive(t *testing.T) {
 
 	got := MergeOverlay(base, overlay, mask)
 
-	_, _, attr := got.Decompose()
+	attr := got.GetAttributes()
 	assert.NotEqual(t, 0, attr&tcell.AttrBold)
-	assert.NotEqual(t, 0, attr&tcell.AttrUnderline)
+	assert.True(t, got.HasUnderline())
 	assert.NotEqual(t, 0, attr&tcell.AttrItalic)
 }
 
@@ -182,7 +182,7 @@ func TestMergeOverlayFullReplacement(t *testing.T) {
 
 	got := MergeOverlay(base, overlay, mask)
 
-	fg, bg, _ := got.Decompose()
+	fg, bg := got.GetForeground(), got.GetBackground()
 	assert.Equal(t, tcell.NewRGBColor(99, 99, 99), fg)
 	assert.Equal(t, tcell.NewRGBColor(11, 11, 11), bg)
 }
