@@ -886,6 +886,52 @@ func TestPickerCtrlHIgnoredInClassicMode(t *testing.T) {
 	}
 }
 
+func TestPickerCtrlIFiresHookWhenSet_Query(t *testing.T) {
+	mockScreenSize(t)
+	fired := 0
+	p := NewPicker(PickerOptions{
+		Title:    "test",
+		Items:    []PickerItem{{Label: "a"}},
+		Query:    true,
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: ScreenRect{X: 0, Y: 0, W: 40, H: 12}},
+		OnCtrlI:  func() { fired++ },
+	})
+	p.HandleEvent(runeKey('a'))
+	p.HandleEvent(runeKey('b'))
+	p.HandleEvent(key(tcell.KeyCtrlI))
+	if fired != 1 {
+		t.Fatalf("OnCtrlI: fired=%d, want 1", fired)
+	}
+	if p.query != "ab" {
+		t.Fatalf("Ctrl-I must not edit query: query=%q, want ab", p.query)
+	}
+}
+
+func TestPickerCtrlIIgnoredWhenHookUnset_Query(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	h.p.HandleEvent(runeKey('a'))
+	h.p.HandleEvent(key(tcell.KeyCtrlI))
+	if h.p.query != "a" {
+		t.Fatalf("Ctrl-I without hook must be a no-op: query=%q, want a", h.p.query)
+	}
+}
+
+func TestPickerCtrlIIgnoredInClassicMode(t *testing.T) {
+	mockScreenSize(t)
+	fired := 0
+	p := NewPicker(PickerOptions{
+		Items:    []PickerItem{{Label: "a"}},
+		Query:    false,
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: ScreenRect{X: 0, Y: 0, W: 40, H: 12}},
+		OnCtrlI:  func() { fired++ },
+	})
+	p.HandleEvent(key(tcell.KeyCtrlI))
+	if fired != 0 {
+		t.Fatalf("classic mode must not fire OnCtrlI, got %d", fired)
+	}
+}
+
 func TestPickerRefreshItemsKeepsQuery(t *testing.T) {
 	mockScreenSize(t)
 	h := newPickerHarnessOpts([]PickerItem{
