@@ -1889,6 +1889,43 @@ func (h *BufPane) JumpLine() bool {
 	return true
 }
 
+// JumpBack moves the cursor to the previous entry in the global jump list,
+// crossing pane and tab boundaries as needed. The first call also records the
+// live cursor so JumpForward can return to it.
+func (h *BufPane) JumpBack() bool {
+	var ok bool
+	Jumps.withSuppression(func() {
+		e, found := Jumps.Back(h.ID(), h.Buf.SharedBuffer, h.Cursor.Loc, paneAlive)
+		if !found {
+			return
+		}
+		ok = applyJump(e)
+	})
+	return ok
+}
+
+// JumpForward moves the cursor to the next entry in the global jump list.
+func (h *BufPane) JumpForward() bool {
+	var ok bool
+	Jumps.withSuppression(func() {
+		e, found := Jumps.Forward(paneAlive)
+		if !found {
+			return
+		}
+		ok = applyJump(e)
+	})
+	return ok
+}
+
+// PushJump records the current cursor on the jump list as a manual breadcrumb.
+// Useful for marking a spot before a sequence of small motions that wouldn't
+// otherwise trigger an automatic push. Uses PushAlways so a manual breadcrumb
+// is recorded even if some caller has wrapped this in a withSuppression scope.
+func (h *BufPane) PushJump() bool {
+	Jumps.PushAlways(h.ID(), h.Buf.SharedBuffer, h.Cursor.Loc)
+	return true
+}
+
 // Start moves the viewport to the start of the buffer
 func (h *BufPane) Start() bool {
 	v := h.GetView()
