@@ -286,6 +286,8 @@ SelectAll
 OpenFile
 FileExplorerAtCwd
 FileExplorerAtFile
+OpenFilePickerAtCwd
+OpenFilePickerAtFile
 Start
 End
 PageUp
@@ -370,6 +372,24 @@ ancestor `.gitignore` files apply when navigating into a subtree of
 a project; outside a git repo only the literal `.git` skip applies.
 Neither action is bound by default; add entries in `bindings.json`
 to use them.
+
+The `OpenFilePickerAtCwd` and `OpenFilePickerAtFile` actions open a
+centred picker showing files recursively under a starting directory,
+filterable by the typed query (fuzzy match). `OpenFilePickerAtCwd`
+starts at the current working directory; `OpenFilePickerAtFile`
+starts at the directory of the active buffer's file (falling back to
+the current working directory when the buffer has no file path).
+The walker collects every non-ignored entry under the start directory
+so the typed filter operates across the full subtree. The same
+hidden / ignored toggles apply: `Ctrl-h` flips the
+`filemanager.showhidden` axis and `Ctrl-i` flips
+`filemanager.showignored` for the session, both rebuilding the list
+in place. `Enter` opens the highlighted file with the same precedence
+as the file-explorer picker (focus existing pane, swap unused scratch
+in place, otherwise open a new tab); typing a path that matches no
+entry and pressing `Enter` opens that path verbatim. `Esc` cancels.
+Symlinks are skipped to avoid cycles. Neither action is bound by
+default; add entries in `bindings.json` to use them.
 
 
 The `CutLine` action cuts the current line and adds it to the previously cut
