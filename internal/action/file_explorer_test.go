@@ -26,7 +26,11 @@ func makeDir(t *testing.T, path string) {
 
 func labels(t *testing.T, dir string, showHidden bool) []string {
 	t.Helper()
-	items, err := listDir(dir, showHidden)
+	// showIgnored=true makes these tests independent of any
+	// .gitignore that might exist under TempDir's parent — the
+	// matcher walk would otherwise pick those up via findGitRoot.
+	filter := NewIgnoreFilter(dir, showHidden, true)
+	items, err := listDir(dir, filter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +92,7 @@ func TestListDir_RootHasNoDotDot(t *testing.T) {
 		// reliably. Skip rather than introduce a flaky case.
 		t.Skip("filesystem root listing is unstable on this platform")
 	}
-	items, err := listDir(root, false)
+	items, err := listDir(root, NewIgnoreFilter(root, false, true))
 	if err != nil {
 		t.Skipf("cannot read filesystem root: %v", err)
 	}
@@ -123,7 +127,8 @@ func TestListDir_EmptyDirJustHasParentEntry(t *testing.T) {
 }
 
 func TestListDir_ErrorOnMissingDir(t *testing.T) {
-	_, err := listDir(filepath.Join(t.TempDir(), "does-not-exist"), false)
+	dir := t.TempDir()
+	_, err := listDir(filepath.Join(dir, "does-not-exist"), NewIgnoreFilter(dir, false, true))
 	if err == nil {
 		t.Fatal("expected error for missing directory")
 	}
@@ -163,7 +168,7 @@ func TestIndexOfLabel(t *testing.T) {
 	makeFile(t, filepath.Join(dir, "b.txt"))
 	makeDir(t, filepath.Join(dir, "sub"))
 
-	items, err := listDir(dir, false)
+	items, err := listDir(dir, NewIgnoreFilter(dir, false, true))
 	if err != nil {
 		t.Fatal(err)
 	}
