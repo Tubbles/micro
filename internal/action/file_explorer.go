@@ -123,6 +123,21 @@ func resolveQueryPath(cur, query string) string {
 	return cleaned
 }
 
+// buildExplorerHint produces the hint row text shown above the bottom
+// border of the explorer picker. The [x] / [ ] marker after the Ctrl-h
+// legend reflects the current showHidden state so the user can see at
+// a glance whether dotfiles are in or out of the listing.
+func buildExplorerHint(showHidden bool) string {
+	mark := func(on bool) string {
+		if on {
+			return "[x]"
+		}
+		return "[ ]"
+	}
+	return "<type> filter | <Up>/<Down> move | <Ctrl-h> show hidden " +
+		mark(showHidden) + " | <Enter> open | <Esc> cancel"
+}
+
 // openFileExplorer opens a file-explorer picker rooted at start.
 // The invoker pane is the BufPane the user invoked the action from;
 // it is used by openFileFromPicker to decide whether to reuse a
@@ -158,12 +173,30 @@ func openFileExplorer(invoker *BufPane, start string, selectName string) {
 		picker.SetItems(items) // also clears the query
 	}
 
+	// toggleHidden flips the visibility filter and re-lists the
+	// current directory in place. RefreshItems keeps the typed query
+	// so narrowing survives the toggle; SetHint redraws the hint row
+	// so the [x] / [ ] marker next to the Ctrl-h legend reflects the
+	// new state.
+	toggleHidden := func() {
+		showHidden = !showHidden
+		newItems, err := listDir(cur, showHidden)
+		if err != nil {
+			InfoBar.Error(err)
+			return
+		}
+		items = newItems
+		picker.RefreshItems(items)
+		picker.SetHint(buildExplorerHint(showHidden))
+	}
+
 	picker = widget.NewPicker(widget.PickerOptions{
 		Title:    cur,
 		Items:    items,
-		Hint:     "<type> filter | <Up>/<Down> move | <Enter> open | <Esc> cancel",
+		Hint:     buildExplorerHint(showHidden),
 		Query:    true,
 		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: editorAreaRect()},
+		OnCtrlH:  toggleHidden,
 		OnSelect: func(idx int) {
 			if idx < 0 || idx >= len(items) {
 				return
