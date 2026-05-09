@@ -2194,6 +2194,57 @@ func (h *BufPane) SpawnMultiCursor() bool {
 	return true
 }
 
+// SpawnMultiCursorAll creates a new multiple cursor at every occurrence of the
+// current selection (or current word if nothing is selected), in a single call.
+func (h *BufPane) SpawnMultiCursorAll() bool {
+	spawner := h.Buf.GetCursor(h.Buf.NumCursors() - 1)
+	if !spawner.HasSelection() {
+		spawner.SelectWord()
+		h.multiWord = true
+	}
+
+	sel := spawner.GetSelection()
+	search := regexp.QuoteMeta(string(sel))
+	if h.multiWord {
+		search = "\\b" + search + "\\b"
+	}
+
+	origStart := spawner.CurSelection[0]
+	searchStart := spawner.CurSelection[1]
+	added := 0
+	for {
+		match, found, err := h.Buf.FindNext(search, h.Buf.Start(), h.Buf.End(), searchStart, true, true)
+		if err != nil {
+			InfoBar.Error(err)
+			break
+		}
+		if !found || match[0] == origStart {
+			break
+		}
+
+		c := buffer.NewCursor(h.Buf, buffer.Loc{})
+		c.SetSelectionStart(match[0])
+		c.SetSelectionEnd(match[1])
+		c.OrigSelection[0] = c.CurSelection[0]
+		c.OrigSelection[1] = c.CurSelection[1]
+		c.Loc = c.CurSelection[1]
+		h.Buf.AddCursor(c)
+		added++
+
+		searchStart = match[1]
+	}
+
+	if added > 0 {
+		h.Buf.SetCurCursor(h.Buf.NumCursors() - 1)
+		h.Buf.MergeCursors()
+	} else {
+		InfoBar.Message("No matches found")
+	}
+
+	h.Relocate()
+	return true
+}
+
 // SpawnCursorAtLoc spawns a new cursor at a location and merges the cursors
 func (h *BufPane) SpawnCursorAtLoc(loc buffer.Loc) *buffer.Cursor {
 	c := buffer.NewCursor(h.Buf, loc)
