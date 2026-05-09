@@ -39,6 +39,9 @@ func (p *Picker) Display() {
 	p.fillBackground(rect, row)
 	p.drawBorder(rect, frame)
 	p.drawTitle(rect, frame)
+	if p.opts.Query {
+		p.drawInputRow(rect, row, frame)
+	}
 	p.drawBody(rect, row, rowCur)
 	p.drawHint(rect, frame)
 }
@@ -94,9 +97,41 @@ func (p *Picker) drawTitle(r ScreenRect, st tcell.Style) {
 	screen.SetContent(x, r.Y, ' ', nil, st)
 }
 
+// drawInputRow paints the "> query" row at r.Y+1 and positions the
+// terminal cursor at the caret. The prefix uses the frame style so
+// it's visually demoted from the typed text.
+func (p *Picker) drawInputRow(r ScreenRect, rowSt tcell.Style, frameSt tcell.Style) {
+	y := r.Y + 1
+	x := r.X + 1
+	// padding " > "
+	screen.SetContent(x, y, ' ', nil, rowSt)
+	x++
+	screen.SetContent(x, y, '>', nil, frameSt)
+	x++
+	screen.SetContent(x, y, ' ', nil, rowSt)
+	x++
+
+	queryX0 := x
+	availW := r.X + r.W - 1 - x
+	q := truncateToWidth(p.query, availW)
+	for _, ch := range q {
+		screen.SetContent(x, y, ch, nil, rowSt)
+		x += runewidth.RuneWidth(ch)
+	}
+
+	caretByteOff := byteOffsetForRune(p.query, p.qcur)
+	if caretByteOff > len(q) {
+		caretByteOff = len(q)
+	}
+	caretCellOffset := stringWidth(p.query[:caretByteOff])
+	if screen.Screen != nil {
+		screen.ShowCursor(queryX0+caretCellOffset, y)
+	}
+}
+
 func (p *Picker) drawBody(r ScreenRect, row, rowCur tcell.Style) {
-	bodyY0 := r.Y + 1
-	bodyH := r.H - 2
+	bodyY0 := p.bodyY0(r)
+	bodyH := p.bodyHeight()
 	bodyX0 := r.X + 1
 	bodyW := r.W - 2
 
@@ -112,10 +147,15 @@ func (p *Picker) drawBody(r ScreenRect, row, rowCur tcell.Style) {
 				screen.SetContent(x, y, ' ', nil, st)
 			}
 		}
-		if idx >= len(p.opts.Items) {
+		if idx >= p.displayedLen() {
 			continue
 		}
-		it := p.opts.Items[idx]
+		itIdx := p.itemIndexAt(idx)
+		if itIdx < 0 {
+			continue
+		}
+		it := p.opts.Items[itIdx]
+		match := p.matchAt(idx)
 		auxW := stringWidth(it.Aux)
 		labelMax := bodyW - 1 // 1 cell of left padding
 		if auxW > 0 {
@@ -126,9 +166,15 @@ func (p *Picker) drawBody(r ScreenRect, row, rowCur tcell.Style) {
 		}
 		label := truncateToWidth(it.Label, labelMax)
 		x := bodyX0 + 1
+		byteOff := 0
 		for _, ch := range label {
-			screen.SetContent(x, y, ch, nil, st)
+			cellSt := st
+			if isMatchedByteIdx(match, byteOff) {
+				cellSt = st.Bold(true)
+			}
+			screen.SetContent(x, y, ch, nil, cellSt)
 			x += runewidth.RuneWidth(ch)
+			byteOff += len(string(ch))
 		}
 		if auxW > 0 {
 			ax := bodyX0 + bodyW - auxW
