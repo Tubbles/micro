@@ -66,6 +66,7 @@ func InitCommands() {
 		"memusage":       {(*BufPane).MemUsageCmd, nil},
 		"retab":          {(*BufPane).RetabCmd, nil},
 		"raw":            {(*BufPane).RawCmd, nil},
+		"runaction":      {(*BufPane).RunActionCmd, ActionComplete},
 		"textfilter":     {(*BufPane).TextFilterCmd, nil},
 		"commandpalette": {(*BufPane).CommandPaletteCmd, nil},
 	}
@@ -852,6 +853,40 @@ func (h *BufPane) ShowKeyCmd(args []string) {
 		InfoBar.Message(action)
 	} else {
 		InfoBar.Message(args[0], " has no binding")
+	}
+}
+
+// RunActionCmd runs a buffer action by name as if it had been triggered
+// by a keybinding. For actions registered in MultiActions the action
+// runs once per cursor, matching BufMapEvent semantics so multi-cursor
+// behaviour is preserved when invoking via the command bar.
+func (h *BufPane) RunActionCmd(args []string) {
+	if len(args) < 1 {
+		InfoBar.Error("Not enough arguments: provide an action name")
+		return
+	}
+	name := args[0]
+
+	fn, ok := BufKeyActions[name]
+	if !ok {
+		if _, isMouse := BufMouseActions[name]; isMouse {
+			InfoBar.Error(name, " is a mouse action and cannot be run from the command bar")
+			return
+		}
+		InfoBar.Error("Unknown action ", name)
+		return
+	}
+
+	if _, multi := MultiActions[name]; multi {
+		for _, c := range h.Buf.GetCursors() {
+			h.Buf.SetCurCursor(c.Num)
+			h.Cursor = c
+			h.execAction(fn, name, nil)
+		}
+	} else {
+		h.Buf.SetCurCursor(0)
+		h.Cursor = h.Buf.GetActiveCursor()
+		h.execAction(fn, name, nil)
 	}
 }
 

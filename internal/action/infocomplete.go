@@ -36,6 +36,28 @@ func CommandComplete(b *buffer.Buffer) ([]string, []string) {
 	return completions, suggestions
 }
 
+// ActionComplete autocompletes BufPane action names from BufKeyActions.
+// Used by the runaction command. Mouse actions are excluded because they
+// require a mouse event payload that the command bar can't supply.
+func ActionComplete(b *buffer.Buffer) ([]string, []string) {
+	c := b.GetActiveCursor()
+	input, argstart := b.GetArg()
+
+	var suggestions []string
+	for name := range BufKeyActions {
+		if strings.HasPrefix(name, input) {
+			suggestions = append(suggestions, name)
+		}
+	}
+
+	sort.Strings(suggestions)
+	completions := make([]string, len(suggestions))
+	for i := range suggestions {
+		completions[i] = util.SliceEndStr(suggestions[i], c.X-argstart)
+	}
+	return completions, suggestions
+}
+
 // HelpComplete autocompletes help topics
 func HelpComplete(b *buffer.Buffer) ([]string, []string) {
 	c := b.GetActiveCursor()
