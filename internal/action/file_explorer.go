@@ -92,11 +92,27 @@ func editorAreaRect() widget.ScreenRect {
 	return widget.ScreenRect{X: x, Y: y, W: w, H: h}
 }
 
+// indexOfLabel returns the index of the first item whose Label
+// equals label, or -1 if no such item exists.
+func indexOfLabel(items []widget.PickerItem, label string) int {
+	for i, it := range items {
+		if it.Label == label {
+			return i
+		}
+	}
+	return -1
+}
+
 // openFileExplorer opens a file-explorer picker rooted at start.
 // The invoker pane is the BufPane the user invoked the action from;
 // it is used by openFileFromPicker to decide whether to reuse a
 // scratch buffer or open a new tab.
-func openFileExplorer(invoker *BufPane, start string) {
+//
+// selectName, when non-empty, is matched literally against the row
+// labels (regular files have a bare name; directories have a "/"
+// suffix; "../" is always available). On match the corresponding row
+// is preselected; on miss the picker opens at the top of the list.
+func openFileExplorer(invoker *BufPane, start string, selectName string) {
 	cur := filepath.Clean(start)
 	showHidden := getShowHidden()
 
@@ -141,6 +157,11 @@ func openFileExplorer(invoker *BufPane, start string) {
 		},
 		OnClose: func() {},
 	})
+	if selectName != "" {
+		if idx := indexOfLabel(items, selectName); idx >= 0 {
+			picker.SetCurrent(idx)
+		}
+	}
 	widget.Open(picker)
 }
 
@@ -193,21 +214,22 @@ func getShowHidden() bool {
 }
 
 // FileExplorerAtCwd opens the file explorer rooted at the current
-// working directory.
+// working directory. No row is preselected.
 func (h *BufPane) FileExplorerAtCwd() bool {
 	cwd, err := os.Getwd()
 	if err != nil {
 		InfoBar.Error(err)
 		return true
 	}
-	openFileExplorer(h, cwd)
+	openFileExplorer(h, cwd, "")
 	return true
 }
 
 // FileExplorerAtFile opens the file explorer rooted at the
-// directory of the active buffer's file. When the buffer has no
-// associated file path, falls back silently to the current working
-// directory; the picker title reflects the resolved directory.
+// directory of the active buffer's file, with the buffer's filename
+// preselected so the user lands on the row they came from. When the
+// buffer has no associated file path, falls back silently to the
+// current working directory with no preselection.
 //
 // Gating on Buf.Path (the user-supplied filename) rather than
 // Buf.AbsPath is deliberate: NewBuffer feeds an empty path through
@@ -215,17 +237,15 @@ func (h *BufPane) FileExplorerAtCwd() bool {
 // even for a fresh scratch buffer. Using AbsPath here would make
 // the explorer open at filepath.Dir(cwd) instead of cwd.
 func (h *BufPane) FileExplorerAtFile() bool {
-	var start string
 	if h.Buf.Path == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
 			InfoBar.Error(err)
 			return true
 		}
-		start = cwd
-	} else {
-		start = filepath.Dir(h.Buf.AbsPath)
+		openFileExplorer(h, cwd, "")
+		return true
 	}
-	openFileExplorer(h, start)
+	openFileExplorer(h, filepath.Dir(h.Buf.AbsPath), filepath.Base(h.Buf.AbsPath))
 	return true
 }
