@@ -12,16 +12,15 @@ import (
 	"github.com/micro-editor/micro/v2/internal/widget"
 )
 
-// listDir returns the picker rows for absPath. Directories are
-// listed first (with a trailing "/"), then files; both groups are
-// sorted case-insensitively. Hidden entries are filtered when
-// showHidden is false. A "../" entry is prepended unless absPath is
-// a filesystem root.
+// listDir returns the picker rows for absPath, applying filter to
+// each entry. Directories are listed first (with a trailing "/"),
+// then files; both groups are sorted case-insensitively. A "../"
+// entry is prepended unless absPath is a filesystem root.
 //
 // Symlinks-to-directories are listed as files (no os.Stat per
 // entry); pressing Enter on one will fail in NewBufferFromFile
 // rather than navigate. Acceptable for v1; revisit if it bites.
-func listDir(absPath string, showHidden bool) ([]widget.PickerItem, error) {
+func listDir(absPath string, filter *IgnoreFilter) ([]widget.PickerItem, error) {
 	entries, err := os.ReadDir(absPath)
 	if err != nil {
 		return nil, err
@@ -29,7 +28,7 @@ func listDir(absPath string, showHidden bool) ([]widget.PickerItem, error) {
 
 	var dirs, files []os.DirEntry
 	for _, e := range entries {
-		if !showHidden && strings.HasPrefix(e.Name(), ".") {
+		if filter != nil && filter.ShouldExclude(filepath.Join(absPath, e.Name()), e.IsDir()) {
 			continue
 		}
 		if e.IsDir() {
@@ -135,8 +134,10 @@ func resolveQueryPath(cur, query string) string {
 func openFileExplorer(invoker *BufPane, start string, selectName string) {
 	cur := filepath.Clean(start)
 	showHidden := getShowHidden()
+	showIgnored := getShowIgnored()
+	filter := newExplorerFilter(cur, showHidden, showIgnored)
 
-	items, err := listDir(cur, showHidden)
+	items, err := listDir(cur, filter)
 	if err != nil {
 		InfoBar.Error(err)
 		return
@@ -144,41 +145,56 @@ func openFileExplorer(invoker *BufPane, start string, selectName string) {
 
 	// navigate redirects the picker at newCur, swallowing read errors
 	// to the info bar. Used by both the directory branch of OnSelect
-	// and the directory branch of OnSubmit.
+	// and the directory branch of OnSubmit. The ignore filter is
+	// rebuilt at the new location so an ancestor's .gitignore (and a
+	// possibly different git-root anchor) governs the new listing.
 	var picker *widget.Picker
 	navigate := func(newCur string) {
-		newItems, err := listDir(newCur, showHidden)
+		newFilter := newExplorerFilter(newCur, showHidden, showIgnored)
+		newItems, err := listDir(newCur, newFilter)
 		if err != nil {
 			InfoBar.Error(err)
 			return
 		}
 		cur = newCur
+		filter = newFilter
 		items = newItems
 		picker.SetTitle(cur)
 		picker.SetItems(items) // also clears the query
 	}
 
-	// toggleHidden flips the visibility filter and re-lists the
-	// current directory in place. RefreshItems keeps the typed query
-	// so narrowing survives the toggle.
-	toggleHidden := func() {
-		showHidden = !showHidden
-		newItems, err := listDir(cur, showHidden)
+	// toggle is the shared body of the Ctrl-h and Ctrl-i closures:
+	// rebuild the filter with the current flag state, re-list cur,
+	// and refresh the picker. RefreshItems keeps the typed query so
+	// narrowing survives the toggle.
+	toggle := func() {
+		newFilter := newExplorerFilter(cur, showHidden, showIgnored)
+		newItems, err := listDir(cur, newFilter)
 		if err != nil {
 			InfoBar.Error(err)
 			return
 		}
+		filter = newFilter
 		items = newItems
 		picker.RefreshItems(items)
+	}
+	toggleHidden := func() {
+		showHidden = !showHidden
+		toggle()
+	}
+	toggleIgnored := func() {
+		showIgnored = !showIgnored
+		toggle()
 	}
 
 	picker = widget.NewPicker(widget.PickerOptions{
 		Title:    cur,
 		Items:    items,
-		Hint:     "<type> filter - <Up>/<Down> move - <Ctrl-h> hidden - <Enter> open - <Esc> cancel",
+		Hint:     "<type> filter - <Up>/<Down> move - <Ctrl-h> hidden - <Ctrl-i> ignored - <Enter> open - <Esc> cancel",
 		Query:    true,
 		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: editorAreaRect()},
 		OnCtrlH:  toggleHidden,
+		OnCtrlI:  toggleIgnored,
 		OnSelect: func(idx int) {
 			if idx < 0 || idx >= len(items) {
 				return
@@ -273,6 +289,25 @@ func openFileFromPicker(invoker *BufPane, path string) {
 func getShowHidden() bool {
 	v, ok := config.GlobalSettings["filemanager.showhidden"].(bool)
 	return ok && v
+}
+
+func getShowIgnored() bool {
+	v, ok := config.GlobalSettings["filemanager.showignored"].(bool)
+	return ok && v
+}
+
+// newExplorerFilter constructs the IgnoreFilter for a per-directory
+// listing rooted at cur. It anchors the gitignore matcher at the
+// nearest enclosing git root so that ancestor .gitignore files apply
+// when the user navigates into a subtree of a project; outside a git
+// repo the matcher is empty and only the literal .git skip applies
+// (a no-op when there is no .git anyway).
+func newExplorerFilter(cur string, showHidden, showIgnored bool) *IgnoreFilter {
+	root := cur
+	if r, ok := findGitRoot(cur); ok {
+		root = r
+	}
+	return NewIgnoreFilter(root, showHidden, showIgnored)
 }
 
 // FileExplorerAtCwd opens the file explorer rooted at the current
