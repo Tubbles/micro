@@ -103,6 +103,26 @@ func indexOfLabel(items []widget.PickerItem, label string) int {
 	return -1
 }
 
+// resolveQueryPath turns a user-typed query into an absolute target
+// path under cur. Absolute queries are honoured as-is; relative
+// queries are joined onto cur. The result is filepath.Clean'd, but a
+// trailing separator from the query is preserved (callers use it as
+// a hint that the user is asking for directory navigation).
+func resolveQueryPath(cur, query string) string {
+	var p string
+	if filepath.IsAbs(query) {
+		p = query
+	} else {
+		p = filepath.Join(cur, query)
+	}
+	cleaned := filepath.Clean(p)
+	if strings.HasSuffix(query, string(filepath.Separator)) &&
+		!strings.HasSuffix(cleaned, string(filepath.Separator)) {
+		cleaned += string(filepath.Separator)
+	}
+	return cleaned
+}
+
 // openFileExplorer opens a file-explorer picker rooted at start.
 // The invoker pane is the BufPane the user invoked the action from;
 // it is used by openFileFromPicker to decide whether to reuse a
@@ -122,10 +142,27 @@ func openFileExplorer(invoker *BufPane, start string, selectName string) {
 		return
 	}
 
+	// navigate redirects the picker at newCur, swallowing read errors
+	// to the info bar. Used by both the directory branch of OnSelect
+	// and the directory branch of OnSubmit.
 	var picker *widget.Picker
+	navigate := func(newCur string) {
+		newItems, err := listDir(newCur, showHidden)
+		if err != nil {
+			InfoBar.Error(err)
+			return
+		}
+		cur = newCur
+		items = newItems
+		picker.SetTitle(cur)
+		picker.SetItems(items) // also clears the query
+	}
+
 	picker = widget.NewPicker(widget.PickerOptions{
 		Title:    cur,
 		Items:    items,
+		Hint:     "<type> filter - <Up>/<Down> move - <Enter> open - <Esc> cancel",
+		Query:    true,
 		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: editorAreaRect()},
 		OnSelect: func(idx int) {
 			if idx < 0 || idx >= len(items) {
@@ -139,21 +176,31 @@ func openFileExplorer(invoker *BufPane, start string, selectName string) {
 				} else {
 					newCur = filepath.Join(cur, strings.TrimSuffix(label, "/"))
 				}
-				newItems, err := listDir(newCur, showHidden)
-				if err != nil {
-					InfoBar.Error(err)
-					return
-				}
-				cur = newCur
-				items = newItems
-				picker.SetTitle(cur)
-				picker.SetItems(items)
+				navigate(newCur)
 				return
 			}
 
 			target := filepath.Join(cur, label)
 			widget.CloseActive()
 			openFileFromPicker(invoker, target)
+		},
+		OnSubmit: func(query string) {
+			target := resolveQueryPath(cur, query)
+			// Trailing-separator query: treat as directory regardless
+			// of stat result. Lets the user descend into a new
+			// directory whose name they are about to mkdir.
+			trailingSep := strings.HasSuffix(target, string(filepath.Separator))
+			cleanedTarget := filepath.Clean(target)
+			if info, err := os.Stat(cleanedTarget); err == nil && info.IsDir() {
+				navigate(cleanedTarget)
+				return
+			}
+			if trailingSep {
+				navigate(cleanedTarget)
+				return
+			}
+			widget.CloseActive()
+			openFileFromPicker(invoker, cleanedTarget)
 		},
 		OnClose: func() {},
 	})
