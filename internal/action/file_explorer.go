@@ -158,12 +158,27 @@ func openFileExplorer(invoker *BufPane, start string, selectName string) {
 		picker.SetItems(items) // also clears the query
 	}
 
+	// toggleHidden flips the visibility filter and re-lists the
+	// current directory in place. RefreshItems keeps the typed query
+	// so narrowing survives the toggle.
+	toggleHidden := func() {
+		showHidden = !showHidden
+		newItems, err := listDir(cur, showHidden)
+		if err != nil {
+			InfoBar.Error(err)
+			return
+		}
+		items = newItems
+		picker.RefreshItems(items)
+	}
+
 	picker = widget.NewPicker(widget.PickerOptions{
 		Title:    cur,
 		Items:    items,
-		Hint:     "<type> filter - <Up>/<Down> move - <Enter> open - <Esc> cancel",
+		Hint:     "<type> filter - <Up>/<Down> move - <Ctrl-h> hidden - <Enter> open - <Esc> cancel",
 		Query:    true,
 		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: editorAreaRect()},
+		OnCtrlH:  toggleHidden,
 		OnSelect: func(idx int) {
 			if idx < 0 || idx >= len(items) {
 				return
