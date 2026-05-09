@@ -194,6 +194,55 @@ func TestPaletteSettingsGateLua(t *testing.T) {
 	}
 }
 
+func TestPaletteItemLabel(t *testing.T) {
+	cases := []struct {
+		name string
+		e    paletteEntry
+		want string
+	}{
+		{
+			name: "action without bindings",
+			e:    paletteEntry{Kind: paletteAction, Name: "DuplicateLine"},
+			want: "action DuplicateLine",
+		},
+		{
+			name: "action with single binding",
+			e:    paletteEntry{Kind: paletteAction, Name: "DuplicateLine", Bindings: []string{"Ctrl-d"}},
+			want: "action DuplicateLine [Ctrl-d]",
+		},
+		{
+			name: "action with multiple bindings packed for fuzzy search",
+			e:    paletteEntry{Kind: paletteAction, Name: "Save", Bindings: []string{"Ctrl-s", "Ctrl-Shift-S"}},
+			want: "action Save [Ctrl-s, Ctrl-Shift-S]",
+		},
+		{
+			name: "command label uses cmd tag",
+			e:    paletteEntry{Kind: paletteCommand, Name: "save"},
+			want: "cmd    save",
+		},
+		{
+			name: "lua label uses lua tag and qualified name",
+			e:    paletteEntry{Kind: paletteLua, Name: "linter.checkAll"},
+			want: "lua    linter.checkAll",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := paletteItemLabel(c.e)
+			if got != c.want {
+				t.Errorf("paletteItemLabel: got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestPaletteCommandPaletteRegistered(t *testing.T) {
+	setupPaletteTest(t)
+	if _, ok := commands["commandpalette"]; !ok {
+		t.Fatalf("commandpalette command not registered")
+	}
+}
+
 func TestPaletteEntriesAreSortedWithinKind(t *testing.T) {
 	setupPaletteTest(t)
 	entries := buildPaletteEntries()

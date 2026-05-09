@@ -2,9 +2,12 @@ package action
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/micro-editor/micro/v2/internal/config"
 	ulua "github.com/micro-editor/micro/v2/internal/lua"
+	"github.com/micro-editor/micro/v2/internal/screen"
+	"github.com/micro-editor/micro/v2/internal/widget"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -157,4 +160,144 @@ func isPaletteEnabled(opt string) bool {
 	}
 	b, _ := v.(bool)
 	return b
+}
+
+// paletteKindTag returns the short prefix rendered on each palette
+// row. Trailing spaces line entries up across kinds for readability.
+func paletteKindTag(k paletteKind) string {
+	switch k {
+	case paletteAction:
+		return "action "
+	case paletteCommand:
+		return "cmd    "
+	case paletteLua:
+		return "lua    "
+	}
+	return ""
+}
+
+// paletteItemLabel formats a paletteEntry as a picker row label.
+// Layout: "<kindTag><Name> [<bindings>]". The bindings group is
+// omitted when empty. Keystrokes are packed into the label so the
+// fuzzy filter can match queries like "ctrl-shift-x" against the
+// bound entries.
+func paletteItemLabel(e paletteEntry) string {
+	s := paletteKindTag(e.Kind) + e.Name
+	if len(e.Bindings) > 0 {
+		s += " [" + strings.Join(e.Bindings, ", ") + "]"
+	}
+	return s
+}
+
+// paletteItems wraps the entries into the picker's row type.
+func paletteItems(entries []paletteEntry) []widget.PickerItem {
+	items := make([]widget.PickerItem, len(entries))
+	for i, e := range entries {
+		items[i].Label = paletteItemLabel(e)
+	}
+	return items
+}
+
+// commandPaletteRect computes the on-screen rect for the palette
+// overlay, leaving a 2-cell margin around the editor area and
+// accounting for the tab bar (when more than one tab is open) and
+// the info bar.
+func commandPaletteRect() widget.ScreenRect {
+	sw, sh := screen.Screen.Size()
+	iOff := config.GetInfoBarOffset()
+	tabBar := 0
+	if Tabs != nil && len(Tabs.List) > 1 {
+		tabBar = 1
+	}
+	const margin = 2
+	x := margin
+	y := tabBar + margin
+	w := sw - 2*margin
+	h := (sh - tabBar - iOff) - 2*margin
+	if w < 0 {
+		w = 0
+	}
+	if h < 0 {
+		h = 0
+	}
+	return widget.ScreenRect{X: x, Y: y, W: w, H: h}
+}
+
+// CommandPalette opens the command palette overlay. No default key
+// binding ships. Users invoke it from the command bar by typing
+// commandpalette, or by binding command:commandpalette themselves.
+func (h *BufPane) CommandPalette() {
+	entries := buildPaletteEntries()
+	items := paletteItems(entries)
+	picker := widget.NewPicker(widget.PickerOptions{
+		Title:    "Command palette",
+		Hint:     "<type> filter - <Up>/<Down> move - <Enter> run - <Esc> cancel",
+		Query:    true,
+		Items:    items,
+		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: commandPaletteRect()},
+		OnSelect: func(idx int) {
+			widget.CloseActive()
+			if idx < 0 || idx >= len(entries) {
+				return
+			}
+			executePaletteEntry(h, entries[idx])
+		},
+	})
+	widget.Open(picker)
+}
+
+// CommandPaletteCmd is the command-bar entry point. Args are
+// ignored.
+func (h *BufPane) CommandPaletteCmd(args []string) {
+	h.CommandPalette()
+}
+
+// executePaletteEntry dispatches the selected entry through the
+// same code paths a real keystroke or command-bar invocation would,
+// so plugin pre/on hooks fire and macros record consistently.
+//
+// The action-kind branch duplicates the MultiActions per-cursor
+// loop from BufMapEvent (mirrored by RunActionCmd on the
+// runaction-command branch, commit 6ea16cf1). When both branches
+// land in integration this body and that one should be folded into
+// a shared helper.
+func executePaletteEntry(h *BufPane, e paletteEntry) {
+	switch e.Kind {
+	case paletteAction:
+		fn, ok := BufKeyActions[e.Name]
+		if !ok {
+			return
+		}
+		if _, multi := MultiActions[e.Name]; multi {
+			for _, c := range h.Buf.GetCursors() {
+				h.Buf.SetCurCursor(c.Num)
+				h.Cursor = c
+				h.execAction(fn, e.Name, nil)
+			}
+		} else {
+			h.Buf.SetCurCursor(0)
+			h.Cursor = h.Buf.GetActiveCursor()
+			h.execAction(fn, e.Name, nil)
+		}
+	case paletteCommand:
+		h.HandleCommand(e.Name)
+	case paletteLua:
+		a := LuaAction(e.Name, KeyEvent{})
+		fn, ok := a.(BufKeyAction)
+		if !ok || fn == nil {
+			return
+		}
+		// Match BufMapEvent's hook-name convention for `lua:` bindings:
+		// title-case the plugin and function names so the pre/on hook
+		// keys mirror what plugins receive when invoked from a real
+		// keybinding.
+		split := strings.SplitN(e.Name, ".", 2)
+		var hookName string
+		if len(split) > 1 {
+			hookName = strings.Title(split[0]) + strings.Title(split[1])
+		} else {
+			hookName = strings.Title(e.Name)
+		}
+		h.execAction(fn, hookName, nil)
+	}
 }
