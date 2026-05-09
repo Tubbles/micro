@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"regexp"
 	"sync"
 
 	"github.com/micro-editor/micro/v2/internal/util"
@@ -41,6 +42,17 @@ type searchState struct {
 	done       bool
 }
 
+// An hlSelectionState contains the hlselection match info for a single
+// line. The query is always treated as a literal (regex-escaped at use
+// time); wholeWord toggles \b boundaries.
+type hlSelectionState struct {
+	query      string
+	wholeWord  bool
+	ignorecase bool
+	match      [][2]int
+	done       bool
+}
+
 // A Line contains the data in bytes as well as a highlight state, match
 // and a flag for whether the highlighting needs to be updated
 type Line struct {
@@ -57,6 +69,10 @@ type Line struct {
 	// which have distinct searches, so in the general case there are multiple
 	// searches per a line, one search per a Buffer containing this line.
 	search map[*Buffer]*searchState
+
+	// hlselection mirrors `search` but caches matches of the active
+	// cursor's selection / word-under-cursor.
+	hlselection map[*Buffer]*hlSelectionState
 }
 
 const (
@@ -441,5 +457,88 @@ func (la *LineArray) invalidateSearchMatches(lineN int) {
 		for _, s := range la.lines[lineN].search {
 			s.done = false
 		}
+	}
+}
+
+// HLSelectionMatch reports whether pos lies inside an hlselection
+// match. Mirrors SearchMatch: matches are computed lazily per line and
+// cached until the line is invalidated or the query changes.
+func (la *LineArray) HLSelectionMatch(b *Buffer, pos Loc) bool {
+	if !b.HLSelection || b.HLSelectionQuery == "" {
+		return false
+	}
+
+	lineN := pos.Y
+	if la.lines[lineN].hlselection == nil {
+		la.lines[lineN].hlselection = make(map[*Buffer]*hlSelectionState)
+	}
+	s, ok := la.lines[lineN].hlselection[b]
+	if !ok {
+		// Same harmless-leak caveat as SearchMatch: when buffer `b`
+		// closes, its entry stays in the map until the line array is
+		// garbage-collected.
+		s = new(hlSelectionState)
+		la.lines[lineN].hlselection[b] = s
+	}
+	ic := b.Settings["ignorecase"].(bool)
+	if !ok || s.query != b.HLSelectionQuery || s.wholeWord != b.HLSelectionWholeWord || s.ignorecase != ic {
+		s.query = b.HLSelectionQuery
+		s.wholeWord = b.HLSelectionWholeWord
+		s.ignorecase = ic
+		s.done = false
+	}
+
+	if !s.done {
+		s.match = nil
+		pattern := regexp.QuoteMeta(s.query)
+		if s.wholeWord {
+			pattern = `\b` + pattern + `\b`
+		}
+		start := Loc{0, lineN}
+		end := Loc{util.CharacterCount(la.lines[lineN].data), lineN}
+		for start.X < end.X {
+			m, found, err := b.FindNext(pattern, start, end, start, true, true)
+			if err != nil || !found {
+				break
+			}
+			if m[0].Y != lineN || m[1].Y != lineN {
+				break
+			}
+			s.match = append(s.match, [2]int{m[0].X, m[1].X})
+
+			start.X = m[1].X
+			if m[1].X == m[0].X {
+				start.X = m[1].X + 1
+			}
+		}
+
+		s.done = true
+	}
+
+	for _, m := range s.match {
+		if pos.X >= m[0] && pos.X < m[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// invalidateHLSelection marks hlselection matches for the given line
+// as outdated. Called when the line is modified.
+func (la *LineArray) invalidateHLSelection(lineN int) {
+	if la.lines[lineN].hlselection != nil {
+		for _, s := range la.lines[lineN].hlselection {
+			s.done = false
+		}
+	}
+}
+
+// invalidateAllHLSelection marks hlselection matches on every line as
+// outdated. Used when the query (or ignorecase) changes, since the
+// underlying line text is unaffected but every cached match is now
+// stale.
+func (la *LineArray) invalidateAllHLSelection() {
+	for i := range la.lines {
+		la.invalidateHLSelection(i)
 	}
 }
