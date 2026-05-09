@@ -198,6 +198,7 @@ func (b *SharedBuffer) MarkModified(start, end int) {
 
 	for i := start; i <= end; i++ {
 		b.LineArray.invalidateSearchMatches(i)
+		b.LineArray.invalidateHLSelection(i)
 	}
 }
 
@@ -261,6 +262,18 @@ type Buffer struct {
 	LastSearchRegex bool
 	// HighlightSearch enables highlighting all instances of the last successful search
 	HighlightSearch bool
+
+	// HLSelection enables highlighting all occurrences of the active
+	// cursor's selection (or word under cursor when there is no
+	// selection). Mirrors the `hlselection` option.
+	HLSelection bool
+	// HLSelectionQuery is the literal text being highlighted. Empty
+	// disables the highlight (e.g. multi-line selection, cursor not on
+	// a word).
+	HLSelectionQuery string
+	// HLSelectionWholeWord constrains the regex to whole-word boundaries
+	// (true in word-under-cursor mode, false in selection mode).
+	HLSelectionWholeWord bool
 
 	// OverwriteMode indicates that we are in overwrite mode (toggled by
 	// Insert key by default) i.e. that typing a character shall replace the
