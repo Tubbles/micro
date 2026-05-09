@@ -128,3 +128,34 @@ func TestListDir_ErrorOnMissingDir(t *testing.T) {
 		t.Fatal("expected error for missing directory")
 	}
 }
+
+func TestIndexOfLabel(t *testing.T) {
+	dir := t.TempDir()
+	makeFile(t, filepath.Join(dir, "a.txt"))
+	makeFile(t, filepath.Join(dir, "b.txt"))
+	makeDir(t, filepath.Join(dir, "sub"))
+
+	items, err := listDir(dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Listing is "../", "sub/", "a.txt", "b.txt" — dirs first, files
+	// next, both case-insensitive sorted.
+	cases := []struct {
+		label string
+		want  int
+	}{
+		{"../", 0},
+		{"sub/", 1},
+		{"a.txt", 2},
+		{"b.txt", 3},
+		{"missing", -1},
+		// Files do not have a trailing slash; "a.txt/" must miss.
+		{"a.txt/", -1},
+	}
+	for _, c := range cases {
+		if got := indexOfLabel(items, c.label); got != c.want {
+			t.Errorf("indexOfLabel(%q) = %d, want %d", c.label, got, c.want)
+		}
+	}
+}
