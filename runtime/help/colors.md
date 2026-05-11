@@ -136,6 +136,18 @@ You can also put bold, italic, or underline in front of the color:
 color-link comment "bold red"
 ```
 
+For most highlight groups, an unspecified field (empty foreground or
+background, or `default`) falls back to the colorscheme's default style.
+Overlay groups behave differently: an unspecified field keeps the value
+from the underlying cell instead. The only overlay group today is
+`hlselection`, where a directive like `color-link hlselection
+",#88C0D0"` paints only the background and preserves the syntax token's
+foreground and attributes. The same applies to attribute-only forms
+like `color-link hlselection "bold"`, which adds bold to whatever was
+already there. Attributes are additive only: there is no syntax to
+clear `bold`, `italic`, `underline`, or `reverse` from an underlying
+style.
+
 ---
 
 There are three different ways to specify the color.
@@ -198,6 +210,7 @@ Here is a list of the colorscheme groups that you can use:
 * error-message (Color of error messages in the bottom line of the screen)
 * match-brace (Color of matching brackets when `matchbracestyle` is set to `highlight`)
 * hlsearch (Color of highlighted search results when `hlsearch` is enabled)
+* hlselection (Color of highlighted selection / word-under-cursor matches when `hlselection` is enabled. Falls back to `hlsearch` when not defined.)
 * tab-error (Color of tab vs space errors when `hltaberrors` is enabled)
 * trailingws (Color of trailing whitespaces when `hltrailingws` is enabled)
 

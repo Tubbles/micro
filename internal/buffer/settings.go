@@ -114,6 +114,20 @@ func (b *Buffer) DoSetOptionNative(option string, nativeValue any) {
 				buf.HighlightSearch = nativeValue.(bool)
 			}
 		}
+	} else if option == "hlselection" {
+		for _, buf := range OpenBuffers {
+			if b.SharedBuffer == buf.SharedBuffer {
+				buf.UpdateHLSelection()
+			}
+		}
+	} else if option == "ignorecase" {
+		// hlselection compiles its regex with (?i) based on this
+		// option, so a toggle invalidates the cache.
+		for _, buf := range OpenBuffers {
+			if b.SharedBuffer == buf.SharedBuffer {
+				buf.LineArray.invalidateAllHLSelection()
+			}
+		}
 	} else {
 		for _, pl := range config.Plugins {
 			if option == pl.Name {
