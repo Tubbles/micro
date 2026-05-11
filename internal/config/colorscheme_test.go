@@ -65,10 +65,124 @@ color-link constant "#AE81FF,#282828"
 color-link constant.string "#E6DB74,#282828"
 color-link constant.string.char "#BDE6AD,#282828"`
 
-	c, err := ParseColorscheme("testColorscheme", testColorscheme, nil)
+	c, m, err := ParseColorscheme("testColorscheme", testColorscheme, nil)
 	assert.Nil(t, err)
 
 	fg, bg := c["comment"].GetForeground(), c["comment"].GetBackground()
 	assert.Equal(t, tcell.NewRGBColor(117, 113, 94), fg)
 	assert.Equal(t, tcell.NewRGBColor(40, 40, 40), bg)
+
+	assert.True(t, m["comment"].Fg)
+	assert.True(t, m["comment"].Bg)
+	assert.False(t, m["comment"].Bold)
+}
+
+func TestStringToStyleMaskBgOnly(t *testing.T) {
+	_, m := StringToStyleMask(",#88C0D0")
+	assert.False(t, m.Fg)
+	assert.True(t, m.Bg)
+	assert.False(t, m.Bold)
+	assert.False(t, m.Italic)
+	assert.False(t, m.Underline)
+	assert.False(t, m.Reverse)
+}
+
+func TestStringToStyleMaskFgOnly(t *testing.T) {
+	_, m := StringToStyleMask("#abcdef,")
+	assert.True(t, m.Fg)
+	assert.False(t, m.Bg)
+}
+
+func TestStringToStyleMaskAttrsOnly(t *testing.T) {
+	_, m := StringToStyleMask("bold underline")
+	assert.False(t, m.Fg)
+	assert.False(t, m.Bg)
+	assert.True(t, m.Bold)
+	assert.True(t, m.Underline)
+	assert.False(t, m.Italic)
+	assert.False(t, m.Reverse)
+}
+
+func TestStringToStyleMaskDefaultIsUnset(t *testing.T) {
+	// "default" in either field reads as unspecified, same as the empty
+	// form, so overlay renderers leave the underlying cell value alone.
+	_, m := StringToStyleMask("default,#88C0D0")
+	assert.False(t, m.Fg)
+	assert.True(t, m.Bg)
+
+	_, m = StringToStyleMask("#abcdef,default")
+	assert.True(t, m.Fg)
+	assert.False(t, m.Bg)
+}
+
+func TestStringToStyleMaskFullSpec(t *testing.T) {
+	_, m := StringToStyleMask("bold italic reverse underline #abcdef,#123456")
+	assert.True(t, m.Fg)
+	assert.True(t, m.Bg)
+	assert.True(t, m.Bold)
+	assert.True(t, m.Italic)
+	assert.True(t, m.Underline)
+	assert.True(t, m.Reverse)
+}
+
+func TestMergeOverlayBgOnly(t *testing.T) {
+	base := tcell.StyleDefault.
+		Foreground(tcell.NewRGBColor(10, 20, 30)).
+		Background(tcell.NewRGBColor(0, 0, 0)).
+		Bold(true)
+	overlay := tcell.StyleDefault.Background(tcell.NewRGBColor(99, 99, 99))
+	mask := StyleMask{Bg: true}
+
+	got := MergeOverlay(base, overlay, mask)
+
+	fg, bg, attr := got.GetForeground(), got.GetBackground(), got.GetAttributes()
+	assert.Equal(t, tcell.NewRGBColor(10, 20, 30), fg)
+	assert.Equal(t, tcell.NewRGBColor(99, 99, 99), bg)
+	assert.NotEqual(t, 0, attr&tcell.AttrBold)
+}
+
+func TestMergeOverlayNoOpWhenMaskEmpty(t *testing.T) {
+	base := tcell.StyleDefault.
+		Foreground(tcell.NewRGBColor(10, 20, 30)).
+		Background(tcell.NewRGBColor(40, 50, 60)).
+		Italic(true)
+	overlay := tcell.StyleDefault.
+		Foreground(tcell.NewRGBColor(99, 99, 99)).
+		Background(tcell.NewRGBColor(11, 11, 11))
+
+	got := MergeOverlay(base, overlay, StyleMask{})
+
+	fg, bg, attr := got.GetForeground(), got.GetBackground(), got.GetAttributes()
+	assert.Equal(t, tcell.NewRGBColor(10, 20, 30), fg)
+	assert.Equal(t, tcell.NewRGBColor(40, 50, 60), bg)
+	assert.NotEqual(t, 0, attr&tcell.AttrItalic)
+}
+
+func TestMergeOverlayAttrsAreAdditive(t *testing.T) {
+	base := tcell.StyleDefault.Italic(true)
+	overlay := tcell.StyleDefault
+	mask := StyleMask{Bold: true, Underline: true}
+
+	got := MergeOverlay(base, overlay, mask)
+
+	attr := got.GetAttributes()
+	assert.NotEqual(t, 0, attr&tcell.AttrBold)
+	assert.True(t, got.HasUnderline())
+	assert.NotEqual(t, 0, attr&tcell.AttrItalic)
+}
+
+func TestMergeOverlayFullReplacement(t *testing.T) {
+	base := tcell.StyleDefault.
+		Foreground(tcell.NewRGBColor(10, 20, 30)).
+		Background(tcell.NewRGBColor(40, 50, 60))
+	overlay := tcell.StyleDefault.
+		Foreground(tcell.NewRGBColor(99, 99, 99)).
+		Background(tcell.NewRGBColor(11, 11, 11))
+	mask := StyleMask{Fg: true, Bg: true}
+
+	got := MergeOverlay(base, overlay, mask)
+
+	fg, bg := got.GetForeground(), got.GetBackground()
+	assert.Equal(t, tcell.NewRGBColor(99, 99, 99), fg)
+	assert.Equal(t, tcell.NewRGBColor(11, 11, 11), bg)
 }

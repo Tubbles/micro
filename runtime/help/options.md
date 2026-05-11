@@ -184,6 +184,19 @@ Here are the available options:
 
     default value: `false`
 
+* `hlselection`: highlight all occurrences of the active cursor's selection in
+   the visible buffer. When the cursor has no selection, the word under the
+   cursor is highlighted instead with whole-word boundaries. Multi-line
+   selections disable the highlight. Case sensitivity follows the `ignorecase`
+   option. The colour comes from the `hlselection` colorscheme group, falling
+   back to `hlsearch` when a scheme does not define it. The `hlselection`
+   group is applied as an overlay: any field its `color-link` directive
+   leaves blank (foreground, background, or attributes like `bold`) keeps
+   the value from the underlying syntax-token style, so a `",#88C0D0"`
+   directive paints only the background and preserves token foregrounds.
+
+    default value: `false`
+
 * `hltaberrors`: highlight tabs when spaces are expected, and spaces when tabs
    are expected. More precisely: if `tabstospaces` option is on, highlight
    all tab characters; if `tabstospaces` is off, highlight space characters
@@ -580,6 +593,7 @@ so that you can see what the formatting should look like.
     "ftoptions": true,
     "helpsplit": "hsplit",
     "hlsearch": false,
+    "hlselection": false,
     "hltaberrors": false,
     "hltrailingws": false,
     "ignorecase": true,

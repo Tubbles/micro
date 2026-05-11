@@ -260,6 +260,8 @@ Find
 FindLiteral
 FindNext
 FindPrevious
+FindNextWord
+FindPreviousWord
 DiffNext
 DiffPrevious
 Center
@@ -401,6 +403,14 @@ the adjacent tab. For example: `"Alt-Right": "NextLeafSplit|NextTab"`.
 Unlike the existing `NextSplit` and `PreviousSplit`, which step by
 `tab.Panes` slice index (creation order), these walk the split tree
 and so produce the same ordering as `MovePaneToNext`.
+
+The `FindNextWord` and `FindPreviousWord` actions search for the word
+currently under the cursor (or, if there is an active single-line selection,
+that selection's text), without opening a prompt. The query is picked using
+the same logic as the `hlselection` setting, so the cursor jumps between the
+matches that `hlselection` highlights. Word-mode searches are whole-word
+(`\b…\b`); selection-mode searches are literal substrings. Neither action
+has a default binding.
 
 You can also bind some mouse actions (these must be bound to mouse buttons)
 
