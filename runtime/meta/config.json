@@ -1,0 +1,16 @@
+{
+    "name": "micro-editor",
+    "words": [
+        "import%s*%(",
+        "micro%.CurPane",
+        "micro%.InfoBar",
+        "onBufferOpen",
+        "preinit"
+    ],
+    "files": ["%.lua$"],
+    "settings": {
+        "Lua.runtime.version": "Lua 5.1",
+        "Lua.workspace.library": ["library"],
+        "Lua.diagnostics.globals": ["import"]
+    }
+}
