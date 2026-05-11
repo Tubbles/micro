@@ -2253,25 +2253,42 @@ func (h *BufPane) SpawnCursorAtLoc(loc buffer.Loc) *buffer.Cursor {
 	return c
 }
 
-// SpawnMultiCursorUpN is not an action
+// SpawnMultiCursorUpN is not an action.
+// For each existing cursor, spawn a new cursor one line away in the
+// requested direction (n > 0 == up, n < 0 == down). Cursors at the
+// buffer edge in the requested direction are individually skipped.
+// Overlapping spawns are collapsed by MergeCursors below, which gives
+// VS Code-style behavior: every press extends every cursor's frontier
+// by one in the requested direction; duplicates created when reversing
+// direction inside a contiguous cluster silently merge out.
 func (h *BufPane) SpawnMultiCursorUpN(n int) bool {
-	lastC := h.Buf.GetCursor(h.Buf.NumCursors() - 1)
-	if n > 0 && lastC.Y == 0 {
-		return false
-	}
-	if n < 0 && lastC.Y+1 == h.Buf.LinesNum() {
-		return false
-	}
+	existing := append([]*buffer.Cursor(nil), h.Buf.GetCursors()...)
 
 	h.Buf.DeselectCursors()
 
-	c := buffer.NewCursor(h.Buf, buffer.Loc{lastC.X, lastC.Y - n})
-	c.LastVisualX = lastC.LastVisualX
-	c.LastWrappedVisualX = lastC.LastWrappedVisualX
-	c.X = c.GetCharPosInLine(h.Buf.LineBytes(c.Y), c.LastVisualX)
-	c.Relocate()
+	spawned := false
+	for _, src := range existing {
+		if n > 0 && src.Y == 0 {
+			continue
+		}
+		if n < 0 && src.Y+1 == h.Buf.LinesNum() {
+			continue
+		}
 
-	h.Buf.AddCursor(c)
+		c := buffer.NewCursor(h.Buf, buffer.Loc{src.X, src.Y - n})
+		c.LastVisualX = src.LastVisualX
+		c.LastWrappedVisualX = src.LastWrappedVisualX
+		c.X = c.GetCharPosInLine(h.Buf.LineBytes(c.Y), c.LastVisualX)
+		c.Relocate()
+
+		h.Buf.AddCursor(c)
+		spawned = true
+	}
+
+	if !spawned {
+		return false
+	}
+
 	h.Buf.SetCurCursor(h.Buf.NumCursors() - 1)
 	h.Buf.MergeCursors()
 
