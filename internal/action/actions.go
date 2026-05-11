@@ -1328,6 +1328,98 @@ func (h *BufPane) DiffPrevious() bool {
 	return true
 }
 
+// JumpToNextMessage advances to the next under-cursor Message in document
+// order. When multiple messages overlap the cursor, successive presses
+// cycle through them in slice order without moving the cursor; once at the
+// last, the cursor moves to the next message anchor in the buffer and the
+// info bar shows the first message there. Wraps to the first message
+// overall when called past the last anchor.
+func (h *BufPane) JumpToNextMessage() bool {
+	if len(h.Buf.Messages) == 0 {
+		InfoBar.Message("No messages in buffer")
+		return false
+	}
+	cur := h.Cursor.Loc
+	under := h.Buf.MessagesUnderLoc(cur)
+	if h.activeMsgIdx+1 < len(under) {
+		h.activeMsgIdx++
+		return true
+	}
+	next, ok := smallestStartGT(h.Buf.Messages, cur)
+	if !ok {
+		next = smallestStart(h.Buf.Messages)
+		InfoBar.Message("Wrapped to first message")
+	}
+	h.pendingMsgIdx = 0
+	h.Cursor.GotoLoc(next)
+	h.Relocate()
+	return true
+}
+
+// JumpToPrevMessage is the mirror of JumpToNextMessage.
+func (h *BufPane) JumpToPrevMessage() bool {
+	if len(h.Buf.Messages) == 0 {
+		InfoBar.Message("No messages in buffer")
+		return false
+	}
+	cur := h.Cursor.Loc
+	if h.activeMsgIdx > 0 {
+		h.activeMsgIdx--
+		return true
+	}
+	prev, ok := largestStartLT(h.Buf.Messages, cur)
+	if !ok {
+		prev = largestStart(h.Buf.Messages)
+		InfoBar.Message("Wrapped to last message")
+	}
+	prevUnder := h.Buf.MessagesUnderLoc(prev)
+	if len(prevUnder) > 0 {
+		h.pendingMsgIdx = len(prevUnder) - 1
+	} else {
+		h.pendingMsgIdx = 0
+	}
+	h.Cursor.GotoLoc(prev)
+	h.Relocate()
+	return true
+}
+
+// ShowFullMessage opens a transient buffer in a new tab listing every
+// Message currently under the cursor in full, with severity prefix,
+// owner, and Loc range. Useful when the info bar truncated a long
+// diagnostic.
+func (h *BufPane) ShowFullMessage() bool {
+	cur := h.Cursor.Loc
+	under := h.Buf.MessagesUnderLoc(cur)
+	if len(under) == 0 {
+		InfoBar.Message("No messages here")
+		return false
+	}
+	var sb strings.Builder
+	for i, m := range under {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString(fmt.Sprintf("%s [%s] (%d:%d-%d:%d): %s",
+			messageSeverityLabel(m.Kind), m.Owner,
+			m.Start.Y+1, m.Start.X+1, m.End.Y+1, m.End.X+1, m.Msg))
+	}
+	buf := buffer.NewBufferFromString(sb.String(), "Messages here", buffer.BTScratch)
+	h.AddTab()
+	MainTab().CurPane().OpenBuffer(buf)
+	return true
+}
+
+func messageSeverityLabel(k buffer.MsgType) string {
+	switch k {
+	case buffer.MTError:
+		return "[E]"
+	case buffer.MTWarning:
+		return "[W]"
+	default:
+		return "[I]"
+	}
+}
+
 // Undo undoes the last action
 func (h *BufPane) Undo() bool {
 	if !h.Buf.Undo() {
