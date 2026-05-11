@@ -900,6 +900,7 @@ var BufMouseActions = map[string]BufMouseAction{
 	"MouseDrag":        (*BufPane).MouseDrag,
 	"MouseRelease":     (*BufPane).MouseRelease,
 	"MouseMultiCursor": (*BufPane).MouseMultiCursor,
+	"MouseSelectTo":    (*BufPane).MouseSelectTo,
 }
 
 // MultiActions is a list of actions that should be executed multiple
