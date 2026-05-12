@@ -148,13 +148,11 @@ var (
 	// The options that the user can set
 	GlobalSettings map[string]any
 
-	// This is the raw parsed json
+	// This is the raw parsed json. parsedSettings is the in-memory mirror of
+	// settings.json: :set writes directly into it, WriteSettings serializes it
+	// to disk verbatim.
 	parsedSettings     map[string]any
 	settingsParseError bool
-
-	// ModifiedSettings is a map of settings which should be written to disk
-	// because they have been modified by the user in this session
-	ModifiedSettings map[string]bool
 
 	// VolatileSettings is a map of settings which should not be written to disk
 	// because they have been temporarily set for this session only
@@ -166,7 +164,6 @@ func writeFile(name string, txt []byte) error {
 }
 
 func init() {
-	ModifiedSettings = make(map[string]bool)
 	VolatileSettings = make(map[string]bool)
 }
 
@@ -349,7 +346,40 @@ func UpdateFileTypeLocals(settings map[string]any, filetype string) {
 	}
 }
 
-// WriteSettings writes the settings to the specified filename as JSON
+// UpdateParsedSetting records a user-driven :set in parsedSettings.
+// If value equals the default for option, the key is removed (so it won't
+// be serialized into settings.json); otherwise the key is set to value.
+// This keeps parsedSettings as the authoritative mirror of settings.json
+// so WriteSettings can remain a plain serializer.
+func UpdateParsedSetting(option string, value any) {
+	defaults := DefaultAllSettings()
+	if def, ok := defaults[option]; ok && reflect.DeepEqual(value, def) {
+		delete(parsedSettings, option)
+	} else {
+		parsedSettings[option] = value
+	}
+}
+
+// DeleteParsedSetting removes option from parsedSettings so it will not be
+// emitted by the next WriteSettings call. Used by the clean tool to drop
+// keys that are no longer recognised by micro or its plugins.
+func DeleteParsedSetting(option string) {
+	delete(parsedSettings, option)
+}
+
+// WriteSettings writes parsedSettings to the specified filename as JSON.
+//
+// parsedSettings is the authoritative in-memory mirror of settings.json:
+// :set mutates it directly (delete-if-default, else assign), so by the
+// time WriteSettings runs the map already contains exactly the keys that
+// should appear on disk. WriteSettings is a plain serializer with no
+// reconciliation against GlobalSettings.
+//
+// Behavior note: this function does NOT prune scalar entries whose value
+// equals the default. Hand-edited default-valued entries in settings.json
+// (e.g. "ruler": false when false is the default) are preserved verbatim.
+// The only way an entry leaves settings.json is :set <key> <default-value>
+// at runtime, which deletes the key from parsedSettings.
 func WriteSettings(filename string) error {
 	if settingsParseError {
 		// Don't write settings if there was a parse error
@@ -361,51 +391,6 @@ func WriteSettings(filename string) error {
 
 	var err error
 	if _, e := os.Stat(ConfigDir); e == nil {
-		defaults := DefaultAllSettings()
-
-		// remove any options froms parsedSettings that have since been marked as default
-		for k, v := range parsedSettings {
-			if !strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
-				cur, okcur := GlobalSettings[k]
-				_, vol := VolatileSettings[k]
-				if def, ok := defaults[k]; ok && okcur && !vol && reflect.DeepEqual(cur, def) {
-					delete(parsedSettings, k)
-				}
-			}
-		}
-
-		// add any options to parsedSettings that have since been marked as non-default
-		for k, v := range GlobalSettings {
-			if def, ok := defaults[k]; !ok || !reflect.DeepEqual(v, def) {
-				if _, wr := ModifiedSettings[k]; wr {
-					parsedSettings[k] = v
-				}
-			}
-		}
-
-		txt, _ := json.MarshalIndent(parsedSettings, "", "    ")
-		txt = append(txt, '\n')
-		err = writeFile(filename, txt)
-	}
-	return err
-}
-
-// OverwriteSettings writes the current settings to settings.json and
-// resets any user configuration of local settings present in settings.json
-func OverwriteSettings(filename string) error {
-	settings := make(map[string]any)
-
-	var err error
-	if _, e := os.Stat(ConfigDir); e == nil {
-		defaults := DefaultAllSettings()
-		for k, v := range GlobalSettings {
-			if def, ok := defaults[k]; !ok || !reflect.DeepEqual(v, def) {
-				if _, wr := ModifiedSettings[k]; wr {
-					settings[k] = v
-				}
-			}
-		}
-
 		txt, _ := json.MarshalIndent(parsedSettings, "", "    ")
 		txt = append(txt, '\n')
 		err = writeFile(filename, txt)
