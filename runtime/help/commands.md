@@ -67,19 +67,24 @@ quotes here but these are not necessary when entering the command in micro.
 
 * `set 'option' 'value'`: sets the option to value. See the `options` help
    topic for a list of options you can set. This will modify your
-   `settings.json` with the new value.
+   `settings.json` with the new value. If value equals the option's default,
+   the entry is removed from `settings.json` instead. `set` always writes to
+   `settings.json`, never to `settings.local.json` (see the `options` help
+   topic for details on `settings.local.json`).
 
 * `setlocal 'option' 'value'`: sets the option to value locally (only in the
    current buffer). This will *not* modify `settings.json`.
 
 * `toggle 'option'`: toggles the option. Only works with options that accept
-   exactly two values. This will modify your `settings.json` with the new value.
+   exactly two values. This will modify your `settings.json` with the new
+   value (or remove the entry if the new value is the default).
 
 * `togglelocal 'option'`: toggles the option locally (only in the
    current buffer). Only works with options that accept exactly two values.
    This will *not* modify `settings.json`.
 
-* `reset 'option'`: resets the given option to its default value.
+* `reset 'option'`: resets the given option to its default value. This will
+   also remove the entry from `settings.json`.
 
 * `show 'option'`: shows the current value of the given option.
 
