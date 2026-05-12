@@ -299,9 +299,20 @@ func ReadLocalSettings() error {
 	return validateParsedSettings(parsedLocalSettings)
 }
 
+// ParsedSettings returns the effective scalar view of the user's
+// configuration: keys in parsedSettings overlaid by keys in
+// parsedLocalSettings. ft:/glob: nested maps are excluded because they
+// apply per-buffer via UpdateFileTypeLocals / UpdatePathGlobLocals.
+// Used by the :reload settings path so it picks up local overrides.
 func ParsedSettings() map[string]any {
 	s := make(map[string]any)
 	for k, v := range parsedSettings {
+		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
+			continue
+		}
+		s[k] = v
+	}
+	for k, v := range parsedLocalSettings {
 		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
 			continue
 		}
@@ -387,38 +398,57 @@ func RebuildGlobalSettings() {
 	}
 }
 
-// UpdatePathGlobLocals scans the already parsed settings and sets the options locally
-// based on whether the path matches a glob
-// Must be called after ReadSettings
-func UpdatePathGlobLocals(settings map[string]any, path string) {
-	for k, v := range parsedSettings {
-		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") && strings.HasPrefix(k, "glob:") {
-			tk := strings.TrimPrefix(k, "glob:")
-			g, _ := glob.Compile(tk)
-			if g.MatchString(path) {
-				for k1, v1 := range v.(map[string]any) {
-					settings[k1] = v1
-				}
+// applyPathGlobLocals overlays any glob:<pattern> nested maps in src
+// whose pattern matches path into settings.
+func applyPathGlobLocals(src map[string]any, settings map[string]any, path string) {
+	for k, v := range src {
+		if !strings.HasPrefix(reflect.TypeOf(v).String(), "map") || !strings.HasPrefix(k, "glob:") {
+			continue
+		}
+		tk := strings.TrimPrefix(k, "glob:")
+		g, _ := glob.Compile(tk)
+		if g.MatchString(path) {
+			for k1, v1 := range v.(map[string]any) {
+				settings[k1] = v1
 			}
 		}
 	}
 }
 
-// UpdateFileTypeLocals scans the already parsed settings and sets the options locally
-// based on whether the filetype matches to "ft:"
-// Must be called after ReadSettings
-func UpdateFileTypeLocals(settings map[string]any, filetype string) {
-	for k, v := range parsedSettings {
-		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") && strings.HasPrefix(k, "ft:") {
-			if filetype == k[3:] {
-				for k1, v1 := range v.(map[string]any) {
-					if k1 != "filetype" {
-						settings[k1] = v1
-					}
-				}
+// applyFileTypeLocals overlays any ft:<filetype> nested map in src
+// matching filetype into settings.
+func applyFileTypeLocals(src map[string]any, settings map[string]any, filetype string) {
+	for k, v := range src {
+		if !strings.HasPrefix(reflect.TypeOf(v).String(), "map") || !strings.HasPrefix(k, "ft:") {
+			continue
+		}
+		if filetype != k[3:] {
+			continue
+		}
+		for k1, v1 := range v.(map[string]any) {
+			if k1 != "filetype" {
+				settings[k1] = v1
 			}
 		}
 	}
+}
+
+// UpdatePathGlobLocals applies glob:<pattern> nested maps from settings.json
+// first, then from settings.local.json, so local values win on key collision
+// while non-colliding settings.json keys persist (per-key deep merge).
+// Must be called after ReadSettings and ReadLocalSettings.
+func UpdatePathGlobLocals(settings map[string]any, path string) {
+	applyPathGlobLocals(parsedSettings, settings, path)
+	applyPathGlobLocals(parsedLocalSettings, settings, path)
+}
+
+// UpdateFileTypeLocals applies ft:<filetype> nested maps from settings.json
+// first, then from settings.local.json, so local values win on key collision
+// while non-colliding settings.json keys persist (per-key deep merge).
+// Must be called after ReadSettings and ReadLocalSettings.
+func UpdateFileTypeLocals(settings map[string]any, filetype string) {
+	applyFileTypeLocals(parsedSettings, settings, filetype)
+	applyFileTypeLocals(parsedLocalSettings, settings, filetype)
 }
 
 // UpdateParsedSetting records a user-driven :set in parsedSettings.
