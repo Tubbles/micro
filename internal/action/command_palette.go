@@ -226,12 +226,20 @@ func commandPaletteRect() widget.ScreenRect {
 // CommandPalette opens the command palette overlay. No default key
 // binding ships. Users invoke it from the command bar by typing
 // commandpalette, or by binding command:commandpalette themselves.
+//
+// Enter behaviour:
+//   - With matches in the filtered list, Enter runs the highlighted
+//     entry via executePaletteEntry (action / command / lua).
+//   - With a non-empty query and zero matches, Enter falls through to
+//     OnSubmit, which dispatches the typed text as a command line via
+//     HandleCommand. Lets the palette double as a free-text command
+//     bar (`saveas foo.txt`, `help commands`, etc).
 func (h *BufPane) CommandPalette() {
 	entries := buildPaletteEntries()
 	items := paletteItems(entries)
 	picker := widget.NewPicker(widget.PickerOptions{
 		Title:    "Command palette",
-		Hint:     "<type> filter - <Up>/<Down> move - <Enter> run - <Esc> cancel",
+		Hint:     "<type> filter or command line - <Up>/<Down> move - <Enter> run - <Esc> cancel",
 		Query:    true,
 		Items:    items,
 		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: commandPaletteRect()},
@@ -241,6 +249,10 @@ func (h *BufPane) CommandPalette() {
 				return
 			}
 			executePaletteEntry(h, entries[idx])
+		},
+		OnSubmit: func(query string) {
+			widget.CloseActive()
+			h.HandleCommand(query)
 		},
 	})
 	widget.Open(picker)
