@@ -93,11 +93,16 @@ quotes here but these are not necessary when entering the command in micro.
    column is part of the search haystack, so a query like
    `ctrl-shift-x` filters down to whatever is bound to that keystroke
    (assuming the binding is a single token; chain-bound entries do
-   not surface their bindings in v1). The three kinds can be toggled
-   independently with `commandpalette.actions`, `commandpalette.commands`
-   and `commandpalette.lua` (defaults all `true`). No default key
-   binding ships; users who want a VSCode-style entry point can add
-   `"CtrlShiftP": "command:commandpalette"` to bindings.json.
+   not surface their bindings in v1). If the typed query matches no
+   entry, `Enter` instead runs the query as a command line, exactly as
+   if you had typed it after `Ctrl-E`. That lets the palette double as
+   a free-text command bar for cases that need arguments, e.g.
+   `saveas foo.txt`, `help commands`, `set tabsize 4`. The three kinds
+   of entries can be toggled independently with `commandpalette.actions`,
+   `commandpalette.commands` and `commandpalette.lua` (defaults all
+   `true`). No default key binding ships; users who want a VSCode-style
+   entry point can add `"CtrlShiftP": "command:commandpalette"` to
+   bindings.json.
 
 * `run 'sh-command'`: runs the given shell command in the background. The
    command's output will be displayed in one line when it finishes running.
