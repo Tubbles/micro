@@ -155,6 +155,14 @@ var (
 	parsedSettings     map[string]any
 	settingsParseError bool
 
+	// parsedLocalSettings is the in-memory view of settings.local.json.
+	// It is read-only at runtime: the editor never writes to it; users edit
+	// the file by hand. Values here override parsedSettings during rebuild
+	// of GlobalSettings, providing a per-machine override layer for a
+	// settings.json that the user wants to keep in version control.
+	parsedLocalSettings     map[string]any
+	localSettingsParseError bool
+
 	// VolatileSettings is a map of settings which should not be written to disk
 	// because they have been temporarily set for this session only
 	VolatileSettings map[string]bool
@@ -168,17 +176,21 @@ func init() {
 	VolatileSettings = make(map[string]bool)
 }
 
-func validateParsedSettings() error {
+// validateParsedSettings normalises and validates a parsed settings map
+// in place. It is used for both the global parsedSettings (settings.json)
+// and the per-machine parsedLocalSettings (settings.local.json); the rules
+// are identical for both files.
+func validateParsedSettings(m map[string]any) error {
 	var err error
 	defaults := DefaultAllSettings()
-	for k, v := range parsedSettings {
+	for k, v := range m {
 		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
 			if strings.HasPrefix(k, "ft:") {
 				for k1, v1 := range v.(map[string]any) {
 					if _, ok := defaults[k1]; ok {
 						if e := verifySetting(k1, v1, defaults[k1]); e != nil {
 							err = e
-							parsedSettings[k].(map[string]any)[k1] = defaults[k1]
+							m[k].(map[string]any)[k1] = defaults[k1]
 							continue
 						}
 					}
@@ -187,21 +199,21 @@ func validateParsedSettings() error {
 				tk := strings.TrimPrefix(k, "glob:")
 				if _, e := glob.Compile(tk); e != nil {
 					err = errors.New("Error with glob setting " + tk + ": " + e.Error())
-					delete(parsedSettings, k)
+					delete(m, k)
 					continue
 				}
 				if !strings.HasPrefix(k, "glob:") {
 					// Support non-prefixed glob settings but internally convert
 					// them to prefixed ones for simplicity.
-					delete(parsedSettings, k)
+					delete(m, k)
 					k = "glob:" + k
-					parsedSettings[k] = v
+					m[k] = v
 				}
 				for k1, v1 := range v.(map[string]any) {
 					if _, ok := defaults[k1]; ok {
 						if e := verifySetting(k1, v1, defaults[k1]); e != nil {
 							err = e
-							parsedSettings[k].(map[string]any)[k1] = defaults[k1]
+							m[k].(map[string]any)[k1] = defaults[k1]
 							continue
 						}
 					}
@@ -215,9 +227,9 @@ func validateParsedSettings() error {
 			s, ok := v.(bool)
 			if ok {
 				if s {
-					parsedSettings["autosave"] = 8.0
+					m["autosave"] = 8.0
 				} else {
-					parsedSettings["autosave"] = 0.0
+					m["autosave"] = 0.0
 				}
 			}
 			continue
@@ -226,7 +238,7 @@ func validateParsedSettings() error {
 		if _, ok := defaults[k]; ok {
 			if e := verifySetting(k, v, defaults[k]); e != nil {
 				err = e
-				parsedSettings[k] = defaults[k]
+				m[k] = defaults[k]
 				continue
 			}
 		}
@@ -250,13 +262,42 @@ func ReadSettings() error {
 				settingsParseError = true
 				return errors.New("Error reading settings.json: " + err.Error())
 			}
-			err = validateParsedSettings()
+			err = validateParsedSettings(parsedSettings)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// ReadLocalSettings populates parsedLocalSettings from settings.local.json
+// in ConfigDir. A missing file is not an error. The local file is an
+// optional per-machine override layer for settings.json: any scalar key
+// present here wins over the same key in settings.json, and ft:/glob:
+// nested maps deep-merge on a per-key basis. The editor never writes to
+// settings.local.json; users edit it by hand.
+func ReadLocalSettings() error {
+	parsedLocalSettings = make(map[string]any)
+	filename := filepath.Join(ConfigDir, "settings.local.json")
+	if _, e := os.Stat(filename); e != nil {
+		// Missing local file is the common case; not an error.
+		return nil
+	}
+	input, err := os.ReadFile(filename)
+	if err != nil {
+		localSettingsParseError = true
+		return errors.New("Error reading settings.local.json file: " + err.Error())
+	}
+	if strings.HasPrefix(string(input), "null") {
+		return nil
+	}
+	err = json5.Unmarshal(input, &parsedLocalSettings)
+	if err != nil {
+		localSettingsParseError = true
+		return errors.New("Error reading settings.local.json: " + err.Error())
+	}
+	return validateParsedSettings(parsedLocalSettings)
 }
 
 func ParsedSettings() map[string]any {
@@ -299,18 +340,52 @@ func verifySetting(option string, value any, def any) error {
 	return nil
 }
 
-// InitGlobalSettings initializes the options map and sets all options to their default values
-// Must be called after ReadSettings
+// InitGlobalSettings initialises the GlobalSettings map.
+// Must be called after ReadSettings and ReadLocalSettings.
 func InitGlobalSettings() error {
-	var err error
+	GlobalSettings = make(map[string]any)
+	RebuildGlobalSettings()
+	return nil
+}
+
+// RebuildGlobalSettings recomputes GlobalSettings from the source layers:
+// defaults are laid down first, then parsedSettings (settings.json) overlays
+// them, then parsedLocalSettings (settings.local.json) overlays again. Keys
+// flagged in VolatileSettings (typically set from command-line flags) keep
+// their current GlobalSettings value across the rebuild so transient
+// overrides survive reloads.
+//
+// Only scalar (non-map) values participate in the global rebuild. The
+// ft:<filetype> and glob:<pattern> nested maps from either source apply
+// per-buffer via UpdateFileTypeLocals / UpdatePathGlobLocals, not here.
+func RebuildGlobalSettings() {
+	// Preserve volatile values across the reset.
+	volatileValues := make(map[string]any, len(VolatileSettings))
+	for k := range VolatileSettings {
+		if v, ok := GlobalSettings[k]; ok {
+			volatileValues[k] = v
+		}
+	}
+
 	GlobalSettings = DefaultAllSettings()
 
 	for k, v := range parsedSettings {
-		if !strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
-			GlobalSettings[k] = v
+		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
+			continue
 		}
+		GlobalSettings[k] = v
 	}
-	return err
+	for k, v := range parsedLocalSettings {
+		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
+			continue
+		}
+		GlobalSettings[k] = v
+	}
+
+	// Restore volatile values last so they outrank everything from disk.
+	for k, v := range volatileValues {
+		GlobalSettings[k] = v
+	}
 }
 
 // UpdatePathGlobLocals scans the already parsed settings and sets the options locally
