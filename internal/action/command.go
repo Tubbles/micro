@@ -577,8 +577,8 @@ func doSetGlobalOptionNative(option string, nativeValue any) error {
 		return nil
 	}
 
+	config.UpdateParsedSetting(option, nativeValue)
 	config.GlobalSettings[option] = nativeValue
-	config.ModifiedSettings[option] = true
 	delete(config.VolatileSettings, option)
 
 	if option == "colorscheme" {
