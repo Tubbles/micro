@@ -341,8 +341,9 @@ func ReloadConfig() {
 }
 
 func reloadRuntime(reloadPlugins bool) {
+	var err error
 	if reloadPlugins {
-		err := config.RunPluginFn("deinit")
+		err = config.RunPluginFn("deinit")
 		if err != nil {
 			screen.TermMessage(err)
 		}
@@ -354,10 +355,15 @@ func reloadRuntime(reloadPlugins bool) {
 		config.InitPlugins()
 	}
 
-	err := config.ReadSettings()
-	if err != nil {
-		screen.TermMessage(err)
-	} else {
+	errSettings := config.ReadSettings()
+	if errSettings != nil {
+		screen.TermMessage(errSettings)
+	}
+	errLocal := config.ReadLocalSettings()
+	if errLocal != nil {
+		screen.TermMessage(errLocal)
+	}
+	if errSettings == nil && errLocal == nil {
 		parsedSettings := config.ParsedSettings()
 		defaultSettings := config.DefaultAllSettings()
 		for k := range defaultSettings {
