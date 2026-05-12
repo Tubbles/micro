@@ -2,6 +2,7 @@ package widget
 
 import (
 	"sort"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -82,11 +83,14 @@ type Picker struct {
 	matches []fuzzy.Match
 
 	// pasting is true between EventPaste{Start} and EventPaste{End}.
-	// While set, recomputeFilter is a no-op so a long paste doesn't
-	// re-run the matcher per character; on End the filter recomputes
-	// once. handleKey also drops non-rune keys while pasting so a
-	// pasted "\n" doesn't trigger activate() mid-paste.
-	pasting bool
+	// While set, handleKey routes KeyRune events into pasteBuf instead
+	// of mutating query, so the input row does not redraw per character
+	// and the terminal does not receive an update per character. Non-
+	// rune keys are dropped so a pasted "\n" cannot trigger activate()
+	// mid-paste. On End the accumulated text is spliced into query at
+	// the caret and the filter recomputes once.
+	pasting  bool
+	pasteBuf strings.Builder
 
 	lastClickTime time.Time
 	lastClickRow  int
@@ -188,14 +192,22 @@ func (p *Picker) HandleEvent(ev tcell.Event) bool {
 		p.handleMouse(e)
 	case *tcell.EventPaste:
 		// tcell v3 streams a paste as Start, EventKey rune events,
-		// End. The picker accumulates the runes through the regular
-		// handleKey path and defers the filter recompute to End so a
-		// long paste doesn't re-run fuzzy.Find per character.
+		// End. The picker accumulates the runes in pasteBuf and only
+		// splices them into the query at End, so neither the query
+		// string nor the filter is recomputed per character.
 		if e.Start() {
+			p.pasteBuf.Reset()
 			p.pasting = true
 		} else {
+			text := p.pasteBuf.String()
+			p.pasteBuf.Reset()
 			p.pasting = false
 			if p.opts.Query {
+				if text != "" {
+					off := byteOffsetForRune(p.query, p.qcur)
+					p.query = p.query[:off] + text + p.query[off:]
+					p.qcur += utf8.RuneCountInString(text)
+				}
 				p.recomputeFilter()
 			}
 		}
@@ -204,10 +216,19 @@ func (p *Picker) HandleEvent(ev tcell.Event) bool {
 }
 
 func (p *Picker) handleKey(e *tcell.EventKey) {
-	// During bracketed paste only literal rune events flow into the
-	// query; control keys (Enter, Esc, arrows...) are dropped so a
-	// pasted newline doesn't activate or close the picker.
-	if p.pasting && e.Key() != tcell.KeyRune {
+	// During bracketed paste, KeyRune events go into pasteBuf rather
+	// than mutating query (HandleEvent splices the buffer in at End).
+	// Non-rune control keys (Enter, Esc, arrows, Tab, CtrlJ...) are
+	// dropped so a pasted "\n" cannot activate or close the picker and
+	// so a pasted "\t" cannot inject a tab into a filename query.
+	// Unlike the keystroke path below, the full e.Str() is preserved so
+	// a clipboard containing a multi-rune grapheme cluster pastes
+	// intact; the keystroke path truncates because a single keystroke
+	// cannot legitimately deliver more than one rune.
+	if p.pasting {
+		if e.Key() == tcell.KeyRune {
+			p.pasteBuf.WriteString(e.Str())
+		}
 		return
 	}
 	if p.opts.Query {
@@ -336,14 +357,7 @@ func (p *Picker) deleteAtCaret() {
 //   - parsed atoms with surviving items: matches is a populated slice,
 //     Enter fires OnSelect on the highlighted row of the filtered
 //     list.
-//
-// While p.pasting is true the call is a no-op; HandleEvent runs a
-// single recompute on EventPaste{End} once the full block has been
-// inserted into the query.
 func (p *Picker) recomputeFilter() {
-	if p.pasting {
-		return
-	}
 	if p.query == "" {
 		p.matches = nil
 	} else {

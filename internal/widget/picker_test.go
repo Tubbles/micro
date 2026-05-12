@@ -399,11 +399,22 @@ func TestPickerPasteBatchesFilterRecompute(t *testing.T) {
 	t.Cleanup(func() { fuzzyFind = old })
 
 	// v3 streams a paste as Start, EventKey runes, End. The picker
-	// must defer the filter recompute until End, so a 3-char paste
-	// runs the matcher once, not three times.
+	// must defer both the filter recompute *and* the query mutation
+	// until End. Per-character query mutation would force the input
+	// row to redraw and the terminal to receive an update per
+	// character, which is what users perceive as paste lag.
 	h.p.HandleEvent(tcell.NewEventPaste(true))
 	h.p.HandleEvent(runeKey('a'))
 	h.p.HandleEvent(runeKey('l'))
+	if h.p.query != "" {
+		t.Fatalf("mid-paste: query=%q, want empty until End", h.p.query)
+	}
+	if h.p.qcur != 0 {
+		t.Fatalf("mid-paste: qcur=%d, want 0 until End", h.p.qcur)
+	}
+	if calls != 0 {
+		t.Fatalf("mid-paste: filter ran %d times, want 0 until End", calls)
+	}
 	h.p.HandleEvent(runeKey('p'))
 	h.p.HandleEvent(tcell.NewEventPaste(false))
 
@@ -418,12 +429,130 @@ func TestPickerPasteBatchesFilterRecompute(t *testing.T) {
 	}
 }
 
+func TestPickerPasteAtCaretMidQuery(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	h.p.HandleEvent(runeKey('a'))
+	h.p.HandleEvent(runeKey('c'))
+	h.p.HandleEvent(key(tcell.KeyLeft))
+	h.p.HandleEvent(tcell.NewEventPaste(true))
+	h.p.HandleEvent(runeKey('b'))
+	h.p.HandleEvent(tcell.NewEventPaste(false))
+	if h.p.query != "abc" {
+		t.Fatalf("paste at caret: query=%q, want abc", h.p.query)
+	}
+	if h.p.qcur != 2 {
+		t.Fatalf("paste at caret: qcur=%d, want 2", h.p.qcur)
+	}
+}
+
+func TestPickerPasteAppendsToExistingQuery(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	h.p.HandleEvent(runeKey('a'))
+	h.p.HandleEvent(tcell.NewEventPaste(true))
+	h.p.HandleEvent(runeKey('b'))
+	h.p.HandleEvent(runeKey('c'))
+	h.p.HandleEvent(tcell.NewEventPaste(false))
+	if h.p.query != "abc" {
+		t.Fatalf("paste append: query=%q, want abc", h.p.query)
+	}
+	if h.p.qcur != 3 {
+		t.Fatalf("paste append: qcur=%d, want 3", h.p.qcur)
+	}
+}
+
+func TestPickerBackToBackPastes(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+
+	calls := 0
+	old := fuzzyFind
+	fuzzyFind = func(pattern string, data []string) fuzzy.Matches {
+		calls++
+		return old(pattern, data)
+	}
+	t.Cleanup(func() { fuzzyFind = old })
+
+	h.p.HandleEvent(tcell.NewEventPaste(true))
+	h.p.HandleEvent(runeKey('a'))
+	h.p.HandleEvent(runeKey('b'))
+	h.p.HandleEvent(tcell.NewEventPaste(false))
+	h.p.HandleEvent(tcell.NewEventPaste(true))
+	h.p.HandleEvent(runeKey('c'))
+	h.p.HandleEvent(runeKey('d'))
+	h.p.HandleEvent(tcell.NewEventPaste(false))
+
+	if h.p.query != "abcd" {
+		t.Fatalf("back-to-back paste: query=%q, want abcd", h.p.query)
+	}
+	if h.p.qcur != 4 {
+		t.Fatalf("back-to-back paste: qcur=%d, want 4", h.p.qcur)
+	}
+	if calls != 2 {
+		t.Fatalf("back-to-back paste: fuzzyFind ran %d times, want 2", calls)
+	}
+}
+
+func TestPickerPastePreservesMultiRuneGrapheme(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	// A regional-indicator flag (e.g. 🇸🇪) is a single grapheme cluster
+	// but two runes. tcell v3 delivers it as one EventKey whose Str()
+	// is the full multi-rune string. The keystroke path truncates to
+	// the first rune (because a single keystroke cannot legitimately
+	// deliver more than one rune), but the paste path preserves the
+	// whole grapheme so clipboard content with emoji round-trips.
+	cluster := "\U0001F1F8\U0001F1EA"
+	multi := tcell.NewEventKey(tcell.KeyRune, cluster, tcell.ModNone)
+	h.p.HandleEvent(tcell.NewEventPaste(true))
+	h.p.HandleEvent(multi)
+	h.p.HandleEvent(tcell.NewEventPaste(false))
+	if h.p.query != cluster {
+		t.Fatalf("paste multi-rune: query=%q, want %q", h.p.query, cluster)
+	}
+	if h.p.qcur != 2 {
+		t.Fatalf("paste multi-rune: qcur=%d, want 2 (rune count of cluster)",
+			h.p.qcur)
+	}
+}
+
+func TestPickerPasteEmptyStillFiresRecompute(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	// Type something to seed matches != nil, then send an empty paste
+	// (Start immediately followed by End). The filter must recompute
+	// once on End even though pasteBuf is empty: the End event is the
+	// signal that the user's paste action completed, and the user
+	// expects a fresh render.
+	h.p.HandleEvent(runeKey('x'))
+
+	calls := 0
+	old := fuzzyFind
+	fuzzyFind = func(pattern string, data []string) fuzzy.Matches {
+		calls++
+		return old(pattern, data)
+	}
+	t.Cleanup(func() { fuzzyFind = old })
+
+	h.p.HandleEvent(tcell.NewEventPaste(true))
+	h.p.HandleEvent(tcell.NewEventPaste(false))
+
+	if calls != 1 {
+		t.Fatalf("empty paste: filter ran %d times, want 1", calls)
+	}
+	if h.p.query != "x" {
+		t.Fatalf("empty paste: query=%q, want x (unchanged)", h.p.query)
+	}
+}
+
 func TestPickerPasteSkipsControlKeys(t *testing.T) {
 	mockScreenSize(t)
 	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
 	// v3's input parser turns \n into KeyEnter and \t into KeyTab in
 	// the middle of a paste stream. The picker drops non-rune keys
-	// while pasting so an embedded newline doesn't activate.
+	// while pasting so an embedded newline doesn't activate and an
+	// embedded tab can't inject a stray byte into a filename query.
 	h.p.HandleEvent(tcell.NewEventPaste(true))
 	h.p.HandleEvent(runeKey('a'))
 	h.p.HandleEvent(key(tcell.KeyEnter))
@@ -433,6 +562,10 @@ func TestPickerPasteSkipsControlKeys(t *testing.T) {
 	h.p.HandleEvent(tcell.NewEventPaste(false))
 	if h.p.query != "abc" {
 		t.Fatalf("paste with controls: query=%q, want abc", h.p.query)
+	}
+	if h.p.qcur != 3 {
+		t.Fatalf("paste with controls: qcur=%d, want 3 (dropped keys must not advance caret)",
+			h.p.qcur)
 	}
 }
 
