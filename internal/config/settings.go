@@ -23,7 +23,7 @@ type optionValidator func(string, any) error
 var optionValidators = map[string]optionValidator{
 	"autosave":        validateNonNegativeValue,
 	"clipboard":       validateChoice,
-	"colorcolumn":     validateNonNegativeValue,
+	"colorcolumn":     validateColorcolumn,
 	"colorscheme":     validateColorscheme,
 	"detectlimit":     validateNonNegativeValue,
 	"encoding":        validateEncoding,
@@ -282,6 +282,9 @@ func verifySetting(option string, value any, def any) error {
 	switch option {
 	case "pluginrepos", "pluginchannels":
 		assignable = valType.AssignableTo(reflect.TypeOf(interfaceArr))
+	case "colorcolumn":
+		assignable = defType.AssignableTo(valType) ||
+			valType.AssignableTo(reflect.TypeOf(interfaceArr))
 	default:
 		assignable = defType.AssignableTo(valType)
 	}
@@ -504,6 +507,20 @@ func GetNativeValue(option, value string) (any, error) {
 		return nil, ErrInvalidOption
 	}
 
+	if option == "colorcolumn" && strings.Contains(value, ",") {
+		parts := strings.Split(value, ",")
+		out := make([]any, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			f, err := strconv.ParseFloat(p, 64)
+			if err != nil {
+				return nil, ErrInvalidValue
+			}
+			out = append(out, f)
+		}
+		return out, nil
+	}
+
 	switch kind := reflect.TypeOf(curVal).Kind(); kind {
 	case reflect.Bool:
 		b, err := util.ParseBool(value)
@@ -561,6 +578,31 @@ func validateNonNegativeValue(option string, value any) error {
 	}
 
 	return nil
+}
+
+// validateColorcolumn accepts either a single non-negative number
+// (legacy form) or a list of non-negative numbers (e.g. [72, 80, 120]).
+// Each list element must be a JSON number (float64 after unmarshal).
+func validateColorcolumn(option string, value any) error {
+	if f, ok := value.(float64); ok {
+		if f < 0 {
+			return errors.New(option + " must be non-negative")
+		}
+		return nil
+	}
+	if arr, ok := value.([]any); ok {
+		for i, v := range arr {
+			f, ok := v.(float64)
+			if !ok {
+				return fmt.Errorf("%s[%d] must be a number", option, i)
+			}
+			if f < 0 {
+				return fmt.Errorf("%s[%d] must be non-negative", option, i)
+			}
+		}
+		return nil
+	}
+	return errors.New("Expected number or list of numbers for " + option)
 }
 
 func validateChoice(option string, value any) error {
