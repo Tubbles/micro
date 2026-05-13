@@ -50,7 +50,11 @@ Here are the available options:
     default value: `""` (empty string)
 
 * `basename`: in the infobar and tabbar, show only the basename of the file
-   being edited rather than the full path.
+   being edited rather than the full path. For tab titles, this setting is
+   superseded by `pathdisplay` (see below) when `pathdisplay` is set
+   explicitly; with `pathdisplay` unset, `basename = true` is equivalent to
+   `pathdisplay = "basename"` for tab rendering. The infobar is always
+   governed by `basename` regardless of `pathdisplay`.
 
     default value: `false`
 
@@ -308,6 +312,28 @@ Here are the available options:
    copying and pasting in a terminal environment.
 
     default value: `false`
+
+* `pathdisplay`: controls how each tab's title is rendered. This setting is
+   `global only`. Possible values:
+    * `full`: show the file's absolute path. This is the default and matches
+       micro's historical behavior.
+    * `basename`: show only the filename (the last path component).
+    * `smart`: show only the filename when it is unique across open tabs;
+       otherwise prepend parent directories one at a time until each tab's
+       title is distinct. For example, with three open files `a/b/d`, `a/c/d`,
+       and `a/e`, the tab titles become `b/d`, `c/d`, and `e`. When the same
+       file is opened in two tabs the pair stays grouped (they share an
+       identical title) and the group as a whole expands when it would
+       otherwise collide with a different file.
+
+   When `pathdisplay` is not explicitly set, the legacy `basename` option is
+   consulted as a fallback: `basename = true` is treated as
+   `pathdisplay = "basename"`, and `basename = false` is treated as
+   `pathdisplay = "full"`. When both options are set explicitly, `pathdisplay`
+   wins. Buffers opened via the help, log, or raw-event-viewer commands keep
+   their literal display names regardless of `pathdisplay`.
+
+    default value: `full`
 
 * `permbackup`: this option causes backups (see `backup` option) to be
    permanently saved. With permanent backups, micro will not remove backups when
@@ -604,6 +630,7 @@ so that you can see what the formatting should look like.
     "pageoverlap": 2,
     "parsecursor": false,
     "paste": false,
+    "pathdisplay": "full",
     "permbackup": false,
     "pluginchannels": [
         "https://raw.githubusercontent.com/micro-editor/plugin-channel/master/channel.json"
