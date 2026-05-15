@@ -489,6 +489,14 @@ Here are the available options:
 
     default value: `false`
 
+* `textfilterselectword`: when running the `textfilter` command on a cursor
+   that has no selection, automatically select the word at the cursor and
+   filter that. With this option disabled, the command is invoked with an
+   empty standard input instead, and its output is inserted at the cursor
+   position.
+
+    default value: `true`
+
 * `truecolor`: controls whether micro will use true colors (24-bit colors) when
    using a colorscheme with true colors, such as `solarized-tc` or `atom-dark`.
    * `auto`: enable usage of true color if micro detects that it is supported by
@@ -633,6 +641,7 @@ so that you can see what the formatting should look like.
     "tabreverse": false,
     "tabsize": 4,
     "tabstospaces": false,
+    "textfilterselectword": true,
     "useprimary": true,
     "wordwrap": false,
     "xterm": false
