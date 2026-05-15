@@ -142,10 +142,11 @@ func (h *BufPane) TextFilterCmd(args []string) {
 		return
 	}
 
+	selectWord := h.Buf.Settings["textfilterselectword"].(bool)
 	for _, c := range h.Buf.GetCursors() {
 		sel := c.GetSelection()
 		fromSelection := len(sel) > 0
-		if !fromSelection {
+		if !fromSelection && selectWord {
 			c.SelectWord()
 			sel = c.GetSelection()
 		}
