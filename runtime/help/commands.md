@@ -97,7 +97,12 @@ quotes here but these are not necessary when entering the command in micro.
    entry, `Enter` instead runs the query as a command line, exactly as
    if you had typed it after `Ctrl-E`. That lets the palette double as
    a free-text command bar for cases that need arguments, e.g.
-   `saveas foo.txt`, `help commands`, `set tabsize 4`. The three kinds
+   `saveas foo.txt`, `help commands`, `set tabsize 4`. `Ctrl-Enter`
+   forces the command-line dispatch even when the fuzzy matcher has
+   highlighted a row, so a query like `ltm exec` can be sent verbatim
+   instead of running whatever was highlighted (requires a CSI-u
+   terminal such as kitty, or a multiplexer that forwards CSI-u;
+   legacy terminals collapse `Ctrl-Enter` to `Enter`). The three kinds
    of entries can be toggled independently with `commandpalette.actions`,
    `commandpalette.commands` and `commandpalette.lua` (defaults all
    `true`). No default key binding ships; users who want a VSCode-style
