@@ -234,12 +234,16 @@ func commandPaletteRect() widget.ScreenRect {
 //     OnSubmit, which dispatches the typed text as a command line via
 //     HandleCommand. Lets the palette double as a free-text command
 //     bar (`saveas foo.txt`, `help commands`, etc).
+//   - Ctrl-Enter forces the OnSubmit path even when matches exist, so
+//     a query like `ltm exec` can be dispatched verbatim instead of
+//     running whatever the fuzzy matcher highlighted. Requires a
+//     CSI-u terminal; legacy terminals collapse Ctrl-Enter to Enter.
 func (h *BufPane) CommandPalette() {
 	entries := buildPaletteEntries()
 	items := paletteItems(entries)
 	picker := widget.NewPicker(widget.PickerOptions{
 		Title:    "Command palette",
-		Hint:     "<type> filter or command line - <Up>/<Down> move - <Enter> run - <Esc> cancel",
+		Hint:     "<Up>/<Down> move - <Enter> run match - <Ctrl-Enter> run as command - <Esc> cancel",
 		Query:    true,
 		Items:    items,
 		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: commandPaletteRect()},
