@@ -285,7 +285,15 @@ func (p *Picker) handleKeyQuery(e *tcell.EventKey) {
 	case tcell.KeyPgDn:
 		p.move(p.bodyHeight())
 	case tcell.KeyEnter:
-		p.activate()
+		// Ctrl-Enter forces the OnSubmit path even when a fuzzy match
+		// is highlighted, so the user can dispatch the typed query
+		// verbatim. Requires a CSI-u terminal; legacy terminals
+		// collapse Ctrl-Enter into plain Enter.
+		if e.Modifiers()&tcell.ModCtrl != 0 {
+			p.submitQuery()
+		} else {
+			p.activate()
+		}
 	case tcell.KeyEsc:
 		CloseActive()
 	case tcell.KeyHome:
@@ -589,6 +597,16 @@ func (p *Picker) activate() {
 	if p.opts.OnSelect != nil {
 		p.opts.OnSelect(idx)
 	}
+}
+
+// submitQuery fires OnSubmit with the current query regardless of the
+// highlighted row. No-op when Query mode is off, the query is empty,
+// or no OnSubmit handler is wired.
+func (p *Picker) submitQuery() {
+	if !p.opts.Query || p.query == "" || p.opts.OnSubmit == nil {
+		return
+	}
+	p.opts.OnSubmit(p.query)
 }
 
 // bodyHeight is the row count the visible item list can span. It
