@@ -46,6 +46,20 @@ func (e paletteEntry) actionString() string {
 	return e.Name
 }
 
+// paletteEntryByKindName looks up an entry by (Kind, Name) in a
+// freshly-built atlas list, so a history entry can reuse the atlas
+// label (including the bindings column). Returns (zero, false) when
+// the entry is no longer in the atlas (e.g. a plugin uninstalled
+// mid-session); callers fall back to a synthetic label.
+func paletteEntryByKindName(entries []paletteEntry, k paletteKind, name string) (paletteEntry, bool) {
+	for _, e := range entries {
+		if e.Kind == k && e.Name == name {
+			return e, true
+		}
+	}
+	return paletteEntry{}, false
+}
+
 // buildPaletteEntries produces the full list of palette entries,
 // sorted within each kind. The reverse-binding map is built once and
 // shared across all three enumeration steps.
@@ -176,6 +190,23 @@ func paletteKindTag(k paletteKind) string {
 	return ""
 }
 
+// historyKindTag is the per-kind prefix for a history row. The free-
+// text variant gets its own "text" tag so a typed `saveas foo.txt`
+// row is visually distinct from a registered `saveas` command row.
+func historyKindTag(k historyKind) string {
+	switch k {
+	case historyAction:
+		return "action "
+	case historyCommand:
+		return "cmd    "
+	case historyLua:
+		return "lua    "
+	case historyFreeText:
+		return "text   "
+	}
+	return ""
+}
+
 // paletteItemLabel formats a paletteEntry as a picker row label.
 // Layout: "<kindTag><Name> [<bindings>]". The bindings group is
 // omitted when empty. Keystrokes are packed into the label so the
@@ -194,6 +225,42 @@ func paletteItems(entries []paletteEntry) []widget.PickerItem {
 	items := make([]widget.PickerItem, len(entries))
 	for i, e := range entries {
 		items[i].Label = paletteItemLabel(e)
+	}
+	return items
+}
+
+// historyItemLabel formats a single history row. For action/command/
+// lua entries that still exist in the fresh atlas, the atlas label
+// (including the bindings column) is reused so the row looks the
+// same in both views. When the atlas no longer carries the entry (a
+// plugin unloaded mid-session, say) a bare "<kind> <name>" fallback
+// is used. Free-text entries always use the verbatim typed string.
+func historyItemLabel(atlas []paletteEntry, hist historyEntry) string {
+	switch hist.Kind {
+	case historyFreeText:
+		return historyKindTag(hist.Kind) + hist.Name
+	case historyAction:
+		if e, ok := paletteEntryByKindName(atlas, paletteAction, hist.Name); ok {
+			return paletteItemLabel(e)
+		}
+	case historyCommand:
+		if e, ok := paletteEntryByKindName(atlas, paletteCommand, hist.Name); ok {
+			return paletteItemLabel(e)
+		}
+	case historyLua:
+		if e, ok := paletteEntryByKindName(atlas, paletteLua, hist.Name); ok {
+			return paletteItemLabel(e)
+		}
+	}
+	return historyKindTag(hist.Kind) + hist.Name
+}
+
+// historyPaletteItems is paletteItems for history rows. The atlas
+// is passed in so labels stay in sync with the registered bindings.
+func historyPaletteItems(atlas []paletteEntry, hist []historyEntry) []widget.PickerItem {
+	items := make([]widget.PickerItem, len(hist))
+	for i, h := range hist {
+		items[i].Label = historyItemLabel(atlas, h)
 	}
 	return items
 }
@@ -223,40 +290,145 @@ func commandPaletteRect() widget.ScreenRect {
 	return widget.ScreenRect{X: x, Y: y, W: w, H: h}
 }
 
+// paletteMode discriminates the two views the picker can show. Atlas
+// is the registered-action catalog; History is the per-session
+// most-recent-first list of items previously dispatched through this
+// palette.
+type paletteMode int
+
+const (
+	paletteModeAtlas paletteMode = iota
+	paletteModeHistory
+)
+
+func paletteTitle(m paletteMode) string {
+	if m == paletteModeHistory {
+		return "Command palette · History"
+	}
+	return "Command palette · Atlas"
+}
+
+// paletteHint reflects both the current mode and whether history is
+// available at all. When historysize is 0 the Tab toggle is dropped
+// from the hint (and from the OnTab handler).
+func paletteHint(m paletteMode, size int) string {
+	switch {
+	case m == paletteModeHistory:
+		return "<Tab> Atlas - <Up>/<Down> move - <Enter> rerun - <Ctrl-Enter> run as command - <Esc> cancel"
+	case size > 0:
+		return "<Tab> History - <Up>/<Down> move - <Enter> run match - <Ctrl-Enter> run as command - <Esc> cancel"
+	}
+	return "<Up>/<Down> move - <Enter> run match - <Ctrl-Enter> run as command - <Esc> cancel"
+}
+
+// historyToPaletteKind maps the dispatchable subset of historyKind
+// onto paletteKind for re-running. historyFreeText has no paletteKind
+// counterpart; callers must handle it on the HandleCommand path.
+func historyToPaletteKind(k historyKind) paletteKind {
+	switch k {
+	case historyCommand:
+		return paletteCommand
+	case historyLua:
+		return paletteLua
+	}
+	return paletteAction
+}
+
 // CommandPalette opens the command palette overlay. No default key
 // binding ships. Users invoke it from the command bar by typing
 // commandpalette, or by binding command:commandpalette themselves.
 //
-// Enter behaviour:
+// The picker has two modes. Atlas (the original behaviour) lists
+// every registered action, command, and Lua plugin function. History
+// lists the items the user has dispatched through this palette in
+// this session, most-recent-first. Tab toggles between the two. On
+// open the picker starts in History when history is non-empty, else
+// in Atlas. With commandpalette.historysize == 0 the History mode is
+// disabled entirely: Tab is a no-op, nothing is recorded.
+//
+// Enter behaviour (unchanged from the Atlas-only era):
 //   - With matches in the filtered list, Enter runs the highlighted
-//     entry via executePaletteEntry (action / command / lua).
-//   - With a non-empty query and zero matches, Enter falls through to
-//     OnSubmit, which dispatches the typed text as a command line via
-//     HandleCommand. Lets the palette double as a free-text command
-//     bar (`saveas foo.txt`, `help commands`, etc).
-//   - Ctrl-Enter forces the OnSubmit path even when matches exist, so
-//     a query like `ltm exec` can be dispatched verbatim instead of
-//     running whatever the fuzzy matcher highlighted. Requires a
+//     entry via executePaletteEntry (action / command / lua) in
+//     Atlas, or re-dispatches the recorded entry in History.
+//   - With a non-empty query and zero matches, Enter falls through
+//     to OnSubmit, which dispatches the typed text as a command
+//     line via HandleCommand and records it as a free-text entry.
+//   - Ctrl-Enter forces the OnSubmit path even when matches exist,
+//     so a query like `ltm exec` can be dispatched verbatim instead
+//     of running whatever the fuzzy matcher highlighted. Requires a
 //     CSI-u terminal; legacy terminals collapse Ctrl-Enter to Enter.
 func (h *BufPane) CommandPalette() {
-	entries := buildPaletteEntries()
-	items := paletteItems(entries)
-	picker := widget.NewPicker(widget.PickerOptions{
-		Title:    "Command palette",
-		Hint:     "<Up>/<Down> move - <Enter> run match - <Ctrl-Enter> run as command - <Esc> cancel",
+	atlas := buildPaletteEntries()
+	atlasItems := paletteItems(atlas)
+	hist := recentHistory()
+	histItems := historyPaletteItems(atlas, hist)
+	size := historySize()
+
+	mode := paletteModeAtlas
+	if size > 0 && len(hist) > 0 {
+		mode = paletteModeHistory
+	}
+
+	itemsFor := func(m paletteMode) []widget.PickerItem {
+		if m == paletteModeHistory {
+			return histItems
+		}
+		return atlasItems
+	}
+
+	dispatchHistory := func(idx int) {
+		if idx < 0 || idx >= len(hist) {
+			return
+		}
+		e := hist[idx]
+		if e.Kind == historyFreeText {
+			recordHistory(e)
+			h.HandleCommand(e.Name)
+			return
+		}
+		pk := historyToPaletteKind(e.Kind)
+		pe, ok := paletteEntryByKindName(atlas, pk, e.Name)
+		if !ok {
+			pe = paletteEntry{Kind: pk, Name: e.Name}
+		}
+		executePaletteEntry(h, pe)
+	}
+
+	var picker *widget.Picker
+	picker = widget.NewPicker(widget.PickerOptions{
+		Title:    paletteTitle(mode),
+		Hint:     paletteHint(mode, size),
 		Query:    true,
-		Items:    items,
+		Items:    itemsFor(mode),
 		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: commandPaletteRect()},
 		OnSelect: func(idx int) {
 			widget.CloseActive()
-			if idx < 0 || idx >= len(entries) {
+			if mode == paletteModeHistory {
+				dispatchHistory(idx)
 				return
 			}
-			executePaletteEntry(h, entries[idx])
+			if idx < 0 || idx >= len(atlas) {
+				return
+			}
+			executePaletteEntry(h, atlas[idx])
 		},
 		OnSubmit: func(query string) {
 			widget.CloseActive()
+			recordHistory(historyEntry{Kind: historyFreeText, Name: query})
 			h.HandleCommand(query)
+		},
+		OnTab: func() {
+			if size <= 0 {
+				return
+			}
+			if mode == paletteModeAtlas {
+				mode = paletteModeHistory
+			} else {
+				mode = paletteModeAtlas
+			}
+			picker.SetItems(itemsFor(mode))
+			picker.SetTitle(paletteTitle(mode))
+			picker.SetHint(paletteHint(mode, size))
 		},
 	})
 	widget.Open(picker)
@@ -284,6 +456,7 @@ func executePaletteEntry(h *BufPane, e paletteEntry) {
 		if !ok {
 			return
 		}
+		recordHistory(historyEntry{Kind: historyAction, Name: e.Name})
 		if _, multi := MultiActions[e.Name]; multi {
 			for _, c := range h.Buf.GetCursors() {
 				h.Buf.SetCurCursor(c.Num)
@@ -296,6 +469,7 @@ func executePaletteEntry(h *BufPane, e paletteEntry) {
 			h.execAction(fn, e.Name, nil)
 		}
 	case paletteCommand:
+		recordHistory(historyEntry{Kind: historyCommand, Name: e.Name})
 		h.HandleCommand(e.Name)
 	case paletteLua:
 		a := LuaAction(e.Name, KeyEvent{})
@@ -303,6 +477,7 @@ func executePaletteEntry(h *BufPane, e paletteEntry) {
 		if !ok || fn == nil {
 			return
 		}
+		recordHistory(historyEntry{Kind: historyLua, Name: e.Name})
 		// Match BufMapEvent's hook-name convention for `lua:` bindings:
 		// title-case the plugin and function names so the pre/on hook
 		// keys mirror what plugins receive when invoked from a real
