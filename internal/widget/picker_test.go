@@ -1306,3 +1306,48 @@ func containsInt(s []int, v int) bool {
 	}
 	return false
 }
+
+func TestPickerTabFiresOnTab(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "alpha"}, {Label: "beta"}}
+	var tabCount int
+	p := NewPicker(PickerOptions{
+		Title: "test",
+		Items: items,
+		Query: true,
+		Geometry: Geometry{
+			Kind: GeomScreenRect,
+			Rect: ScreenRect{X: 0, Y: 0, W: 40, H: 12},
+		},
+		OnTab: func() { tabCount++ },
+	})
+
+	p.HandleEvent(key(tcell.KeyTab))
+	if tabCount != 1 {
+		t.Fatalf("OnTab in Query mode: count=%d, want 1", tabCount)
+	}
+
+	pc := NewPicker(PickerOptions{
+		Title: "test",
+		Items: items,
+		Geometry: Geometry{
+			Kind: GeomScreenRect,
+			Rect: ScreenRect{X: 0, Y: 0, W: 40, H: 12},
+		},
+		OnTab: func() { tabCount++ },
+	})
+	pc.HandleEvent(key(tcell.KeyTab))
+	if tabCount != 2 {
+		t.Fatalf("OnTab in Classic mode: count=%d, want 2", tabCount)
+	}
+}
+
+func TestPickerTabNoCallbackIsNoOp(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	h.p.HandleEvent(runeKey('a'))
+	h.p.HandleEvent(key(tcell.KeyTab))
+	if h.p.query != "a" {
+		t.Fatalf("Tab without OnTab: query mutated to %q, want \"a\"", h.p.query)
+	}
+}
