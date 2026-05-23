@@ -65,6 +65,12 @@ type PickerOptions struct {
 	// outside). The callback should treat the picker as gone; the
 	// active slot is cleared by the dispatcher first.
 	OnClose func()
+	// OnTab fires when the user presses Tab. The picker itself has no
+	// notion of what Tab does; callers wire it to whatever in-picker
+	// state change makes sense (e.g. mode toggles). Nil leaves Tab as
+	// a silent no-op, preserving v1 behaviour for callers that don't
+	// opt in.
+	OnTab func()
 }
 
 // Picker is a generic list-of-rows overlay widget.
@@ -270,6 +276,10 @@ func (p *Picker) handleKeyClassic(e *tcell.EventKey) {
 		p.activate()
 	case tcell.KeyEsc:
 		CloseActive()
+	case tcell.KeyTab:
+		if p.opts.OnTab != nil {
+			p.opts.OnTab()
+		}
 	}
 	// All other keys (incl. typed runes) are silently swallowed in
 	// the classic (non-Query) picker.
@@ -297,6 +307,10 @@ func (p *Picker) handleKeyQuery(e *tcell.EventKey) {
 		}
 	case tcell.KeyEsc:
 		CloseActive()
+	case tcell.KeyTab:
+		if p.opts.OnTab != nil {
+			p.opts.OnTab()
+		}
 	case tcell.KeyHome:
 		p.qcur = 0
 	case tcell.KeyEnd:
