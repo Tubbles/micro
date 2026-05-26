@@ -162,13 +162,26 @@ func TestStringToStyleMaskFullSpec(t *testing.T) {
 	assert.True(t, m.Reverse)
 }
 
-func TestMergeOverlayBgOnly(t *testing.T) {
+// withDefStyle installs a known DefStyle for the duration of t and
+// restores it on cleanup, so merge tests that exercise the default
+// branch are not contaminated by other tests' colorscheme parsing.
+func withDefStyle(t *testing.T, fg, bg tcell.Color) {
+	t.Helper()
+	prev := DefStyle
+	DefStyle = tcell.StyleDefault.Foreground(fg).Background(bg)
+	t.Cleanup(func() { DefStyle = prev })
+}
+
+func TestMergeOverlayBgConcreteFgPreserve(t *testing.T) {
+	withDefStyle(t,
+		tcell.NewRGBColor(200, 200, 200),
+		tcell.NewRGBColor(20, 20, 20))
 	base := tcell.StyleDefault.
 		Foreground(tcell.NewRGBColor(10, 20, 30)).
 		Background(tcell.NewRGBColor(0, 0, 0)).
 		Bold(true)
 	overlay := tcell.StyleDefault.Background(tcell.NewRGBColor(99, 99, 99))
-	mask := StyleMask{Bg: true}
+	mask := StyleMask{FgPreserve: true, Bg: true}
 
 	got := MergeOverlay(base, overlay, mask)
 
@@ -178,7 +191,10 @@ func TestMergeOverlayBgOnly(t *testing.T) {
 	assert.NotEqual(t, 0, attr&tcell.AttrBold)
 }
 
-func TestMergeOverlayNoOpWhenMaskEmpty(t *testing.T) {
+func TestMergeOverlayFallsBackToDefStyleWhenUnset(t *testing.T) {
+	withDefStyle(t,
+		tcell.NewRGBColor(200, 210, 220),
+		tcell.NewRGBColor(30, 30, 30))
 	base := tcell.StyleDefault.
 		Foreground(tcell.NewRGBColor(10, 20, 30)).
 		Background(tcell.NewRGBColor(40, 50, 60)).
@@ -190,15 +206,48 @@ func TestMergeOverlayNoOpWhenMaskEmpty(t *testing.T) {
 	got := MergeOverlay(base, overlay, StyleMask{})
 
 	fg, bg, attr := got.GetForeground(), got.GetBackground(), got.GetAttributes()
-	assert.Equal(t, tcell.NewRGBColor(10, 20, 30), fg)
-	assert.Equal(t, tcell.NewRGBColor(40, 50, 60), bg)
+	assert.Equal(t, tcell.NewRGBColor(200, 210, 220), fg)
+	assert.Equal(t, tcell.NewRGBColor(30, 30, 30), bg)
 	assert.NotEqual(t, 0, attr&tcell.AttrItalic)
 }
 
+func TestMergeOverlayPreservesWithAsterisk(t *testing.T) {
+	withDefStyle(t,
+		tcell.NewRGBColor(200, 200, 200),
+		tcell.NewRGBColor(20, 20, 20))
+	base := tcell.StyleDefault.
+		Foreground(tcell.NewRGBColor(10, 20, 30)).
+		Background(tcell.NewRGBColor(40, 50, 60))
+	overlay := tcell.StyleDefault.
+		Foreground(tcell.NewRGBColor(99, 99, 99)).
+		Background(tcell.NewRGBColor(11, 11, 11))
+
+	// "*,*" — preserve both slots
+	got := MergeOverlay(base, overlay, StyleMask{FgPreserve: true, BgPreserve: true})
+	assert.Equal(t, tcell.NewRGBColor(10, 20, 30), got.GetForeground())
+	assert.Equal(t, tcell.NewRGBColor(40, 50, 60), got.GetBackground())
+
+	// "*,#bg" — preserve fg, take overlay bg
+	got = MergeOverlay(base, overlay, StyleMask{FgPreserve: true, Bg: true})
+	assert.Equal(t, tcell.NewRGBColor(10, 20, 30), got.GetForeground())
+	assert.Equal(t, tcell.NewRGBColor(11, 11, 11), got.GetBackground())
+
+	// "#fg,*" — take overlay fg, preserve bg
+	got = MergeOverlay(base, overlay, StyleMask{Fg: true, BgPreserve: true})
+	assert.Equal(t, tcell.NewRGBColor(99, 99, 99), got.GetForeground())
+	assert.Equal(t, tcell.NewRGBColor(40, 50, 60), got.GetBackground())
+}
+
 func TestMergeOverlayAttrsAreAdditive(t *testing.T) {
-	base := tcell.StyleDefault.Italic(true)
+	withDefStyle(t,
+		tcell.NewRGBColor(200, 200, 200),
+		tcell.NewRGBColor(20, 20, 20))
+	base := tcell.StyleDefault.
+		Foreground(tcell.NewRGBColor(10, 20, 30)).
+		Background(tcell.NewRGBColor(40, 50, 60)).
+		Italic(true)
 	overlay := tcell.StyleDefault
-	mask := StyleMask{Bold: true, Underline: true}
+	mask := StyleMask{FgPreserve: true, BgPreserve: true, Bold: true, Underline: true}
 
 	got := MergeOverlay(base, overlay, mask)
 

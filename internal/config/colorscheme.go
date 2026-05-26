@@ -34,17 +34,35 @@ type StyleMask struct {
 // It is rebuilt by InitColorscheme alongside Colorscheme.
 var ColorschemeMasks map[string]StyleMask
 
-// MergeOverlay returns base with the dimensions that mask flags as set
-// replaced by the corresponding values from overlay. Attributes are
-// additive only; the parser has no syntax to clear bold/italic/underline/
-// reverse, so the overlay can only turn them on, never off.
+// MergeOverlay composes overlay onto base. Each colour slot is a
+// three-way switch:
+//   - mask.Fg / mask.Bg set: use overlay's value (an explicit colour
+//     in the directive).
+//   - mask.FgPreserve / mask.BgPreserve set: leave base's value alone
+//     (an asterisk in the directive).
+//   - neither set: paint DefStyle's value (an empty or "default" slot
+//     in the directive).
+//
+// Attributes are additive only; the parser has no syntax to clear
+// bold/italic/underline/reverse, so the overlay can only turn them on,
+// never off.
 func MergeOverlay(base, overlay tcell.Style, mask StyleMask) tcell.Style {
 	s := base
-	if mask.Fg {
+	switch {
+	case mask.Fg:
 		s = s.Foreground(overlay.GetForeground())
+	case mask.FgPreserve:
+		// leave base fg
+	default:
+		s = s.Foreground(DefStyle.GetForeground())
 	}
-	if mask.Bg {
+	switch {
+	case mask.Bg:
 		s = s.Background(overlay.GetBackground())
+	case mask.BgPreserve:
+		// leave base bg
+	default:
+		s = s.Background(DefStyle.GetBackground())
 	}
 	if mask.Bold {
 		s = s.Bold(true)
