@@ -113,13 +113,13 @@ func (i *InfoWindow) displayBuffer() {
 			if activeC.HasSelection() &&
 				(bloc.GreaterEqual(activeC.CurSelection[0]) && bloc.LessThan(activeC.CurSelection[1]) ||
 					bloc.LessThan(activeC.CurSelection[0]) && bloc.GreaterEqual(activeC.CurSelection[1])) {
-				// The current character is selected
-				style = i.defStyle().Reverse(true)
-
+				// The current character is selected. Overlay-merge so a
+				// `*,#bg` directive preserves the underlying text colour.
 				if s, ok := config.Colorscheme["selection"]; ok {
-					style = s
+					style = config.MergeOverlay(style, s, config.ColorschemeMasks["selection"])
+				} else {
+					style = i.defStyle().Reverse(true)
 				}
-
 			}
 
 			screen.SetContent(vlocX, i.Y, r, combc, style)
