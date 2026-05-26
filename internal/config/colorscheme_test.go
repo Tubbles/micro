@@ -81,6 +81,8 @@ func TestStringToStyleMaskBgOnly(t *testing.T) {
 	_, m := StringToStyleMask(",#88C0D0")
 	assert.False(t, m.Fg)
 	assert.True(t, m.Bg)
+	assert.False(t, m.FgPreserve)
+	assert.False(t, m.BgPreserve)
 	assert.False(t, m.Bold)
 	assert.False(t, m.Italic)
 	assert.False(t, m.Underline)
@@ -91,12 +93,16 @@ func TestStringToStyleMaskFgOnly(t *testing.T) {
 	_, m := StringToStyleMask("#abcdef,")
 	assert.True(t, m.Fg)
 	assert.False(t, m.Bg)
+	assert.False(t, m.FgPreserve)
+	assert.False(t, m.BgPreserve)
 }
 
 func TestStringToStyleMaskAttrsOnly(t *testing.T) {
 	_, m := StringToStyleMask("bold underline")
 	assert.False(t, m.Fg)
 	assert.False(t, m.Bg)
+	assert.False(t, m.FgPreserve)
+	assert.False(t, m.BgPreserve)
 	assert.True(t, m.Bold)
 	assert.True(t, m.Underline)
 	assert.False(t, m.Italic)
@@ -105,20 +111,51 @@ func TestStringToStyleMaskAttrsOnly(t *testing.T) {
 
 func TestStringToStyleMaskDefaultIsUnset(t *testing.T) {
 	// "default" in either field reads as unspecified, same as the empty
-	// form, so overlay renderers leave the underlying cell value alone.
+	// form. After the asterisk-preserve change, this means MergeOverlay
+	// paints the field with DefStyle, not with the base value.
 	_, m := StringToStyleMask("default,#88C0D0")
 	assert.False(t, m.Fg)
 	assert.True(t, m.Bg)
+	assert.False(t, m.FgPreserve)
+	assert.False(t, m.BgPreserve)
 
 	_, m = StringToStyleMask("#abcdef,default")
 	assert.True(t, m.Fg)
 	assert.False(t, m.Bg)
+	assert.False(t, m.FgPreserve)
+	assert.False(t, m.BgPreserve)
+}
+
+func TestStringToStyleMaskFgPreserve(t *testing.T) {
+	_, m := StringToStyleMask("*,#88C0D0")
+	assert.False(t, m.Fg)
+	assert.True(t, m.Bg)
+	assert.True(t, m.FgPreserve)
+	assert.False(t, m.BgPreserve)
+}
+
+func TestStringToStyleMaskBgPreserve(t *testing.T) {
+	_, m := StringToStyleMask("#abcdef,*")
+	assert.True(t, m.Fg)
+	assert.False(t, m.Bg)
+	assert.False(t, m.FgPreserve)
+	assert.True(t, m.BgPreserve)
+}
+
+func TestStringToStyleMaskBothPreserve(t *testing.T) {
+	_, m := StringToStyleMask("*,*")
+	assert.False(t, m.Fg)
+	assert.False(t, m.Bg)
+	assert.True(t, m.FgPreserve)
+	assert.True(t, m.BgPreserve)
 }
 
 func TestStringToStyleMaskFullSpec(t *testing.T) {
 	_, m := StringToStyleMask("bold italic reverse underline #abcdef,#123456")
 	assert.True(t, m.Fg)
 	assert.True(t, m.Bg)
+	assert.False(t, m.FgPreserve)
+	assert.False(t, m.BgPreserve)
 	assert.True(t, m.Bold)
 	assert.True(t, m.Italic)
 	assert.True(t, m.Underline)
