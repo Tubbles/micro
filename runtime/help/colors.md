@@ -136,17 +136,28 @@ You can also put bold, italic, or underline in front of the color:
 color-link comment "bold red"
 ```
 
-For most highlight groups, an unspecified field (empty foreground or
-background, or `default`) falls back to the colorscheme's default style.
-Overlay groups behave differently: an unspecified field keeps the value
-from the underlying cell instead. The only overlay group today is
-`hlselection`, where a directive like `color-link hlselection
-",#88C0D0"` paints only the background and preserves the syntax token's
-foreground and attributes. The same applies to attribute-only forms
-like `color-link hlselection "bold"`, which adds bold to whatever was
-already there. Attributes are additive only: there is no syntax to
-clear `bold`, `italic`, `underline`, or `reverse` from an underlying
-style.
+An unspecified field (empty foreground or background, or `default`)
+falls back to the colorscheme's default style. This applies uniformly
+to every group: `color-link selection ",#88C0D0"` paints the default
+foreground over the custom background, same as for any other group.
+
+To preserve the underlying cell's foreground or background instead of
+overriding it, use an asterisk: `color-link selection "*,#88C0D0"`
+sets only the background and leaves the syntax-highlighted foreground
+alone. The asterisk works in either slot, so
+`color-link selection "#FF0000,*"` sets only the foreground. Both
+slots may be asterisks (`"*,*"`), which preserves everything and is
+mainly useful when combined with attributes.
+
+The preserve marker is only meaningful for groups whose render path
+overlays another style. Today those are `selection` and `hlselection`.
+For ordinary syntax groups there is no underlying style to preserve,
+so an asterisk falls back to the colorscheme default in practice.
+
+Attributes (`bold`, `italic`, `underline`, `reverse`) are additive
+only: a directive can turn them on but there is no syntax to clear
+them from an underlying style. `color-link hlselection "bold"` adds
+bold to whatever was already there.
 
 ---
 
@@ -185,7 +196,7 @@ Here is a list of the colorscheme groups that you can use:
 * underlined
 * error
 * todo
-* selection (Color of the text selection)
+* selection (Color of the text selection. Applied as an overlay; use the asterisk syntax to preserve the underlying foreground or background.)
 * statusline (Color of the statusline)
 * statusline.inactive (Color of the statusline of inactive split panes)
 * statusline.suggestions (Color of the autocomplete suggestions menu)
@@ -210,7 +221,7 @@ Here is a list of the colorscheme groups that you can use:
 * error-message (Color of error messages in the bottom line of the screen)
 * match-brace (Color of matching brackets when `matchbracestyle` is set to `highlight`)
 * hlsearch (Color of highlighted search results when `hlsearch` is enabled)
-* hlselection (Color of highlighted selection / word-under-cursor matches when `hlselection` is enabled. Falls back to `hlsearch` when not defined.)
+* hlselection (Color of highlighted selection / word-under-cursor matches when `hlselection` is enabled. Falls back to `hlsearch` when not defined. Applied as an overlay; use the asterisk syntax to preserve the underlying foreground or background.)
 * tab-error (Color of tab vs space errors when `hltaberrors` is enabled)
 * trailingws (Color of trailing whitespaces when `hltrailingws` is enabled)
 
