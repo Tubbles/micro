@@ -662,11 +662,13 @@ func (w *BufWindow) displayBuffer() {
 					if c.HasSelection() &&
 						(bloc.GreaterEqual(c.CurSelection[0]) && bloc.LessThan(c.CurSelection[1]) ||
 							bloc.LessThan(c.CurSelection[0]) && bloc.GreaterEqual(c.CurSelection[1])) {
-						// The current character is selected
-						style = config.DefStyle.Reverse(true)
-
+						// The current character is selected. Overlay-merge so
+						// `*,#bg` in the directive preserves the syntax-token
+						// foreground while still painting a custom background.
 						if s, ok := config.Colorscheme["selection"]; ok {
-							style = s
+							style = config.MergeOverlay(style, s, config.ColorschemeMasks["selection"])
+						} else {
+							style = config.DefStyle.Reverse(true)
 						}
 					}
 
