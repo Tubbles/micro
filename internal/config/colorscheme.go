@@ -20,12 +20,14 @@ var Colorscheme map[string]tcell.Style
 // the mask so they can layer the directive over an existing cell style
 // without overwriting the dimensions the user did not specify.
 type StyleMask struct {
-	Fg        bool
-	Bg        bool
-	Bold      bool
-	Italic    bool
-	Underline bool
-	Reverse   bool
+	Fg         bool
+	Bg         bool
+	FgPreserve bool
+	BgPreserve bool
+	Bold       bool
+	Italic     bool
+	Underline  bool
+	Reverse    bool
 }
 
 // ColorschemeMasks is the per-group set-mask companion to Colorscheme.
@@ -243,7 +245,10 @@ func StringToStyleMask(str string) (tcell.Style, StyleMask) {
 
 	var mask StyleMask
 	var fgColor, bgColor tcell.Color
-	if fg == "" || fg == "default" {
+	if fg == "*" {
+		mask.FgPreserve = true
+		fgColor = DefStyle.GetForeground()
+	} else if fg == "" || fg == "default" {
 		fgColor = DefStyle.GetForeground()
 	} else {
 		c, ok := StringToColor(fg)
@@ -254,7 +259,10 @@ func StringToStyleMask(str string) (tcell.Style, StyleMask) {
 			mask.Fg = true
 		}
 	}
-	if bg == "" || bg == "default" {
+	if bg == "*" {
+		mask.BgPreserve = true
+		bgColor = DefStyle.GetBackground()
+	} else if bg == "" || bg == "default" {
 		bgColor = DefStyle.GetBackground()
 	} else {
 		c, ok := StringToColor(bg)
