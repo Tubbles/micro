@@ -1,6 +1,7 @@
 package action
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -262,6 +263,19 @@ type BufPane struct {
 	// them into a single clipboard-style insert.
 	pasteBuf strings.Builder
 	inPaste  bool
+
+	// activeMsgIdx is the position, within MessagesUnderLoc(cursor),
+	// of the Message currently shown in the info bar gutter.
+	activeMsgIdx int
+	// pendingMsgIdx is set by JumpToNextMessage / JumpToPrevMessage right
+	// before they move the cursor across a cluster boundary. The next
+	// refreshMessageGutter consumes it instead of resolving the index from
+	// the new cursor position. -1 means no hint.
+	pendingMsgIdx int
+	// lastMsgCursor is the cursor Loc seen at the previous refreshMessageGutter
+	// call, used to detect cursor moves that did not originate from the jump
+	// actions.
+	lastMsgCursor buffer.Loc
 }
 
 func newBufPane(buf *buffer.Buffer, win display.BWindow, tab *Tab) *BufPane {
@@ -272,6 +286,7 @@ func newBufPane(buf *buffer.Buffer, win display.BWindow, tab *Tab) *BufPane {
 
 	h.Cursor = h.Buf.GetActiveCursor()
 	h.mousePressed = make(map[MouseEvent]bool)
+	h.pendingMsgIdx = -1
 
 	return h
 }
@@ -538,19 +553,7 @@ func (h *BufPane) HandleEvent(event tcell.Event) {
 	h.Buf.MergeCursors()
 
 	if h.IsActive() {
-		// Display any gutter messages for this line
-		c := h.Buf.GetActiveCursor()
-		none := true
-		for _, m := range h.Buf.Messages {
-			if c.Y == m.Start.Y || c.Y == m.End.Y {
-				InfoBar.GutterMessage(m.Msg)
-				none = false
-				break
-			}
-		}
-		if none && InfoBar.HasGutter {
-			InfoBar.ClearGutter()
-		}
+		h.refreshMessageGutter()
 	}
 
 	cursors := h.Buf.GetCursors()
@@ -736,25 +739,144 @@ func (h *BufPane) SetActive(b bool) {
 
 	h.BWindow.SetActive(b)
 	if b {
-		// Display any gutter messages for this line
-		c := h.Buf.GetActiveCursor()
-		none := true
-		for _, m := range h.Buf.Messages {
-			if c.Y == m.Start.Y || c.Y == m.End.Y {
-				InfoBar.GutterMessage(m.Msg)
-				none = false
-				break
-			}
-		}
-		if none && InfoBar.HasGutter {
-			InfoBar.ClearGutter()
-		}
+		h.refreshMessageGutter()
 
 		err := config.RunPluginFn("onSetActive", luar.New(ulua.L, h))
 		if err != nil {
 			screen.TermMessage(err)
 		}
 	}
+}
+
+// refreshMessageGutter resolves the active under-cursor Message and renders
+// it into the info bar gutter. The active message is normally chosen from
+// the cursor's exact Loc via the most-specific rule (largest Start ≤ cursor,
+// ties broken by first-in-slice). JumpToNextMessage / JumpToPrevMessage
+// override the index for one refresh via h.pendingMsgIdx, which lets them
+// land at the start or end of a freshly entered cluster. When more than one
+// message is under the cursor, an "[idx/N]" badge is prepended.
+func (h *BufPane) refreshMessageGutter() {
+	c := h.Buf.GetActiveCursor()
+	cur := buffer.Loc{X: c.X, Y: c.Y}
+	under := h.Buf.MessagesUnderLoc(cur)
+
+	if h.pendingMsgIdx >= 0 {
+		h.activeMsgIdx = h.pendingMsgIdx
+		h.pendingMsgIdx = -1
+	} else if cur != h.lastMsgCursor {
+		h.activeMsgIdx = idxOfLatestStartLE(under, cur)
+	}
+	if len(under) == 0 {
+		h.activeMsgIdx = 0
+	} else if h.activeMsgIdx >= len(under) {
+		h.activeMsgIdx = len(under) - 1
+	} else if h.activeMsgIdx < 0 {
+		h.activeMsgIdx = 0
+	}
+	h.lastMsgCursor = cur
+
+	if len(under) == 0 {
+		if InfoBar.HasGutter {
+			InfoBar.ClearGutter()
+		}
+		return
+	}
+	m := under[h.activeMsgIdx]
+	text := m.Msg
+	if len(under) > 1 {
+		text = fmt.Sprintf("[%d/%d] %s", h.activeMsgIdx+1, len(under), m.Msg)
+	}
+	InfoBar.GutterMessage(text)
+}
+
+// startForOrdering returns the Loc to use when comparing message Starts.
+// Line-only sentinels (Start.X == -1, produced by NewMessageAtLine) are
+// ordered as if they started at column 0.
+func startForOrdering(m *buffer.Message) buffer.Loc {
+	s := m.Start
+	if s.X < 0 {
+		s.X = 0
+	}
+	return s
+}
+
+// idxOfLatestStartLE returns the index of the under-cursor message whose
+// Start is the largest Loc that is ≤ cur. Ties are broken by first
+// occurrence in the slice. Returns 0 if under is empty.
+func idxOfLatestStartLE(under []*buffer.Message, cur buffer.Loc) int {
+	best := 0
+	have := false
+	var bestStart buffer.Loc
+	for i, m := range under {
+		s := startForOrdering(m)
+		if !s.LessEqual(cur) {
+			continue
+		}
+		if !have || s.GreaterThan(bestStart) {
+			best = i
+			bestStart = s
+			have = true
+		}
+	}
+	return best
+}
+
+// smallestStartGT finds the smallest Message.Start strictly greater than
+// cur. Returns ok=false if no such message exists.
+func smallestStartGT(msgs []*buffer.Message, cur buffer.Loc) (loc buffer.Loc, ok bool) {
+	for _, m := range msgs {
+		s := startForOrdering(m)
+		if !s.GreaterThan(cur) {
+			continue
+		}
+		if !ok || s.LessThan(loc) {
+			loc = s
+			ok = true
+		}
+	}
+	return loc, ok
+}
+
+// largestStartLT finds the largest Message.Start strictly less than cur.
+// Returns ok=false if no such message exists.
+func largestStartLT(msgs []*buffer.Message, cur buffer.Loc) (loc buffer.Loc, ok bool) {
+	for _, m := range msgs {
+		s := startForOrdering(m)
+		if !s.LessThan(cur) {
+			continue
+		}
+		if !ok || s.GreaterThan(loc) {
+			loc = s
+			ok = true
+		}
+	}
+	return loc, ok
+}
+
+// smallestStart returns the smallest Message.Start in msgs. Caller must
+// ensure msgs is non-empty.
+func smallestStart(msgs []*buffer.Message) buffer.Loc {
+	loc := startForOrdering(msgs[0])
+	for _, m := range msgs[1:] {
+		s := startForOrdering(m)
+		if s.LessThan(loc) {
+			loc = s
+		}
+	}
+	return loc
+}
+
+// largestStart returns the largest Message.Start in msgs. Caller must
+// ensure msgs is non-empty.
+func largestStart(msgs []*buffer.Message) buffer.Loc {
+	loc := startForOrdering(msgs[0])
+	for _, m := range msgs[1:] {
+		s := startForOrdering(m)
+		if s.GreaterThan(loc) {
+			loc = s
+		}
+	}
+	return loc
 }
 
 // BufKeyActions contains the list of all possible key actions the bufhandler could execute
@@ -810,6 +932,9 @@ var BufKeyActions = map[string]BufKeyAction{
 	"FindPrevious":              (*BufPane).FindPrevious,
 	"DiffNext":                  (*BufPane).DiffNext,
 	"DiffPrevious":              (*BufPane).DiffPrevious,
+	"JumpToNextMessage":         (*BufPane).JumpToNextMessage,
+	"JumpToPrevMessage":         (*BufPane).JumpToPrevMessage,
+	"ShowFullMessage":           (*BufPane).ShowFullMessage,
 	"Center":                    (*BufPane).Center,
 	"Undo":                      (*BufPane).Undo,
 	"Redo":                      (*BufPane).Redo,
