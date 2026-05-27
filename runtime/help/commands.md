@@ -178,6 +178,15 @@ quotes here but these are not necessary when entering the command in micro.
 
 * `pwd`: Print the current working directory.
 
+* `copyfilename`: Copy the current buffer's basename (the filename without
+   any directory part) to the system clipboard.
+
+* `copyrelativepath`: Copy the current buffer's path, relative to the
+   directory micro was launched from, to the system clipboard.
+
+* `copyabsolutepath`: Copy the current buffer's absolute filesystem path to
+   the system clipboard.
+
 * `open 'filename'`: Open a file in the current buffer.
 
 * `reopen`: Reopens the current file from disk.
