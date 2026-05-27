@@ -32,41 +32,44 @@ var commands map[string]Command
 
 func InitCommands() {
 	commands = map[string]Command{
-		"set":         {(*BufPane).SetCmd, OptionValueComplete},
-		"setlocal":    {(*BufPane).SetLocalCmd, OptionValueComplete},
-		"toggle":      {(*BufPane).ToggleCmd, OptionValueComplete},
-		"togglelocal": {(*BufPane).ToggleLocalCmd, OptionValueComplete},
-		"reset":       {(*BufPane).ResetCmd, OptionValueComplete},
-		"show":        {(*BufPane).ShowCmd, OptionComplete},
-		"showkey":     {(*BufPane).ShowKeyCmd, nil},
-		"run":         {(*BufPane).RunCmd, nil},
-		"bind":        {(*BufPane).BindCmd, nil},
-		"unbind":      {(*BufPane).UnbindCmd, nil},
-		"quit":        {(*BufPane).QuitCmd, nil},
-		"goto":        {(*BufPane).GotoCmd, nil},
-		"jump":        {(*BufPane).JumpCmd, nil},
-		"save":        {(*BufPane).SaveCmd, nil},
-		"replace":     {(*BufPane).ReplaceCmd, nil},
-		"replaceall":  {(*BufPane).ReplaceAllCmd, nil},
-		"vsplit":      {(*BufPane).VSplitCmd, buffer.FileComplete},
-		"hsplit":      {(*BufPane).HSplitCmd, buffer.FileComplete},
-		"tab":         {(*BufPane).NewTabCmd, buffer.FileComplete},
-		"help":        {(*BufPane).HelpCmd, HelpComplete},
-		"eval":        {(*BufPane).EvalCmd, nil},
-		"log":         {(*BufPane).ToggleLogCmd, nil},
-		"plugin":      {(*BufPane).PluginCmd, PluginComplete},
-		"reload":      {(*BufPane).ReloadCmd, nil},
-		"reopen":      {(*BufPane).ReopenCmd, nil},
-		"cd":          {(*BufPane).CdCmd, buffer.FileComplete},
-		"pwd":         {(*BufPane).PwdCmd, nil},
-		"open":        {(*BufPane).OpenCmd, buffer.FileComplete},
-		"tabmove":     {(*BufPane).TabMoveCmd, nil},
-		"tabswitch":   {(*BufPane).TabSwitchCmd, nil},
-		"term":        {(*BufPane).TermCmd, nil},
-		"memusage":    {(*BufPane).MemUsageCmd, nil},
-		"retab":       {(*BufPane).RetabCmd, nil},
-		"raw":         {(*BufPane).RawCmd, nil},
-		"textfilter":  {(*BufPane).TextFilterCmd, nil},
+		"set":              {(*BufPane).SetCmd, OptionValueComplete},
+		"setlocal":         {(*BufPane).SetLocalCmd, OptionValueComplete},
+		"toggle":           {(*BufPane).ToggleCmd, OptionValueComplete},
+		"togglelocal":      {(*BufPane).ToggleLocalCmd, OptionValueComplete},
+		"reset":            {(*BufPane).ResetCmd, OptionValueComplete},
+		"show":             {(*BufPane).ShowCmd, OptionComplete},
+		"showkey":          {(*BufPane).ShowKeyCmd, nil},
+		"run":              {(*BufPane).RunCmd, nil},
+		"bind":             {(*BufPane).BindCmd, nil},
+		"unbind":           {(*BufPane).UnbindCmd, nil},
+		"quit":             {(*BufPane).QuitCmd, nil},
+		"goto":             {(*BufPane).GotoCmd, nil},
+		"jump":             {(*BufPane).JumpCmd, nil},
+		"save":             {(*BufPane).SaveCmd, nil},
+		"replace":          {(*BufPane).ReplaceCmd, nil},
+		"replaceall":       {(*BufPane).ReplaceAllCmd, nil},
+		"vsplit":           {(*BufPane).VSplitCmd, buffer.FileComplete},
+		"hsplit":           {(*BufPane).HSplitCmd, buffer.FileComplete},
+		"tab":              {(*BufPane).NewTabCmd, buffer.FileComplete},
+		"help":             {(*BufPane).HelpCmd, HelpComplete},
+		"eval":             {(*BufPane).EvalCmd, nil},
+		"log":              {(*BufPane).ToggleLogCmd, nil},
+		"plugin":           {(*BufPane).PluginCmd, PluginComplete},
+		"reload":           {(*BufPane).ReloadCmd, nil},
+		"reopen":           {(*BufPane).ReopenCmd, nil},
+		"cd":               {(*BufPane).CdCmd, buffer.FileComplete},
+		"pwd":              {(*BufPane).PwdCmd, nil},
+		"copyfilename":     {(*BufPane).CopyFileNameCmd, nil},
+		"copyrelativepath": {(*BufPane).CopyRelativePathCmd, nil},
+		"copyabsolutepath": {(*BufPane).CopyAbsolutePathCmd, nil},
+		"open":             {(*BufPane).OpenCmd, buffer.FileComplete},
+		"tabmove":          {(*BufPane).TabMoveCmd, nil},
+		"tabswitch":        {(*BufPane).TabSwitchCmd, nil},
+		"term":             {(*BufPane).TermCmd, nil},
+		"memusage":         {(*BufPane).MemUsageCmd, nil},
+		"retab":            {(*BufPane).RetabCmd, nil},
+		"raw":              {(*BufPane).RawCmd, nil},
+		"textfilter":       {(*BufPane).TextFilterCmd, nil},
 	}
 }
 
@@ -298,6 +301,23 @@ func (h *BufPane) PwdCmd(args []string) {
 	} else {
 		InfoBar.Message(wd)
 	}
+}
+
+// CopyFileNameCmd copies the current buffer's basename to the system clipboard.
+func (h *BufPane) CopyFileNameCmd(args []string) {
+	h.CopyFileName()
+}
+
+// CopyRelativePathCmd copies the current buffer's path, relative to the
+// directory micro was launched from, to the system clipboard.
+func (h *BufPane) CopyRelativePathCmd(args []string) {
+	h.CopyRelativePath()
+}
+
+// CopyAbsolutePathCmd copies the current buffer's absolute filesystem path
+// to the system clipboard.
+func (h *BufPane) CopyAbsolutePathCmd(args []string) {
+	h.CopyAbsolutePath()
 }
 
 // OpenCmd opens a new buffer with a given filename
