@@ -163,6 +163,39 @@ func (i *InfoWindow) displayBuffer() {
 	}
 }
 
+// truncateForInfoBar returns s clipped to fit at most width display columns,
+// substituting a single-column ellipsis for the trimmed tail. The full input
+// is returned unchanged when it already fits. Width 0 returns the empty
+// string.
+func truncateForInfoBar(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if runewidth.StringWidth(s) <= width {
+		return s
+	}
+	budget := width - 1
+	if budget < 0 {
+		budget = 0
+	}
+	runes := []rune(s)
+	accW := 0
+	cut := 0
+	for i, c := range runes {
+		w := runewidth.RuneWidth(c)
+		if accW+w > budget {
+			cut = i
+			break
+		}
+		accW += w
+		cut = i + 1
+	}
+	out := make([]rune, 0, cut+1)
+	out = append(out, runes[:cut]...)
+	out = append(out, '…')
+	return string(out)
+}
+
 var keydisplay = []string{"^Q Quit, ^S Save, ^O Open, ^G Help, ^E Command Bar, ^K Cut Line", "^F Find, ^Z Undo, ^Y Redo, ^A Select All, ^D Duplicate Line, ^T New Tab"}
 
 func (i *InfoWindow) displayKeyMenu() {
@@ -228,6 +261,13 @@ func (i *InfoWindow) Display() {
 		}
 
 		display := i.Msg
+		// Truncate with an ellipsis when the message would overflow the info
+		// bar. The prompt path (Msg here is the prompt label, with user input
+		// rendered after it by displayBuffer) must keep the full label width
+		// or the cursor and input land in the wrong column.
+		if !i.HasPrompt && i.Width > 0 {
+			display = truncateForInfoBar(display, i.Width)
+		}
 		for _, c := range display {
 			screen.SetContent(x, i.Y, c, nil, style)
 			x += runewidth.RuneWidth(c)
