@@ -271,6 +271,8 @@ Cut
 CutLine
 Duplicate
 DuplicateLine
+DuplicateLineDown
+DuplicateLineUp
 DeleteLine
 MoveLinesUp
 MoveLinesDown
