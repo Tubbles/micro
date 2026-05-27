@@ -136,13 +136,19 @@ func (h *BufPane) RawCmd(args []string) {
 // TextFilterCmd filters the selection through the command.
 // Selection goes to the command input.
 // On successful run command output replaces the current selection.
+//
+// The command is run once per cursor. Two environment variables are
+// set on each invocation so the filter can distinguish cursors:
+//   MICRO_CURSOR_INDEX: 0-based index of the current cursor
+//   MICRO_CURSOR_COUNT: total number of cursors in this run
 func (h *BufPane) TextFilterCmd(args []string) {
 	if len(args) == 0 {
 		InfoBar.Error("usage: textfilter arguments")
 		return
 	}
 
-	for _, c := range h.Buf.GetCursors() {
+	cursors := h.Buf.GetCursors()
+	for i, c := range cursors {
 		sel := c.GetSelection()
 		fromSelection := len(sel) > 0
 		if !fromSelection {
@@ -151,6 +157,10 @@ func (h *BufPane) TextFilterCmd(args []string) {
 		}
 		var bout, berr bytes.Buffer
 		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Env = append(os.Environ(),
+			fmt.Sprintf("MICRO_CURSOR_INDEX=%d", i),
+			fmt.Sprintf("MICRO_CURSOR_COUNT=%d", len(cursors)),
+		)
 		cmd.Stdin = strings.NewReader(string(sel))
 		cmd.Stderr = &berr
 		cmd.Stdout = &bout
