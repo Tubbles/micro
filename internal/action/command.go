@@ -351,8 +351,9 @@ func ReloadConfig() {
 }
 
 func reloadRuntime(reloadPlugins bool) {
+	var err error
 	if reloadPlugins {
-		err := config.RunPluginFn("deinit")
+		err = config.RunPluginFn("deinit")
 		if err != nil {
 			screen.TermMessage(err)
 		}
@@ -364,10 +365,15 @@ func reloadRuntime(reloadPlugins bool) {
 		config.InitPlugins()
 	}
 
-	err := config.ReadSettings()
-	if err != nil {
-		screen.TermMessage(err)
-	} else {
+	errSettings := config.ReadSettings()
+	if errSettings != nil {
+		screen.TermMessage(errSettings)
+	}
+	errLocal := config.ReadLocalSettings()
+	if errLocal != nil {
+		screen.TermMessage(errLocal)
+	}
+	if errSettings == nil && errLocal == nil {
 		parsedSettings := config.ParsedSettings()
 		defaultSettings := config.DefaultAllSettings()
 		for k := range defaultSettings {
@@ -587,8 +593,8 @@ func doSetGlobalOptionNative(option string, nativeValue any) error {
 		return nil
 	}
 
+	config.UpdateParsedSetting(option, nativeValue)
 	config.GlobalSettings[option] = nativeValue
-	config.ModifiedSettings[option] = true
 	delete(config.VolatileSettings, option)
 
 	if option == "colorscheme" {
