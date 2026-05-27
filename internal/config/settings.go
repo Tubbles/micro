@@ -124,6 +124,7 @@ var DefaultGlobalOnlySettings = map[string]any{
 	"multiopen":      "tab",
 	"parsecursor":    false,
 	"paste":          false,
+	"pathbar":        false,
 	"pluginchannels": []string{"https://raw.githubusercontent.com/micro-editor/plugin-channel/master/channel.json"},
 	"pluginrepos":    []string{},
 	"savehistory":    true,
