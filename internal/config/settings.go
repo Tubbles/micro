@@ -33,6 +33,7 @@ var optionValidators = map[string]optionValidator{
 	"matchbracestyle":            validateChoice,
 	"multiopen":                  validateChoice,
 	"pageoverlap":                validateNonNegativeValue,
+	"pathdisplay":                validateChoice,
 	"reload":                     validateChoice,
 	"scrollmargin":               validateNonNegativeValue,
 	"scrollspeed":                validateNonNegativeValue,
@@ -47,6 +48,7 @@ var OptionChoices = map[string][]string{
 	"helpsplit":       {"hsplit", "vsplit"},
 	"matchbracestyle": {"underline", "highlight"},
 	"multiopen":       {"tab", "hsplit", "vsplit"},
+	"pathdisplay":     {"full", "basename", "smart"},
 	"reload":          {"prompt", "auto", "disabled"},
 	"truecolor":       {"auto", "on", "off"},
 }
@@ -132,6 +134,7 @@ var DefaultGlobalOnlySettings = map[string]any{
 	"multiopen":                  "tab",
 	"parsecursor":                false,
 	"paste":                      false,
+	"pathdisplay":                "full",
 	"pluginchannels":             []string{"https://raw.githubusercontent.com/micro-editor/plugin-channel/master/channel.json"},
 	"pluginrepos":                []string{},
 	"quittoscratch":              false,
@@ -401,10 +404,43 @@ func RebuildGlobalSettings() {
 		GlobalSettings[k] = v
 	}
 
+	ApplyPathDisplayBackcompat()
+
 	// Restore volatile values last so they outrank everything from disk.
 	for k, v := range volatileValues {
 		GlobalSettings[k] = v
 	}
+}
+
+// ApplyPathDisplayBackcompat derives GlobalSettings["pathdisplay"] from
+// the legacy basename setting when pathdisplay is not explicitly set in
+// either settings file. Mapping: basename=true -> "basename",
+// basename=false -> "full". When pathdisplay is explicit it wins over
+// basename. Idempotent; safe to call after either a full rebuild or
+// after per-key reload that bypasses RebuildGlobalSettings.
+func ApplyPathDisplayBackcompat() {
+	if _, pdInGlobal := parsedSettings["pathdisplay"]; pdInGlobal {
+		return
+	}
+	if _, pdInLocal := parsedLocalSettings["pathdisplay"]; pdInLocal {
+		return
+	}
+	if bn, ok := parsedLocalSettings["basename"]; ok {
+		GlobalSettings["pathdisplay"] = derivePathDisplay(bn)
+		return
+	}
+	if bn, ok := parsedSettings["basename"]; ok {
+		GlobalSettings["pathdisplay"] = derivePathDisplay(bn)
+	}
+}
+
+// derivePathDisplay maps a legacy basename value to its pathdisplay
+// equivalent: true -> "basename", false (or any non-bool) -> "full".
+func derivePathDisplay(basename any) string {
+	if b, ok := basename.(bool); ok && b {
+		return "basename"
+	}
+	return "full"
 }
 
 // applyPathGlobLocals overlays any glob:<pattern> nested maps in src
