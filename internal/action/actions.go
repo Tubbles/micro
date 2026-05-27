@@ -1389,7 +1389,7 @@ func (h *BufPane) CopyFileName() bool {
 		InfoBar.Error("No filename")
 		return false
 	}
-	if err := clipboard.Write(filepath.Base(h.Buf.Path), clipboard.ClipboardReg); err != nil {
+	if err := clipboard.Write(filepath.Base(h.Buf.AbsPath), clipboard.ClipboardReg); err != nil {
 		InfoBar.Error(err)
 		return false
 	}
@@ -1397,14 +1397,24 @@ func (h *BufPane) CopyFileName() bool {
 	return true
 }
 
-// CopyRelativePath copies the path of the current buffer's file, relative
-// to the directory micro was launched from, to the system clipboard.
+// CopyRelativePath copies the current buffer's file path relative to the
+// current working directory to the system clipboard. b.Path can already be
+// absolute if the buffer was opened that way (file picker, command line),
+// so the relative form is recomputed from b.AbsPath against the live cwd.
+// Falls back to the absolute path if the file is outside cwd (the relative
+// form would escape via "..").
 func (h *BufPane) CopyRelativePath() bool {
 	if h.Buf.Path == "" {
 		InfoBar.Error("No filename")
 		return false
 	}
-	if err := clipboard.Write(h.Buf.Path, clipboard.ClipboardReg); err != nil {
+	text := h.Buf.AbsPath
+	if wd, err := os.Getwd(); err == nil {
+		if rel, err := util.MakeRelative(h.Buf.AbsPath, wd); err == nil && !strings.HasPrefix(rel, "..") {
+			text = rel
+		}
+	}
+	if err := clipboard.Write(text, clipboard.ClipboardReg); err != nil {
 		InfoBar.Error(err)
 		return false
 	}
