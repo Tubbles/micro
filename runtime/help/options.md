@@ -77,9 +77,17 @@ Here are the available options:
 
     default value: `external`
 
-* `colorcolumn`: if this is not set to 0, it will display a column at the
-   specified column. This is useful if you want column 80 to be highlighted
-   special for example.
+* `colorcolumn`: highlight one or more columns. The value may be either a
+   single non-negative integer (legacy form) or a JSON array of non-negative
+   integers, e.g. `[72, 80, 120]`. A value of 0, or an empty array, disables
+   highlighting; a 0 inside a list is silently skipped.
+
+    examples:
+        "colorcolumn": 80
+        "colorcolumn": [72, 80, 120]
+
+    From the command bar, multiple columns can be set with a comma-separated
+    list (no spaces required): `> set colorcolumn 72,80,120`.
 
     default value: `0`
 
