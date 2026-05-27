@@ -345,6 +345,9 @@ SkipMultiCursor
 SkipMultiCursorBack
 JumpToMatchingBrace
 JumpLine
+JumpBack
+JumpForward
+PushJump
 Deselect
 ClearInfo
 None
@@ -352,6 +355,17 @@ None
 
 The `StartOfTextToggle` and `SelectToStartOfTextToggle` actions toggle between
 jumping to the start of the text (first) and start of the line.
+
+The `JumpBack` and `JumpForward` actions step through a global cursor history,
+returning you to recent positions across panes and tabs. The history is
+populated automatically before any "long jump" action runs (CursorStart,
+CursorEnd, JumpLine, JumpToMatchingBrace, Find/FindLiteral/FindNext/FindPrevious,
+CursorPageUp/CursorPageDown, HalfPageUp/HalfPageDown, MousePress) and whenever
+the active pane or tab changes. The first `JumpBack` after a series of edits
+also records your current cursor so `JumpForward` can return to it. Entries
+whose pane has been closed are skipped silently. `PushJump` records the
+current cursor as a manual breadcrumb for the same list. None of these are
+bound by default; add entries in `bindings.json` to use them.
 
 The `CutLine` action cuts the current line and adds it to the previously cut
 lines in the clipboard since the last paste (rather than just replaces the
