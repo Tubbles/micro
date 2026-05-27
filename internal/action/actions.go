@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -1378,6 +1379,51 @@ func (h *BufPane) CopyLine() bool {
 	h.Cursor.LastWrappedVisualX = origLastWrappedVisualX
 	h.Cursor.CurSelection = origSelection
 	h.Relocate()
+	return true
+}
+
+// CopyFileName copies the basename of the current buffer's file to the
+// system clipboard.
+func (h *BufPane) CopyFileName() bool {
+	if h.Buf.Path == "" {
+		InfoBar.Error("No filename")
+		return false
+	}
+	if err := clipboard.Write(filepath.Base(h.Buf.Path), clipboard.ClipboardReg); err != nil {
+		InfoBar.Error(err)
+		return false
+	}
+	InfoBar.Message("Copied filename")
+	return true
+}
+
+// CopyRelativePath copies the path of the current buffer's file, relative
+// to the directory micro was launched from, to the system clipboard.
+func (h *BufPane) CopyRelativePath() bool {
+	if h.Buf.Path == "" {
+		InfoBar.Error("No filename")
+		return false
+	}
+	if err := clipboard.Write(h.Buf.Path, clipboard.ClipboardReg); err != nil {
+		InfoBar.Error(err)
+		return false
+	}
+	InfoBar.Message("Copied relative path")
+	return true
+}
+
+// CopyAbsolutePath copies the absolute filesystem path of the current
+// buffer's file to the system clipboard.
+func (h *BufPane) CopyAbsolutePath() bool {
+	if h.Buf.Path == "" {
+		InfoBar.Error("No filename")
+		return false
+	}
+	if err := clipboard.Write(h.Buf.AbsPath, clipboard.ClipboardReg); err != nil {
+		InfoBar.Error(err)
+		return false
+	}
+	InfoBar.Message("Copied absolute path")
 	return true
 }
 
