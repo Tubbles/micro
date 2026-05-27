@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/config"
 )
 
@@ -16,10 +17,14 @@ import (
 //   - "smart":    shortest unique tail of b.AbsPath such that no two
 //                 tabs in smart mode collide, plus " +" if modified.
 //
-// Buffers with an explicit name (Help, Log, Raw event viewer), the
-// "No name" scratch buffer, and any non-BufPane (TermPane, InfoPane,
-// RawPane) bypass the path-display logic entirely and fall back to the
-// pane's own Name() method, matching the pre-pathdisplay behaviour.
+// Non-default buffer types (Help, Log, Raw event viewer) whose names are
+// set explicitly via SetName, the "No name" scratch buffer, and any
+// non-BufPane (TermPane, InfoPane, RawPane) bypass the path-display logic
+// entirely and fall back to the pane's own Name() method, matching the
+// pre-pathdisplay behaviour. A BTDefault buffer with an explicit name set
+// by a plugin (e.g. an LSP "go to definition" tab that calls SetName to
+// shorten the statusbar entry) still flows through the path-display modes
+// so tab titles stay consistent across all file-backed buffers.
 func computeTabTitles(tabs []*Tab) []string {
 	titles := make([]string, len(tabs))
 	mode, _ := config.GlobalSettings["pathdisplay"].(string)
@@ -37,7 +42,7 @@ func computeTabTitles(tabs []*Tab) []string {
 			continue
 		}
 		b := bp.Buf
-		if b.HasName() || b.Path == "" {
+		if (b.HasName() && b.Type != buffer.BTDefault) || b.Path == "" {
 			titles[i] = bp.Name()
 			continue
 		}
