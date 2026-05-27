@@ -565,6 +565,35 @@ func IntOpt(opt any) int {
 	return int(opt.(float64))
 }
 
+// IntListOpt converts a setting that may be either a single float64
+// (legacy scalar form) or a []any of float64s (list form, used e.g.
+// by colorcolumn) into a []int. Zero-valued entries are filtered so
+// callers can treat the empty result as "disabled" regardless of
+// input shape.
+func IntListOpt(opt any) []int {
+	if f, ok := opt.(float64); ok {
+		if int(f) == 0 {
+			return nil
+		}
+		return []int{int(f)}
+	}
+	if arr, ok := opt.([]any); ok {
+		out := make([]int, 0, len(arr))
+		for _, v := range arr {
+			f, ok := v.(float64)
+			if !ok {
+				continue
+			}
+			if int(f) == 0 {
+				continue
+			}
+			out = append(out, int(f))
+		}
+		return out
+	}
+	return nil
+}
+
 // GetCharPosInLine gets the char position of a visual x y
 // coordinate (this is necessary because tabs are 1 char but
 // 4 visual spaces)
