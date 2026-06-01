@@ -526,6 +526,9 @@ func DoEvent() {
 
 	if event != nil {
 		_, resize := event.(*tcell.EventResize)
+		if focus, ok := event.(*tcell.EventFocus); ok && focus.Focused {
+			reapplySystemColorscheme()
+		}
 		if resize {
 			action.InfoBar.HandleEvent(event)
 			action.Tabs.HandleEvent(event)
@@ -539,5 +542,26 @@ func DoEvent() {
 	err := config.RunPluginFn("onAnyEvent")
 	if err != nil {
 		screen.TermMessage(err)
+	}
+}
+
+// reapplySystemColorscheme re-runs the follow-system resolver and
+// reloads the colorscheme only when the resolved name has actually
+// changed since the last load. It is invoked on every focus-in event,
+// so the short-circuit is what keeps it cheap. The follow-system
+// option being off makes the resolver return the manual colorscheme,
+// which equals ActiveColorschemeName in steady state and the
+// reapply becomes a no-op.
+func reapplySystemColorscheme() {
+	name, _ := config.ResolveEffectiveColorscheme()
+	if name == config.ActiveColorschemeName {
+		return
+	}
+	if err := config.InitColorscheme(); err != nil {
+		screen.TermMessage(err)
+		return
+	}
+	for _, b := range buffer.OpenBuffers {
+		b.UpdateRules()
 	}
 }
