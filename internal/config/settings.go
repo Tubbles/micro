@@ -21,22 +21,24 @@ type optionValidator func(string, any) error
 
 // a list of settings that need option validators
 var optionValidators = map[string]optionValidator{
-	"autosave":        validateNonNegativeValue,
-	"clipboard":       validateChoice,
-	"colorcolumn":     validateNonNegativeValue,
-	"colorscheme":     validateColorscheme,
-	"detectlimit":     validateNonNegativeValue,
-	"encoding":        validateEncoding,
-	"fileformat":      validateChoice,
-	"helpsplit":       validateChoice,
-	"matchbracestyle": validateChoice,
-	"multiopen":       validateChoice,
-	"pageoverlap":     validateNonNegativeValue,
-	"reload":          validateChoice,
-	"scrollmargin":    validateNonNegativeValue,
-	"scrollspeed":     validateNonNegativeValue,
-	"tabsize":         validatePositiveValue,
-	"truecolor":       validateChoice,
+	"autosave":          validateNonNegativeValue,
+	"clipboard":         validateChoice,
+	"colorcolumn":       validateNonNegativeValue,
+	"colorscheme":       validateColorscheme,
+	"colorscheme.dark":  validateColorschemeOrEmpty,
+	"colorscheme.light": validateColorschemeOrEmpty,
+	"detectlimit":       validateNonNegativeValue,
+	"encoding":          validateEncoding,
+	"fileformat":        validateChoice,
+	"helpsplit":         validateChoice,
+	"matchbracestyle":   validateChoice,
+	"multiopen":         validateChoice,
+	"pageoverlap":       validateNonNegativeValue,
+	"reload":            validateChoice,
+	"scrollmargin":      validateNonNegativeValue,
+	"scrollspeed":       validateNonNegativeValue,
+	"tabsize":           validatePositiveValue,
+	"truecolor":         validateChoice,
 }
 
 // a list of settings with pre-defined choices
@@ -110,28 +112,31 @@ var defaultCommonSettings = map[string]any{
 // a list of settings that should only be globally modified and their
 // default values
 var DefaultGlobalOnlySettings = map[string]any{
-	"autosave":       float64(0),
-	"clipboard":      "external",
-	"colorscheme":    "default",
-	"divchars":       "|-",
-	"divreverse":     true,
-	"fakecursor":     defaultFakeCursor(),
-	"helpsplit":      "hsplit",
-	"infobar":        true,
-	"keymenu":        false,
-	"lockbindings":   false,
-	"mouse":          true,
-	"multiopen":      "tab",
-	"parsecursor":    false,
-	"paste":          false,
-	"pluginchannels": []string{"https://raw.githubusercontent.com/micro-editor/plugin-channel/master/channel.json"},
-	"pluginrepos":    []string{},
-	"savehistory":    true,
-	"scrollbarchar":  "|",
-	"sucmd":          "sudo",
-	"tabhighlight":   false,
-	"tabreverse":     true,
-	"xterm":          false,
+	"autosave":                  float64(0),
+	"clipboard":                 "external",
+	"colorscheme":               "default",
+	"colorscheme.dark":          "",
+	"colorscheme.light":         "",
+	"colorscheme.follow-system": false,
+	"divchars":                  "|-",
+	"divreverse":                true,
+	"fakecursor":                defaultFakeCursor(),
+	"helpsplit":                 "hsplit",
+	"infobar":                   true,
+	"keymenu":                   false,
+	"lockbindings":              false,
+	"mouse":                     true,
+	"multiopen":                 "tab",
+	"parsecursor":               false,
+	"paste":                     false,
+	"pluginchannels":            []string{"https://raw.githubusercontent.com/micro-editor/plugin-channel/master/channel.json"},
+	"pluginrepos":               []string{},
+	"savehistory":               true,
+	"scrollbarchar":             "|",
+	"sucmd":                     "sudo",
+	"tabhighlight":              false,
+	"tabreverse":                true,
+	"xterm":                     false,
 }
 
 // a list of settings that should never be globally modified
@@ -288,7 +293,7 @@ func verifySetting(option string, value any, def any) error {
 		return fmt.Errorf("Error: setting '%s' has incorrect type (%s), using default value: %v (%s)", option, valType, def, defType)
 	}
 
-	if option == "colorscheme" {
+	if option == "colorscheme" || option == "colorscheme.dark" || option == "colorscheme.light" {
 		// Plugins are not initialized yet, so do not verify if the colorscheme
 		// exists yet, since the colorscheme may be added by a plugin later.
 		return nil
@@ -593,6 +598,24 @@ func validateColorscheme(option string, value any) error {
 		return errors.New(colorscheme + " is not a valid colorscheme")
 	}
 
+	return nil
+}
+
+// validateColorschemeOrEmpty is the validator for colorscheme.dark and
+// colorscheme.light. The empty string is a sentinel meaning "this slot
+// is not configured, fall back to colorscheme"; any non-empty value
+// must name an existing colorscheme.
+func validateColorschemeOrEmpty(option string, value any) error {
+	colorscheme, ok := value.(string)
+	if !ok {
+		return errors.New("Expected string type for " + option)
+	}
+	if colorscheme == "" {
+		return nil
+	}
+	if !ColorschemeExists(colorscheme) {
+		return errors.New(colorscheme + " is not a valid colorscheme")
+	}
 	return nil
 }
 

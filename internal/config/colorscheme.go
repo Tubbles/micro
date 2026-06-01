@@ -15,6 +15,62 @@ var DefStyle tcell.Style = tcell.StyleDefault
 // Colorscheme is the current colorscheme
 var Colorscheme map[string]tcell.Style
 
+// ActiveColorschemeName is the name of the colorscheme last loaded by
+// InitColorscheme. Consumers that need to know whether a re-resolve
+// would produce a different load (e.g. the focus-event re-detector)
+// compare against this value.
+var ActiveColorschemeName string
+
+// SystemTheme is a coarse classification of the desktop's color-scheme
+// preference. SystemThemeUnknown is the result both for desktops that
+// expose no preference and for platforms where detection is not
+// implemented.
+type SystemTheme int
+
+const (
+	SystemThemeUnknown SystemTheme = iota
+	SystemThemeDark
+	SystemThemeLight
+)
+
+// DetectSystemTheme returns the desktop's reported color-scheme
+// preference. It is a function variable so tests can stub it. The
+// production implementation lives in systheme_linux.go (Linux) and
+// systheme_other.go (everywhere else).
+var DetectSystemTheme = detectSystemTheme
+
+// ResolveEffectiveColorscheme decides which colorscheme micro should
+// load, given the current values of the colorscheme, colorscheme.dark,
+// colorscheme.light, and colorscheme.follow-system options. The
+// returned source tag identifies which slot supplied the name:
+//
+//	"manual"   follow-system is off; the colorscheme option wins
+//	"dark"     follow-system is on and the dark slot applied
+//	"light"    follow-system is on and the light slot applied
+//	"fallback" follow-system is on but the resolved slot was empty
+//	           or the detector returned SystemThemeUnknown; the
+//	           colorscheme option was used as a backstop
+func ResolveEffectiveColorscheme() (name string, source string) {
+	manual, _ := GlobalSettings["colorscheme"].(string)
+	follow, _ := GlobalSettings["colorscheme.follow-system"].(bool)
+	if !follow {
+		return manual, "manual"
+	}
+	dark, _ := GlobalSettings["colorscheme.dark"].(string)
+	light, _ := GlobalSettings["colorscheme.light"].(string)
+	switch DetectSystemTheme() {
+	case SystemThemeDark:
+		if dark != "" {
+			return dark, "dark"
+		}
+	case SystemThemeLight:
+		if light != "" {
+			return light, "light"
+		}
+	}
+	return manual, "fallback"
+}
+
 // GetColor takes in a syntax group and returns the colorscheme's style for that group
 func GetColor(color string) tcell.Style {
 	st := DefStyle
