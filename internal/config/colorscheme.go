@@ -133,10 +133,17 @@ func ColorschemeExists(colorschemeName string) bool {
 // colorscheme.follow-system switch takes effect at startup and on
 // every subsequent > reload settings call.
 func InitColorscheme() error {
+	return InitColorschemeFor(DetectSystemTheme())
+}
+
+// InitColorschemeFor is InitColorscheme with the system theme injected
+// by the caller. The 1-second theme poller in main runs detection in
+// its own goroutine and reuses that result here, so the main goroutine
+// does not pay the D-Bus latency a second time.
+func InitColorschemeFor(theme SystemTheme) error {
 	Colorscheme = make(map[string]tcell.Style)
 	DefStyle = tcell.StyleDefault
 
-	theme := DetectSystemTheme()
 	name, source := ResolveEffectiveColorschemeFor(theme)
 
 	var parsedColorschemes []string
