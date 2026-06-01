@@ -114,3 +114,92 @@ func TestValidateColorschemeOrEmptyRejectsUnknownName(t *testing.T) {
 	err := validateColorschemeOrEmpty("colorscheme.dark", "definitely-not-a-real-scheme-xyz")
 	assert.Error(t, err)
 }
+
+func withWarningHook(t *testing.T, fn func(captured *[]string)) {
+	t.Helper()
+	savedHook := ThemeWarningHook
+	savedWarned := warnedSlots
+	t.Cleanup(func() {
+		ThemeWarningHook = savedHook
+		warnedSlots = savedWarned
+	})
+	var captured []string
+	ThemeWarningHook = func(msg string) { captured = append(captured, msg) }
+	warnedSlots = map[SystemTheme]bool{}
+	fn(&captured)
+}
+
+func TestMaybeWarnEmptyColorschemeSlotFiresOnce(t *testing.T) {
+	withResolverState(t, map[string]any{
+		"colorscheme":               "monokai",
+		"colorscheme.dark":          "",
+		"colorscheme.light":         "sunny-day",
+		"colorscheme.follow-system": true,
+	}, SystemThemeDark, func() {
+		withWarningHook(t, func(captured *[]string) {
+			maybeWarnEmptyColorschemeSlot(SystemThemeDark)
+			maybeWarnEmptyColorschemeSlot(SystemThemeDark)
+			assert.Len(t, *captured, 1)
+			assert.Contains(t, (*captured)[0], "colorscheme.dark")
+			assert.Contains(t, (*captured)[0], "monokai")
+		})
+	})
+}
+
+func TestMaybeWarnEmptyColorschemeSlotSilentWhenFollowSystemOff(t *testing.T) {
+	withResolverState(t, map[string]any{
+		"colorscheme":               "monokai",
+		"colorscheme.dark":          "",
+		"colorscheme.light":         "",
+		"colorscheme.follow-system": false,
+	}, SystemThemeDark, func() {
+		withWarningHook(t, func(captured *[]string) {
+			maybeWarnEmptyColorschemeSlot(SystemThemeDark)
+			assert.Empty(t, *captured)
+		})
+	})
+}
+
+func TestMaybeWarnEmptyColorschemeSlotSilentWhenSystemUnknown(t *testing.T) {
+	withResolverState(t, map[string]any{
+		"colorscheme":               "monokai",
+		"colorscheme.dark":          "",
+		"colorscheme.light":         "",
+		"colorscheme.follow-system": true,
+	}, SystemThemeUnknown, func() {
+		withWarningHook(t, func(captured *[]string) {
+			maybeWarnEmptyColorschemeSlot(SystemThemeUnknown)
+			assert.Empty(t, *captured)
+		})
+	})
+}
+
+func TestMaybeWarnEmptyColorschemeSlotSilentWhenSlotFilled(t *testing.T) {
+	withResolverState(t, map[string]any{
+		"colorscheme":               "monokai",
+		"colorscheme.dark":          "darcula-tc",
+		"colorscheme.light":         "sunny-day",
+		"colorscheme.follow-system": true,
+	}, SystemThemeDark, func() {
+		withWarningHook(t, func(captured *[]string) {
+			maybeWarnEmptyColorschemeSlot(SystemThemeDark)
+			assert.Empty(t, *captured)
+		})
+	})
+}
+
+func TestResetEmptySlotWarningAllowsReWarn(t *testing.T) {
+	withResolverState(t, map[string]any{
+		"colorscheme":               "monokai",
+		"colorscheme.dark":          "",
+		"colorscheme.light":         "sunny-day",
+		"colorscheme.follow-system": true,
+	}, SystemThemeDark, func() {
+		withWarningHook(t, func(captured *[]string) {
+			maybeWarnEmptyColorschemeSlot(SystemThemeDark)
+			ResetEmptySlotWarning(SystemThemeDark)
+			maybeWarnEmptyColorschemeSlot(SystemThemeDark)
+			assert.Len(t, *captured, 2)
+		})
+	})
+}

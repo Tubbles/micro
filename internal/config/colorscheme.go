@@ -21,6 +21,17 @@ var Colorscheme map[string]tcell.Style
 // compare against this value.
 var ActiveColorschemeName string
 
+// ThemeWarningHook routes follow-system misconfiguration messages to
+// the screen layer. config cannot import screen (circular), so main
+// registers a hook that forwards to screen.TermMessage. Nil-safe.
+var ThemeWarningHook func(msg string)
+
+// warnedSlots remembers which "follow-system on but slot empty"
+// warnings have been surfaced this session, keyed by the detected
+// system theme. ResetEmptySlotWarning clears entries when the user
+// populates a slot (see action.doSetGlobalOptionNative).
+var warnedSlots = map[SystemTheme]bool{}
+
 // SystemTheme is a coarse classification of the desktop's color-scheme
 // preference. SystemThemeUnknown is the result both for desktops that
 // expose no preference and for platforms where detection is not
@@ -50,7 +61,21 @@ var DetectSystemTheme = detectSystemTheme
 //	"fallback" follow-system is on but the resolved slot was empty
 //	           or the detector returned SystemThemeUnknown; the
 //	           colorscheme option was used as a backstop
+//
+// Callers that already have a SystemTheme on hand (e.g. the startup
+// loader, which also needs to diagnose empty-slot misconfigurations)
+// should use ResolveEffectiveColorschemeFor instead to avoid an
+// extra detector call.
 func ResolveEffectiveColorscheme() (name string, source string) {
+	return ResolveEffectiveColorschemeFor(DetectSystemTheme())
+}
+
+// ResolveEffectiveColorschemeFor is ResolveEffectiveColorscheme with
+// the system theme injected by the caller. Keeping the detection
+// outside the resolver makes the function purely a decision over its
+// inputs, which simplifies testing and lets callers reuse a single
+// detector result for both the decision and any follow-on diagnostic.
+func ResolveEffectiveColorschemeFor(theme SystemTheme) (name string, source string) {
 	manual, _ := GlobalSettings["colorscheme"].(string)
 	follow, _ := GlobalSettings["colorscheme.follow-system"].(bool)
 	if !follow {
@@ -58,7 +83,7 @@ func ResolveEffectiveColorscheme() (name string, source string) {
 	}
 	dark, _ := GlobalSettings["colorscheme.dark"].(string)
 	light, _ := GlobalSettings["colorscheme.light"].(string)
-	switch DetectSystemTheme() {
+	switch theme {
 	case SystemThemeDark:
 		if dark != "" {
 			return dark, "dark"
@@ -103,31 +128,91 @@ func ColorschemeExists(colorschemeName string) bool {
 	return FindRuntimeFile(RTColorscheme, colorschemeName) != nil
 }
 
-// InitColorscheme picks and initializes the colorscheme when micro starts
+// InitColorscheme picks and initializes the colorscheme when micro
+// starts. It consults ResolveEffectiveColorschemeFor so the
+// colorscheme.follow-system switch takes effect at startup and on
+// every subsequent > reload settings call.
 func InitColorscheme() error {
 	Colorscheme = make(map[string]tcell.Style)
 	DefStyle = tcell.StyleDefault
 
-	c, err := LoadDefaultColorscheme()
+	theme := DetectSystemTheme()
+	name, source := ResolveEffectiveColorschemeFor(theme)
+
+	var parsedColorschemes []string
+	c, err := LoadColorscheme(name, &parsedColorschemes)
 	if err == nil {
 		Colorscheme = c
+		ActiveColorschemeName = name
 	} else {
-		// The colorscheme setting seems broken (maybe because we have not validated
-		// it earlier, see comment in verifySetting()). So reset it to the default
-		// colorscheme and try again.
+		// The colorscheme setting seems broken (maybe because we have not
+		// validated it earlier, see comment in verifySetting()). Reset to the
+		// hardcoded default and try once more.
 		GlobalSettings["colorscheme"] = DefaultGlobalOnlySettings["colorscheme"]
-		if c, err2 := LoadDefaultColorscheme(); err2 == nil {
-			Colorscheme = c
+		name = GlobalSettings["colorscheme"].(string)
+		var parsed2 []string
+		if c2, err2 := LoadColorscheme(name, &parsed2); err2 == nil {
+			Colorscheme = c2
+			ActiveColorschemeName = name
 		}
 	}
 
+	if source == "fallback" {
+		maybeWarnEmptyColorschemeSlot(theme)
+	}
 	return err
 }
 
-// LoadDefaultColorscheme loads the default colorscheme from $(ConfigDir)/colorschemes
+// LoadDefaultColorscheme loads the colorscheme named by the
+// colorscheme option, without consulting the follow-system resolver.
+// It is preserved for callers that explicitly want the manual slot.
 func LoadDefaultColorscheme() (map[string]tcell.Style, error) {
 	var parsedColorschemes []string
 	return LoadColorscheme(GlobalSettings["colorscheme"].(string), &parsedColorschemes)
+}
+
+// maybeWarnEmptyColorschemeSlot fires the ThemeWarningHook at most
+// once per session per detected system theme, when follow-system is
+// on and the matching dark or light slot is empty. The detector
+// reporting SystemThemeUnknown is not a misconfiguration and never
+// triggers a warning.
+func maybeWarnEmptyColorschemeSlot(theme SystemTheme) {
+	if ThemeWarningHook == nil {
+		return
+	}
+	follow, _ := GlobalSettings["colorscheme.follow-system"].(bool)
+	if !follow {
+		return
+	}
+	var slot, value string
+	switch theme {
+	case SystemThemeDark:
+		slot = "colorscheme.dark"
+		value, _ = GlobalSettings["colorscheme.dark"].(string)
+	case SystemThemeLight:
+		slot = "colorscheme.light"
+		value, _ = GlobalSettings["colorscheme.light"].(string)
+	default:
+		return
+	}
+	if value != "" {
+		return
+	}
+	if warnedSlots[theme] {
+		return
+	}
+	warnedSlots[theme] = true
+	manual, _ := GlobalSettings["colorscheme"].(string)
+	ThemeWarningHook("colorscheme.follow-system is on but " + slot +
+		" is empty; using colorscheme=" + manual + " instead")
+}
+
+// ResetEmptySlotWarning clears the once-per-session warning bit for
+// the given theme so the loader will warn again if the slot is
+// emptied a second time. Called from the set-time hook when the user
+// assigns a non-empty value to a slot.
+func ResetEmptySlotWarning(theme SystemTheme) {
+	delete(warnedSlots, theme)
 }
 
 // LoadColorscheme loads the given colorscheme from a directory
