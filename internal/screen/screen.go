@@ -215,6 +215,15 @@ func Init() error {
 		Screen.EnableMouse()
 	}
 
+	// Focus reporting is required by the follow-system colorscheme
+	// path: micro re-queries the desktop's color-scheme preference on
+	// focus-in events so a theme change made while the terminal was
+	// unfocused gets picked up the moment the user comes back. The
+	// EnableFocus call is unconditional because the cost is one CSI
+	// pair at startup; consumers ignore focus events when they have
+	// nothing to do with them.
+	Screen.EnableFocus()
+
 	Events = Screen.EventQ()
 
 	return nil
