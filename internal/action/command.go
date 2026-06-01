@@ -581,8 +581,18 @@ func doSetGlobalOptionNative(option string, nativeValue any) error {
 	config.ModifiedSettings[option] = true
 	delete(config.VolatileSettings, option)
 
-	if option == "colorscheme" {
+	if option == "colorscheme" || option == "colorscheme.dark" ||
+		option == "colorscheme.light" || option == "colorscheme.follow-system" {
 		// LoadSyntaxFiles()
+		if option == "colorscheme.dark" {
+			if s, _ := nativeValue.(string); s != "" {
+				config.ResetEmptySlotWarning(config.SystemThemeDark)
+			}
+		} else if option == "colorscheme.light" {
+			if s, _ := nativeValue.(string); s != "" {
+				config.ResetEmptySlotWarning(config.SystemThemeLight)
+			}
+		}
 		config.InitColorscheme()
 		for _, b := range buffer.OpenBuffers {
 			b.UpdateRules()
