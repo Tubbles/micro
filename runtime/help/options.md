@@ -111,10 +111,10 @@ Here are the available options:
     default value: `""`
 
 * `colorscheme.follow-system`: when `true`, micro queries the desktop's
-   color-scheme preference at startup and again whenever the terminal regains
-   focus, and applies `colorscheme.dark` or `colorscheme.light` accordingly.
-   When `false`, micro uses `colorscheme` unconditionally. This setting is
-   `global only`.
+   color-scheme preference at startup, on a 1-second background poll, and
+   whenever the terminal regains focus, and applies `colorscheme.dark` or
+   `colorscheme.light` accordingly. When `false`, micro uses `colorscheme`
+   unconditionally. This setting is `global only`.
 
     Detection runs through the XDG desktop portal D-Bus interface
    (`org.freedesktop.portal.Settings`, namespace `org.freedesktop.appearance`,
