@@ -437,6 +437,7 @@ func main() {
 		screen.TermMessage(err)
 	}
 
+	config.ThemeWarningHook = func(msg string) { screen.TermMessage(msg) }
 	err = config.InitColorscheme()
 	if err != nil {
 		screen.TermMessage(err)
