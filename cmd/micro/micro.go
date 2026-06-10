@@ -45,6 +45,12 @@ var (
 	sighup chan os.Signal
 
 	timerChan chan func()
+
+	// themePollChan carries the latest detected system color-scheme
+	// preference from the 1-second poller goroutine to the main loop.
+	// Buffered length 1 so the poller can drop stale samples instead of
+	// blocking when the main loop is busy.
+	themePollChan = make(chan config.SystemTheme, 1)
 )
 
 func InitFlags() {
@@ -447,10 +453,12 @@ func main() {
 		screen.TermMessage(err)
 	}
 
+	config.ThemeWarningHook = func(msg string) { screen.TermMessage(msg) }
 	err = config.InitColorscheme()
 	if err != nil {
 		screen.TermMessage(err)
 	}
+	startThemePoller()
 
 	if clipErr != nil {
 		log.Println(clipErr, " or change 'clipboard' option")
@@ -511,6 +519,8 @@ func DoEvent() {
 		}
 	case <-shell.CloseTerms:
 		action.Tabs.CloseTerms()
+	case theme := <-themePollChan:
+		reapplySystemColorschemeFor(theme)
 	case event = <-screen.Events:
 	case <-screen.DrawChan():
 		for len(screen.DrawChan()) > 0 {
@@ -536,6 +546,9 @@ func DoEvent() {
 
 	if event != nil {
 		_, resize := event.(*tcell.EventResize)
+		if focus, ok := event.(*tcell.EventFocus); ok && focus.Focused {
+			reapplySystemColorscheme()
+		}
 		if resize {
 			action.InfoBar.HandleEvent(event)
 			action.Tabs.HandleEvent(event)
@@ -552,4 +565,56 @@ func DoEvent() {
 	if err != nil {
 		screen.TermMessage(err)
 	}
+}
+
+// reapplySystemColorscheme is the focus-event entry into the system
+// theme re-application path. The focus handler does not have a
+// pre-detected theme, so we detect here and forward.
+func reapplySystemColorscheme() {
+	reapplySystemColorschemeFor(config.DetectSystemTheme())
+}
+
+// reapplySystemColorschemeFor re-runs the follow-system resolver with
+// the given theme and reloads the colorscheme only when the resolved
+// name has actually changed since the last load. The short-circuit on
+// the name match is what keeps the 1-second poller and per-focus
+// trigger cheap: the expensive operations (LoadColorscheme +
+// UpdateRules) only run when the visible colorscheme would change.
+func reapplySystemColorschemeFor(theme config.SystemTheme) {
+	name, _ := config.ResolveEffectiveColorschemeFor(theme)
+	if name == config.ActiveColorschemeName {
+		return
+	}
+	if err := config.InitColorschemeFor(theme); err != nil {
+		screen.TermMessage(err)
+		return
+	}
+	for _, b := range buffer.OpenBuffers {
+		b.UpdateRules()
+	}
+}
+
+// startThemePoller launches the goroutine that probes the desktop's
+// color-scheme preference on a 1-second cadence and forwards the
+// result to the main loop. The detection happens off the main
+// goroutine, so the up-to-500ms D-Bus timeout never blocks editor
+// input. When follow-system is off the main loop's short-circuit
+// makes the polling effectively a no-op; the poll itself is still
+// cheap, so we keep it unconditional rather than threading the
+// option's on/off state across goroutines.
+func startThemePoller() {
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			theme := config.DetectSystemTheme()
+			select {
+			case themePollChan <- theme:
+			default:
+				// Main loop hasn't drained the previous sample yet; drop
+				// this one. Theme changes are sticky, so a later tick will
+				// re-deliver the same value.
+			}
+		}
+	}()
 }
