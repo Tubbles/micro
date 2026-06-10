@@ -421,6 +421,11 @@ func (c *Cursor) WordOrSelection() (query string, wholeWord bool, span [2]Loc, o
 		if s.Y != e.Y {
 			return "", false, [2]Loc{}, false
 		}
+		// A shrinking edit (e.g. file reload) can leave the selection
+		// out of bounds: Relocate clamps only Loc, not CurSelection.
+		if !InBounds(s, c.buf) || !InBounds(e, c.buf) {
+			return "", false, [2]Loc{}, false
+		}
 		return string(c.buf.Substr(s, e)), false, [2]Loc{s, e}, true
 	}
 	s, e, ok := c.wordRangeUnder()
