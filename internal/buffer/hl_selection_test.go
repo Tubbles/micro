@@ -166,6 +166,39 @@ func TestHLSelectionInvalidationOnLineEdit(t *testing.T) {
 	assert.True(t, b.HLSelectionAt(Loc{0, 0}))
 }
 
+func TestWordOrSelectionOutOfBoundsSelection(t *testing.T) {
+	b := hlBuf(t, "foo", map[string]any{
+		"hlselection": true,
+	})
+	c := b.GetActiveCursor()
+	// Simulate a selection left stale by a shrinking edit: Relocate
+	// clamps only Loc, so CurSelection can point past the buffer end.
+	c.SetSelectionStart(Loc{0, 5})
+	c.SetSelectionEnd(Loc{3, 5})
+
+	_, _, _, ok := c.WordOrSelection()
+	assert.False(t, ok)
+}
+
+func TestHLSelectionStaleSelectionAfterShrink(t *testing.T) {
+	b := hlBuf(t, "l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9", map[string]any{
+		"hlselection": true,
+	})
+	c := b.GetActiveCursor()
+	c.SetSelectionStart(Loc{0, 8})
+	c.SetSelectionEnd(Loc{2, 8})
+	c.Loc = Loc{2, 8}
+
+	// Mirror Buffer.ReOpen on a file that shrank below the selection's
+	// line: ShiftLoc leaves Locs inside the removed span untouched, so
+	// the selection survives with out-of-bounds coordinates.
+	b.EventHandler.ApplyDiff("l0")
+	b.RelocateCursors()
+	b.UpdateHLSelection()
+
+	assert.Equal(t, "", b.HLSelectionQuery)
+}
+
 func TestHLSelectionQueryChangeInvalidates(t *testing.T) {
 	b := hlBuf(t, "foo bar", map[string]any{
 		"hlselection": true,
