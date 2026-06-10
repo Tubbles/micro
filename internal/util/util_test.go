@@ -31,3 +31,14 @@ func TestSliceVisualEnd(t *testing.T) {
 	assert.Equal(t, []byte("ello"), slc)
 	assert.Equal(t, 0, n)
 }
+
+func TestIntListOpt(t *testing.T) {
+	assert.Nil(t, IntListOpt(float64(0)))
+	assert.Equal(t, []int{80}, IntListOpt(float64(80)))
+	assert.Equal(t, []int{72, 80, 120}, IntListOpt([]any{float64(72), float64(80), float64(120)}))
+	assert.Equal(t, []int{80}, IntListOpt([]any{float64(0), float64(80)}))
+	assert.Equal(t, []int{}, IntListOpt([]any{}))
+	assert.Equal(t, []int{}, IntListOpt([]any{float64(0), float64(0)}))
+	assert.Nil(t, IntListOpt("80"))
+	assert.Nil(t, IntListOpt(nil))
+}
