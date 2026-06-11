@@ -760,6 +760,78 @@ func TestRegistrySingleActive(t *testing.T) {
 	}
 }
 
+func TestPickerCtrlHFiresHookWhenSet_Query(t *testing.T) {
+	mockScreenSize(t)
+	fired := 0
+	p := NewPicker(PickerOptions{
+		Title:    "test",
+		Items:    []PickerItem{{Label: "a"}},
+		Query:    true,
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: ScreenRect{X: 0, Y: 0, W: 40, H: 12}},
+		OnCtrlH:  func() { fired++ },
+	})
+	// Pre-load a query so we can verify Ctrl-H does NOT delete from it.
+	p.HandleEvent(runeKey('a'))
+	p.HandleEvent(runeKey('b'))
+	p.HandleEvent(key(tcell.KeyCtrlH))
+	if fired != 1 {
+		t.Fatalf("OnCtrlH: fired=%d, want 1", fired)
+	}
+	if p.query != "ab" {
+		t.Fatalf("Ctrl-H with hook must not delete: query=%q, want ab", p.query)
+	}
+}
+
+func TestPickerCtrlHDeletesWhenHookUnset_Query(t *testing.T) {
+	mockScreenSize(t)
+	// Hook left unset — preserves legacy behaviour on terminals that
+	// route the Backspace key to 0x08 instead of 0x7f.
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	h.p.HandleEvent(runeKey('a'))
+	h.p.HandleEvent(runeKey('b'))
+	h.p.HandleEvent(key(tcell.KeyCtrlH))
+	if h.p.query != "a" {
+		t.Fatalf("Ctrl-H without hook must delete: query=%q, want a", h.p.query)
+	}
+}
+
+func TestPickerBackspace2AlwaysDeletes_Query(t *testing.T) {
+	mockScreenSize(t)
+	// Even with a hook installed, KeyBackspace2 (0x7f) must keep
+	// behaving as delete-before-caret — that is the modern-terminal
+	// Backspace path and we don't want a hook to break it.
+	p := NewPicker(PickerOptions{
+		Items:    []PickerItem{{Label: "x"}},
+		Query:    true,
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: ScreenRect{X: 0, Y: 0, W: 40, H: 12}},
+		OnCtrlH:  func() { t.Fatalf("OnCtrlH must not fire on KeyBackspace2") },
+	})
+	p.HandleEvent(runeKey('a'))
+	p.HandleEvent(runeKey('b'))
+	p.HandleEvent(key(tcell.KeyBackspace2))
+	if p.query != "a" {
+		t.Fatalf("KeyBackspace2 must delete regardless of hook: query=%q, want a", p.query)
+	}
+}
+
+func TestPickerCtrlHIgnoredInClassicMode(t *testing.T) {
+	mockScreenSize(t)
+	// Classic (Query=false) mode swallows runes and is unrelated to
+	// the hook. Even if OnCtrlH is set, classic mode must not invoke
+	// it, since Ctrl-H is reserved by the buffer-side binding tree.
+	fired := 0
+	p := NewPicker(PickerOptions{
+		Items:    []PickerItem{{Label: "a"}},
+		Query:    false,
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: ScreenRect{X: 0, Y: 0, W: 40, H: 12}},
+		OnCtrlH:  func() { fired++ },
+	})
+	p.HandleEvent(key(tcell.KeyCtrlH))
+	if fired != 0 {
+		t.Fatalf("classic mode must not fire OnCtrlH, got %d", fired)
+	}
+}
+
 func TestPickerRefreshItemsKeepsQuery(t *testing.T) {
 	mockScreenSize(t)
 	h := newPickerHarnessOpts([]PickerItem{
