@@ -120,6 +120,18 @@ func (p *Picker) SetItems(items []PickerItem) {
 	p.ResetQuery()
 }
 
+// RefreshItems replaces the row list while preserving the typed
+// query and caret. The fuzzy filter is recomputed against the new
+// items; current/top reset to 0 because row identity has changed.
+// Used when the item set shifts under the picker but the user's
+// typed filter should keep narrowing the result (e.g. a visibility
+// toggle re-lists the same directory, or a mode toggle swaps in a
+// sibling list).
+func (p *Picker) RefreshItems(items []PickerItem) {
+	p.opts.Items = items
+	p.recomputeFilter()
+}
+
 // SetTitle replaces the title shown on the top border.
 func (p *Picker) SetTitle(t string) { p.opts.Title = t }
 
