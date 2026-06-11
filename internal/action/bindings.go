@@ -34,34 +34,37 @@ func createBindingsIfNotExist(fname string) {
 	}
 }
 
-// InitBindings intializes the bindings map by reading from bindings.json
-func InitBindings() {
+// loadBindingsFile reads and parses one bindings JSON file in the
+// config dir. A missing file yields nil; read and parse errors
+// surface via TermMessage, and a parse error still returns whatever
+// json5 decoded before failing (matching the historical bindings.json
+// behaviour of binding what it can).
+func loadBindingsFile(name string) map[string]any {
 	var parsed map[string]any
 
-	filename := filepath.Join(config.ConfigDir, "bindings.json")
-	createBindingsIfNotExist(filename)
-
-	if _, e := os.Stat(filename); e == nil {
-		input, err := os.ReadFile(filename)
-		if err != nil {
-			screen.TermMessage("Error reading bindings.json file: " + err.Error())
-			return
-		}
-
-		err = json5.Unmarshal(input, &parsed)
-		if err != nil {
-			screen.TermMessage("Error reading bindings.json:", err.Error())
-		}
+	filename := filepath.Join(config.ConfigDir, name)
+	if _, e := os.Stat(filename); e != nil {
+		return nil
 	}
 
-	for p, bind := range Binder {
-		defaults := DefaultBindings(p)
-
-		for k, v := range defaults {
-			BindKey(k, v, bind)
-		}
+	input, err := os.ReadFile(filename)
+	if err != nil {
+		screen.TermMessage("Error reading " + name + " file: " + err.Error())
+		return nil
 	}
 
+	err = json5.Unmarshal(input, &parsed)
+	if err != nil {
+		screen.TermMessage("Error reading "+name+":", err.Error())
+	}
+	return parsed
+}
+
+// applyBindings binds every entry of one parsed bindings map. A
+// top-level string entry targets the buffer pane; a map entry
+// targets the pane type named by its key. name is the source file
+// name, used in error messages only.
+func applyBindings(parsed map[string]any, name string) {
 	for k, v := range parsed {
 		switch val := v.(type) {
 		case string:
@@ -75,15 +78,39 @@ func InitBindings() {
 			for e, a := range val {
 				s, ok := a.(string)
 				if !ok {
-					screen.TermMessage("Error reading bindings.json: non-string and non-map entry", k)
+					screen.TermMessage("Error reading "+name+": non-string and non-map entry", k)
 				} else {
 					BindKey(e, s, bind)
 				}
 			}
 		default:
-			screen.TermMessage("Error reading bindings.json: non-string and non-map entry", k)
+			screen.TermMessage("Error reading "+name+": non-string and non-map entry", k)
 		}
 	}
+}
+
+// InitBindings initializes the bindings map: defaults first, then
+// bindings.json, then bindings.local.json, so the local per-machine
+// layer wins over both. bindings.local.json is user-edited only and
+// is never created or written by micro (mirroring
+// settings.local.json): the bind/unbind commands persist to
+// bindings.json, so a binding saved there stays shadowed by a
+// conflicting local override on the next start or reload.
+func InitBindings() {
+	createBindingsIfNotExist(filepath.Join(config.ConfigDir, "bindings.json"))
+	parsed := loadBindingsFile("bindings.json")
+	parsedLocal := loadBindingsFile("bindings.local.json")
+
+	for p, bind := range Binder {
+		defaults := DefaultBindings(p)
+
+		for k, v := range defaults {
+			BindKey(k, v, bind)
+		}
+	}
+
+	applyBindings(parsed, "bindings.json")
+	applyBindings(parsedLocal, "bindings.local.json")
 }
 
 func BindKey(k, v string, bind func(e Event, a string)) {
