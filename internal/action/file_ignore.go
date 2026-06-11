@@ -105,8 +105,15 @@ type ignoreRule struct {
 // ignoreLevel collects the rules from one .gitignore file together
 // with the directory the file lived in (relative to the matcher
 // root, forward-slashes; root .gitignore has dir == "").
+//
+// above re-roots queries when the rule file lives in an ancestor of
+// the matcher root (git info/exclude when the root is a subdir of
+// the repo): it is the forward-slash path from that ancestor down to
+// the root, prepended to every queried rel so anchored patterns
+// resolve against the repo root. dir is "" whenever above is set.
 type ignoreLevel struct {
 	dir   string
+	above string
 	rules []ignoreRule
 }
 
@@ -120,8 +127,9 @@ type ignoreLevel struct {
 // The type is named for the syntax it parses, not for the source
 // filename: the same parser handles .gitignore, .ignore, .fdignore,
 // .npmignore, .eslintignore, etc., differing only in what the loader
-// picks up. v1 only loads .gitignore; future loaders can plug in to
-// the same matcher.
+// picks up. The loaders today are .gitignore files in the root
+// subtree plus the enclosing repo's .git/info/exclude; future
+// loaders can plug in to the same matcher.
 type ignoreMatcher struct {
 	root   string
 	levels []ignoreLevel
@@ -152,6 +160,13 @@ func (m *ignoreMatcher) ensureLevel(relDir string) {
 		return
 	}
 	m.seen[relDir] = true
+	if relDir == "" {
+		// info/exclude is appended before the root .gitignore level so
+		// the deepest-first walk in matchDirect prefers any .gitignore,
+		// matching git's precedence (info/exclude is the weakest
+		// in-repo source).
+		m.loadGitInfoExclude()
+	}
 	absDir := m.root
 	if relDir != "" {
 		absDir = filepath.Join(m.root, filepath.FromSlash(relDir))
@@ -161,6 +176,32 @@ func (m *ignoreMatcher) ensureLevel(relDir string) {
 		return
 	}
 	m.levels = append(m.levels, ignoreLevel{dir: relDir, rules: rules})
+}
+
+// loadGitInfoExclude appends the enclosing repo's .git/info/exclude
+// as the shallowest level. Patterns there are anchored at the repo
+// root, which may sit above the matcher root (the recursive file
+// picker roots at its start directory); the level's above offset
+// re-roots queries in that case. In a submodule or worktree .git is
+// a file, the open fails, and the level is simply skipped.
+func (m *ignoreMatcher) loadGitInfoExclude() {
+	gitRoot, ok := findGitRoot(m.root)
+	if !ok {
+		return
+	}
+	rules, err := loadIgnoreFile(filepath.Join(gitRoot, ".git", "info", "exclude"))
+	if err != nil || len(rules) == 0 {
+		return
+	}
+	above := ""
+	if gitRoot != m.root {
+		rel, err := filepath.Rel(gitRoot, m.root)
+		if err != nil {
+			return
+		}
+		above = filepath.ToSlash(rel)
+	}
+	m.levels = append(m.levels, ignoreLevel{above: above, rules: rules})
 }
 
 // Match reports whether rel (forward-slash, relative to the matcher
@@ -194,7 +235,9 @@ func (m *ignoreMatcher) matchDirect(rel string, isDir bool) bool {
 	for li := len(m.levels) - 1; li >= 0; li-- {
 		lvl := m.levels[li]
 		var relInLevel string
-		if lvl.dir == "" {
+		if lvl.above != "" {
+			relInLevel = lvl.above + "/" + rel
+		} else if lvl.dir == "" {
 			relInLevel = rel
 		} else {
 			prefix := lvl.dir + "/"
