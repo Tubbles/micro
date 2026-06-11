@@ -1082,6 +1082,129 @@ func TestPickerEnterOperatorOnlyQueryNoSubmit(t *testing.T) {
 	}
 }
 
+func ctrlKey(k tcell.Key) *tcell.EventKey {
+	return tcell.NewEventKey(k, "", tcell.ModCtrl)
+}
+
+func typeQuery(h *pickerHarness, s string) {
+	for _, r := range s {
+		h.p.HandleEvent(runeKey(r))
+	}
+}
+
+func TestPickerCtrlLeftRightJumpWords(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	typeQuery(h, "foo bar-baz")
+
+	h.p.HandleEvent(ctrlKey(tcell.KeyLeft))
+	if h.p.qcur != 8 {
+		t.Fatalf("Ctrl-Left from end: qcur=%d, want 8 (start of baz)", h.p.qcur)
+	}
+	h.p.HandleEvent(ctrlKey(tcell.KeyLeft))
+	if h.p.qcur != 4 {
+		t.Fatalf("Ctrl-Left again: qcur=%d, want 4 (start of bar)", h.p.qcur)
+	}
+	h.p.HandleEvent(ctrlKey(tcell.KeyLeft))
+	if h.p.qcur != 0 {
+		t.Fatalf("Ctrl-Left to start: qcur=%d, want 0", h.p.qcur)
+	}
+	h.p.HandleEvent(ctrlKey(tcell.KeyLeft)) // clamps at 0
+	if h.p.qcur != 0 {
+		t.Fatalf("Ctrl-Left at start: qcur=%d, want 0", h.p.qcur)
+	}
+
+	h.p.HandleEvent(ctrlKey(tcell.KeyRight))
+	if h.p.qcur != 3 {
+		t.Fatalf("Ctrl-Right from start: qcur=%d, want 3 (end of foo)", h.p.qcur)
+	}
+	h.p.HandleEvent(ctrlKey(tcell.KeyRight))
+	if h.p.qcur != 7 {
+		t.Fatalf("Ctrl-Right again: qcur=%d, want 7 (end of bar)", h.p.qcur)
+	}
+	h.p.HandleEvent(ctrlKey(tcell.KeyRight))
+	h.p.HandleEvent(ctrlKey(tcell.KeyRight)) // clamps at end
+	if h.p.qcur != 11 {
+		t.Fatalf("Ctrl-Right at end: qcur=%d, want 11", h.p.qcur)
+	}
+}
+
+func TestPickerCtrlBackspaceDeletesWordLeft(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	typeQuery(h, "foo bar")
+
+	h.p.HandleEvent(ctrlKey(tcell.KeyBackspace))
+	if h.p.query != "foo " || h.p.qcur != 4 {
+		t.Fatalf("Ctrl-Backspace from end: query=%q qcur=%d, want %q 4",
+			h.p.query, h.p.qcur, "foo ")
+	}
+	h.p.HandleEvent(ctrlKey(tcell.KeyBackspace))
+	if h.p.query != "" || h.p.qcur != 0 {
+		t.Fatalf("Ctrl-Backspace again: query=%q qcur=%d, want empty 0",
+			h.p.query, h.p.qcur)
+	}
+	h.p.HandleEvent(ctrlKey(tcell.KeyBackspace)) // no-op on empty
+	if h.p.query != "" || h.p.qcur != 0 {
+		t.Fatalf("Ctrl-Backspace on empty: query=%q qcur=%d, want empty 0",
+			h.p.query, h.p.qcur)
+	}
+}
+
+func TestPickerCtrlBackspaceMidQuery(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	typeQuery(h, "foo bar")
+	h.p.HandleEvent(key(tcell.KeyLeft))
+	h.p.HandleEvent(key(tcell.KeyLeft))
+	h.p.HandleEvent(key(tcell.KeyLeft)) // caret at 4 (start of bar)
+
+	h.p.HandleEvent(ctrlKey(tcell.KeyBackspace))
+	if h.p.query != "bar" || h.p.qcur != 0 {
+		t.Fatalf("Ctrl-Backspace mid-query: query=%q qcur=%d, want %q 0",
+			h.p.query, h.p.qcur, "bar")
+	}
+}
+
+func TestPickerCtrlDeleteDeletesWordRight(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	typeQuery(h, "foo bar")
+	h.p.HandleEvent(key(tcell.KeyHome))
+
+	h.p.HandleEvent(ctrlKey(tcell.KeyDelete))
+	if h.p.query != " bar" || h.p.qcur != 0 {
+		t.Fatalf("Ctrl-Delete from start: query=%q qcur=%d, want %q 0",
+			h.p.query, h.p.qcur, " bar")
+	}
+	h.p.HandleEvent(ctrlKey(tcell.KeyDelete))
+	if h.p.query != "" || h.p.qcur != 0 {
+		t.Fatalf("Ctrl-Delete again: query=%q qcur=%d, want empty 0",
+			h.p.query, h.p.qcur)
+	}
+	h.p.HandleEvent(ctrlKey(tcell.KeyDelete)) // no-op on empty
+	if h.p.query != "" || h.p.qcur != 0 {
+		t.Fatalf("Ctrl-Delete on empty: query=%q qcur=%d, want empty 0",
+			h.p.query, h.p.qcur)
+	}
+}
+
+func TestPickerCtrlWordOpsMultibyte(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	typeQuery(h, "αβ γδ")
+
+	h.p.HandleEvent(ctrlKey(tcell.KeyBackspace))
+	if h.p.query != "αβ " || h.p.qcur != 3 {
+		t.Fatalf("Ctrl-Backspace multibyte: query=%q qcur=%d, want %q 3",
+			h.p.query, h.p.qcur, "αβ ")
+	}
+	h.p.HandleEvent(ctrlKey(tcell.KeyLeft))
+	if h.p.qcur != 0 {
+		t.Fatalf("Ctrl-Left multibyte: qcur=%d, want 0", h.p.qcur)
+	}
+}
+
 func intsEqual(a, b []int) bool {
 	if len(a) != len(b) {
 		return false

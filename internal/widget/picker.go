@@ -10,6 +10,7 @@ import (
 	"github.com/sahilm/fuzzy"
 
 	"github.com/micro-editor/micro/v2/internal/screen"
+	"github.com/micro-editor/micro/v2/internal/util"
 )
 
 // screenSize is overridable for tests so the picker can be exercised
@@ -280,20 +281,33 @@ func (p *Picker) handleKeyQuery(e *tcell.EventKey) {
 	case tcell.KeyEnd:
 		p.qcur = utf8.RuneCountInString(p.query)
 	case tcell.KeyLeft:
-		if p.qcur > 0 {
+		if e.Modifiers()&tcell.ModCtrl != 0 {
+			p.qcur = wordBoundaryLeft([]rune(p.query), p.qcur)
+		} else if p.qcur > 0 {
 			p.qcur--
 		}
 	case tcell.KeyRight:
-		if p.qcur < utf8.RuneCountInString(p.query) {
+		if e.Modifiers()&tcell.ModCtrl != 0 {
+			p.qcur = wordBoundaryRight([]rune(p.query), p.qcur)
+		} else if p.qcur < utf8.RuneCountInString(p.query) {
 			p.qcur++
 		}
 	case tcell.KeyBackspace:
 		// In v3 KeyBackspace2 (0x7f) is translated to KeyBackspace at
 		// the input layer, so this single case covers Backspace from
-		// any terminal.
-		p.deleteBeforeCaret()
+		// any terminal. Ctrl+Backspace only exists on CSI-u terminals;
+		// legacy ones send a plain 0x08 and get the single-rune delete.
+		if e.Modifiers()&tcell.ModCtrl != 0 {
+			p.deleteWordBeforeCaret()
+		} else {
+			p.deleteBeforeCaret()
+		}
 	case tcell.KeyDelete:
-		p.deleteAtCaret()
+		if e.Modifiers()&tcell.ModCtrl != 0 {
+			p.deleteWordAtCaret()
+		} else {
+			p.deleteAtCaret()
+		}
 	case tcell.KeyRune:
 		// v3 reports keystrokes as a grapheme cluster string rather
 		// than a single rune. Take the first rune; multi-rune
@@ -338,6 +352,59 @@ func (p *Picker) deleteAtCaret() {
 	end := byteOffsetForRune(p.query, p.qcur+1)
 	p.query = p.query[:start] + p.query[end:]
 	p.recomputeFilter()
+}
+
+// deleteWordBeforeCaret removes from the previous word boundary up to
+// the caret.
+func (p *Picker) deleteWordBeforeCaret() {
+	boundary := wordBoundaryLeft([]rune(p.query), p.qcur)
+	if boundary == p.qcur {
+		return
+	}
+	start := byteOffsetForRune(p.query, boundary)
+	end := byteOffsetForRune(p.query, p.qcur)
+	p.query = p.query[:start] + p.query[end:]
+	p.qcur = boundary
+	p.recomputeFilter()
+}
+
+// deleteWordAtCaret removes from the caret up to the next word
+// boundary.
+func (p *Picker) deleteWordAtCaret() {
+	boundary := wordBoundaryRight([]rune(p.query), p.qcur)
+	if boundary == p.qcur {
+		return
+	}
+	start := byteOffsetForRune(p.query, p.qcur)
+	end := byteOffsetForRune(p.query, boundary)
+	p.query = p.query[:start] + p.query[end:]
+	p.recomputeFilter()
+}
+
+// wordBoundaryLeft returns the rune index of the start of the word
+// ending at or before cur: non-word runes immediately left of the
+// caret are skipped first, then word runes. util.IsWordChar decides
+// membership, matching bufpane word movement.
+func wordBoundaryLeft(runes []rune, cur int) int {
+	for cur > 0 && !util.IsWordChar(runes[cur-1]) {
+		cur--
+	}
+	for cur > 0 && util.IsWordChar(runes[cur-1]) {
+		cur--
+	}
+	return cur
+}
+
+// wordBoundaryRight returns the rune index just past the end of the
+// word starting at or after cur. Mirror image of wordBoundaryLeft.
+func wordBoundaryRight(runes []rune, cur int) int {
+	for cur < len(runes) && !util.IsWordChar(runes[cur]) {
+		cur++
+	}
+	for cur < len(runes) && util.IsWordChar(runes[cur]) {
+		cur++
+	}
+	return cur
 }
 
 // recomputeFilter runs the query layer against opts.Items.Label and
