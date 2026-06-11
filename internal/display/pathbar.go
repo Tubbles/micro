@@ -2,6 +2,8 @@ package display
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 
 	runewidth "github.com/mattn/go-runewidth"
 	"github.com/micro-editor/micro/v2/internal/buffer"
@@ -47,9 +49,20 @@ func resolvePathText(b *buffer.Buffer) string {
 	if err != nil {
 		return b.GetName()
 	}
-	rel, err := util.MakeRelative(b.AbsPath, cwd)
+	return pathBarText(b.AbsPath, cwd)
+}
+
+// pathBarText picks the display form of absPath given cwd: the
+// cwd-relative path when the file lives under cwd, the absolute path
+// when it lives above (a "../../.." chain says nothing about where
+// the file actually is).
+func pathBarText(absPath, cwd string) string {
+	rel, err := util.MakeRelative(absPath, cwd)
 	if err != nil {
-		return b.AbsPath
+		return absPath
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return absPath
 	}
 	return rel
 }
