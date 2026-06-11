@@ -760,6 +760,38 @@ func TestRegistrySingleActive(t *testing.T) {
 	}
 }
 
+func TestPickerRefreshItemsKeepsQuery(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{
+		{Label: "alpha"}, {Label: "beta"},
+	}, true)
+	h.p.HandleEvent(runeKey('a'))
+	if h.p.query != "a" || len(h.p.matches) == 0 {
+		t.Fatalf("setup: query=%q matches=%d", h.p.query, len(h.p.matches))
+	}
+	// Replace items with a set where the query still matches one row.
+	h.p.RefreshItems([]PickerItem{
+		{Label: ".alpha"}, {Label: "beta"}, {Label: "gamma"},
+	})
+	if h.p.query != "a" {
+		t.Fatalf("RefreshItems must preserve query, got %q", h.p.query)
+	}
+	if h.p.qcur != 1 {
+		t.Fatalf("RefreshItems must preserve qcur, got %d", h.p.qcur)
+	}
+	// Filter must have been recomputed against the new items: 'a'
+	// fuzzy-matches all three rows now (".alpha" gains, "beta" still
+	// has "a", "gamma" has "a").
+	if len(h.p.matches) != 3 {
+		t.Fatalf("RefreshItems must recompute filter: got %d matches, want 3",
+			len(h.p.matches))
+	}
+	if h.p.Current() != 0 || h.p.top != 0 {
+		t.Fatalf("RefreshItems must reset current/top to 0, got current=%d top=%d",
+			h.p.Current(), h.p.top)
+	}
+}
+
 func TestPickerByteOffsetForRune(t *testing.T) {
 	// "aé€b" — a (1 byte), é (2), € (3), b (1) = 7 bytes total.
 	s := "aé€b"
