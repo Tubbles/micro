@@ -426,7 +426,9 @@ func (h *BufPane) CommandPalette() {
 			} else {
 				mode = paletteModeAtlas
 			}
-			picker.SetItems(itemsFor(mode))
+			// RefreshItems, not SetItems: the typed filter should keep
+			// narrowing whichever list the user toggles to.
+			picker.RefreshItems(itemsFor(mode))
 			picker.SetTitle(paletteTitle(mode))
 			picker.SetHint(paletteHint(mode, size))
 		},
