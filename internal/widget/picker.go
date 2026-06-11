@@ -64,6 +64,14 @@ type PickerOptions struct {
 	// outside). The callback should treat the picker as gone; the
 	// active slot is cleared by the dispatcher first.
 	OnClose func()
+	// OnCtrlH, when non-nil and Query is true, fires for Ctrl-H key
+	// presses instead of treating them as Backspace. Used by the file
+	// explorer to toggle `filemanager.showhidden` while the picker is
+	// open. In tcell v3 KeyBackspace (0x08) and KeyCtrlH (72) are
+	// distinct values; this hook only fires for the latter, which is
+	// what kitty/CSI-u terminals send for Ctrl-H. On terminals without
+	// CSI-u, Ctrl-H lands as KeyBackspace and behaves as a backspace.
+	OnCtrlH func()
 }
 
 // Picker is a generic list-of-rows overlay widget.
@@ -311,6 +319,15 @@ func (p *Picker) handleKeyQuery(e *tcell.EventKey) {
 		// legacy ones send a plain 0x08 and get the single-rune delete.
 		if e.Modifiers()&tcell.ModCtrl != 0 {
 			p.deleteWordBeforeCaret()
+		} else {
+			p.deleteBeforeCaret()
+		}
+	case tcell.KeyCtrlH:
+		// v3 distinguishes KeyCtrlH (72) from KeyBackspace (0x08);
+		// kitty/CSI-u terminals report this for Ctrl-H so the file
+		// explorer's hidden-files toggle has a key to bind to.
+		if p.opts.OnCtrlH != nil {
+			p.opts.OnCtrlH()
 		} else {
 			p.deleteBeforeCaret()
 		}
