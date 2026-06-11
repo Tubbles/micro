@@ -377,6 +377,72 @@ func TestIgnoreMatcherCrossCheckGit(t *testing.T) {
 	}
 }
 
+func TestIgnoreMatcherGitInfoExclude(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, root, ".git/info/exclude", "*.secret\n/topbuild\n")
+	mustMkdir(t, root, "sub")
+
+	m := newIgnoreMatcher(root)
+	cases := []struct {
+		rel     string
+		want    bool
+		comment string
+	}{
+		{"a.secret", true, "exclude basename rule matches at root"},
+		{"sub/b.secret", true, "exclude basename rule matches in subdir"},
+		{"topbuild", true, "exclude anchored rule matches at root"},
+		{"sub/topbuild", false, "anchored rule must not match below root"},
+		{"a.txt", false, "unrelated file stays visible"},
+	}
+	for _, c := range cases {
+		if got := m.Match(c.rel, false); got != c.want {
+			t.Errorf("%s: Match(%q)=%v want %v", c.comment, c.rel, got, c.want)
+		}
+	}
+}
+
+func TestIgnoreMatcherGitInfoExcludeRootedBelowGitRoot(t *testing.T) {
+	// The recursive file picker roots the matcher at its start
+	// directory, which can be a subdir of the repo. Anchored exclude
+	// patterns must still resolve against the repo root.
+	gitRoot := t.TempDir()
+	mustWrite(t, gitRoot, ".git/info/exclude", "/sub/topbuild\n*.secret\n")
+	mustMkdir(t, gitRoot, "sub/inner")
+
+	m := newIgnoreMatcher(filepath.Join(gitRoot, "sub"))
+	cases := []struct {
+		rel     string
+		want    bool
+		comment string
+	}{
+		{"topbuild", true, "repo-root-anchored rule matches via above offset"},
+		{"inner/topbuild", false, "anchored rule must not match deeper"},
+		{"a.secret", true, "basename rule matches below the offset"},
+		{"a.txt", false, "unrelated file stays visible"},
+	}
+	for _, c := range cases {
+		if got := m.Match(c.rel, false); got != c.want {
+			t.Errorf("%s: Match(%q)=%v want %v", c.comment, c.rel, got, c.want)
+		}
+	}
+}
+
+func TestIgnoreMatcherGitignoreWinsOverInfoExclude(t *testing.T) {
+	// git precedence: any .gitignore outranks info/exclude, so a
+	// negation in the root .gitignore un-ignores an exclude rule.
+	root := t.TempDir()
+	mustWrite(t, root, ".git/info/exclude", "*.log\n")
+	mustWrite(t, root, ".gitignore", "!keep.log\n")
+
+	m := newIgnoreMatcher(root)
+	if !m.Match("a.log", false) {
+		t.Errorf("a.log should be ignored by info/exclude")
+	}
+	if m.Match("keep.log", false) {
+		t.Errorf("keep.log should be un-ignored by .gitignore negation")
+	}
+}
+
 func gitCheckIgnore(t *testing.T, gitBin, root, rel string) bool {
 	t.Helper()
 	cmd := exec.Command(gitBin, "-C", root, "check-ignore", "-q", "--", rel)
