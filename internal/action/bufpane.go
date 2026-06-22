@@ -472,7 +472,14 @@ func (h *BufPane) HandleEvent(event tcell.Event) {
 				for _, c := range h.Buf.GetCursors() {
 					h.Buf.SetCurCursor(c.Num)
 					h.Cursor = c
+					// Fire the paste hooks per cursor, matching how the
+					// Paste action's MultiActions dispatch wraps each cursor
+					// in execAction. A prePaste veto skips that cursor only.
+					if !h.PluginCB("prePaste", nil) {
+						continue
+					}
 					h.paste(clipboard.ReadMultiText(text, clipboard.ClipboardReg, c.Num, ncursors))
+					h.PluginCB("onPaste", nil)
 				}
 				h.Relocate()
 			}
