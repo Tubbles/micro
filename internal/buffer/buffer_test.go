@@ -96,6 +96,24 @@ func check(t *testing.T, before []string, operations []operation, after []string
 	b.Close()
 }
 
+// Regression: CloseOpenBuffers used to nil OpenBuffers[i] mid-iteration,
+// which made Fini() -> Shared() dereference a nil *Buffer on the next
+// outer iteration once two or more buffers were open.
+func TestCloseOpenBuffersWithMultipleBuffers(t *testing.T) {
+	saved := OpenBuffers
+	OpenBuffers = nil
+	defer func() { OpenBuffers = saved }()
+
+	NewBufferFromString("a", "", BTDefault)
+	NewBufferFromString("b", "", BTDefault)
+
+	assert.Len(t, OpenBuffers, 2)
+
+	CloseOpenBuffers()
+
+	assert.Len(t, OpenBuffers, 0)
+}
+
 const maxLineLength = 200
 
 var alphabet = []rune(" abcdeäم📚")
