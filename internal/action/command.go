@@ -392,6 +392,11 @@ func reloadRuntime(reloadPlugins bool) {
 				screen.TermMessage(err)
 			}
 		}
+		// doSetGlobalOptionNative overwrote pathdisplay with either the
+		// parsed value or its default; re-run the basename backwards-compat
+		// derivation so a user with only basename set still gets the
+		// derived pathdisplay value.
+		config.ApplyPathDisplayBackcompat()
 	}
 
 	if reloadPlugins {
