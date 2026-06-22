@@ -99,7 +99,44 @@ Here are the available options:
    option value. You can read more about micro's colorschemes and see the list
    of default colorschemes in `> help colors`.
 
+    When `colorscheme.follow-system` is `true`, micro picks between
+   `colorscheme.dark` and `colorscheme.light` based on the desktop's reported
+   color-scheme preference, and `colorscheme` is the fallback used when either
+   the matching slot is empty or the desktop reports no preference.
+
     default value: `default`
+
+* `colorscheme.dark`: the colorscheme micro loads when `colorscheme.follow-system`
+   is `true` and the desktop reports a "prefer dark" color-scheme preference.
+   This setting is `global only`. The value names a colorscheme the same way
+   `colorscheme` does. The default is the empty string, which means "no
+   preferred dark scheme"; in that case micro falls back to `colorscheme` and
+   prints a one-shot notice so the misconfiguration is visible.
+
+    default value: `""`
+
+* `colorscheme.light`: the colorscheme micro loads when
+   `colorscheme.follow-system` is `true` and the desktop reports a "prefer
+   light" color-scheme preference. Same shape and same fallback as
+   `colorscheme.dark`. This setting is `global only`.
+
+    default value: `""`
+
+* `colorscheme.follow-system`: when `true`, micro queries the desktop's
+   color-scheme preference at startup, on a 1-second background poll, and
+   whenever the terminal regains focus, and applies `colorscheme.dark` or
+   `colorscheme.light` accordingly. When `false`, micro uses `colorscheme`
+   unconditionally. This setting is `global only`.
+
+    Detection runs through the XDG desktop portal D-Bus interface
+   (`org.freedesktop.portal.Settings`, namespace `org.freedesktop.appearance`,
+   key `color-scheme`). The portal is the cross-desktop signal exposed by
+   GNOME 44+, KDE Plasma 5.27+, sway, hyprland, and any other session that
+   runs `xdg-desktop-portal`. Sessions without a portal service, and every
+   platform other than Linux, report unknown, and micro falls back to
+   `colorscheme`.
+
+    default value: `false`
 
 * `cursorline`: highlight the line that the cursor is on in a different color
    (the color is defined by the colorscheme you are using).
