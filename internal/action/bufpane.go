@@ -7,6 +7,7 @@ import (
 	luar "layeh.com/gopher-luar"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
+	"github.com/micro-editor/micro/v2/internal/clipboard"
 	"github.com/micro-editor/micro/v2/internal/config"
 	"github.com/micro-editor/micro/v2/internal/display"
 	ulua "github.com/micro-editor/micro/v2/internal/lua"
@@ -467,7 +468,12 @@ func (h *BufPane) HandleEvent(event tcell.Event) {
 			h.pasteBuf.Reset()
 			h.inPaste = false
 			if text != "" {
-				h.paste(text)
+				ncursors := h.Buf.NumCursors()
+				for _, c := range h.Buf.GetCursors() {
+					h.Buf.SetCurCursor(c.Num)
+					h.Cursor = c
+					h.paste(clipboard.ReadMultiText(text, clipboard.ClipboardReg, c.Num, ncursors))
+				}
 				h.Relocate()
 			}
 		}

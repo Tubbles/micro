@@ -84,10 +84,20 @@ func ReadMulti(r Register, num, ncursors int) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return ReadMultiText(clip, r, num, ncursors), nil
+}
+
+// ReadMultiText distributes an already-known clipboard payload across
+// cursors. If the internal multi-clipboard matches clip and the cursor
+// count, the per-cursor segment for cursor num is returned; otherwise the
+// whole clip is returned. Unlike ReadMulti it does not re-read the system
+// clipboard, so it suits bracketed paste, where the payload is in hand and
+// re-reading (e.g. under the Internal method) would not reflect the paste.
+func ReadMultiText(clip string, r Register, num, ncursors int) string {
 	if ValidMulti(r, clip, ncursors) {
-		return multi.getText(r, num), nil
+		return multi.getText(r, num)
 	}
-	return clip, nil
+	return clip
 }
 
 // WriteMulti writes text to a clipboard register for a certain multi-cursor

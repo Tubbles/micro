@@ -183,6 +183,15 @@ func injectString(str string) {
 	drainEvents()
 }
 
+// injectPaste simulates a terminal bracketed paste (what Ctrl-Shift-V
+// triggers): the payload is wrapped in the CSI 200~/201~ markers that the
+// tcell input parser turns into EventPaste{Start}, EventKey stream,
+// EventPaste{End}.
+func injectPaste(text string) {
+	mt.SendRaw([]byte("\x1b[200~" + text + "\x1b[201~"))
+	drainEvents()
+}
+
 // tcellButtonToVt maps a tcell ButtonMask to the single vt.Button it
 // corresponds to. micro_test only ever passes Button1 or ButtonNone;
 // for ButtonNone (release) the caller must remember the button that
@@ -389,8 +398,35 @@ func TestSearchAndReplace(t *testing.T) {
 	assert.Equal(t, srTest3, string(data))
 }
 
+// TestMultiCursor checks that a bracketed paste (Ctrl-Shift-V) inserts at
+// every cursor, not just the active one. Regression test for the bug where
+// the EventPaste handler called paste() once on the active cursor only.
 func TestMultiCursor(t *testing.T) {
-	// TODO
+	file := createTestFile(t, "aaa\nbbb\n")
+
+	openFile(file)
+
+	if findBuffer(file) == nil {
+		t.Fatalf("Could not find buffer %s", file)
+	}
+
+	// Place the active cursor at the start of line 0 and add a second
+	// cursor at the start of line 1.
+	pane := action.MainTab().CurPane()
+	pane.Buf.GetActiveCursor().GotoLoc(buffer.Loc{X: 0, Y: 0})
+	pane.Buf.AddCursor(buffer.NewCursor(pane.Buf, buffer.Loc{X: 0, Y: 1}))
+	pane.Buf.MergeCursors()
+
+	injectPaste("X")
+
+	injectKey(tcell.KeyCtrlS, rune(tcell.KeyCtrlS), tcell.ModCtrl)
+
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, "Xaaa\nXbbb\n", string(data))
 }
 
 func TestSettingsPersistence(t *testing.T) {
