@@ -385,6 +385,55 @@ func TestPickerEnterEmptyQueryEmptyMatchesNoOp(t *testing.T) {
 	}
 }
 
+// ctrlEnter is Ctrl+Enter as a CSI-u terminal reports it.
+func ctrlEnter() *tcell.EventKey {
+	return tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModCtrl)
+}
+
+func TestPickerCtrlEnterFiresOnSubmitDespiteMatches(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "zero"}, {Label: "one"}, {Label: "two"}}
+	h := newPickerHarnessOpts(items, true)
+
+	h.p.HandleEvent(runeKey('t'))
+	h.p.HandleEvent(runeKey('w'))
+	h.p.HandleEvent(ctrlEnter())
+
+	if h.submitCount != 1 || h.lastSubmit != "tw" {
+		t.Fatalf("OnSubmit: count=%d last=%q, want 1/tw",
+			h.submitCount, h.lastSubmit)
+	}
+	if h.selectCount != 0 {
+		t.Fatalf("OnSelect must not fire when Ctrl-Enter bypasses match")
+	}
+}
+
+func TestPickerCtrlEnterEmptyQueryNoOp(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "zero"}, {Label: "one"}}
+	h := newPickerHarnessOpts(items, true)
+
+	h.p.HandleEvent(ctrlEnter())
+
+	if h.submitCount != 0 || h.selectCount != 0 {
+		t.Fatalf("Ctrl-Enter on empty query: submit=%d select=%d",
+			h.submitCount, h.selectCount)
+	}
+}
+
+func TestPickerCtrlEnterClassicPickerNoSubmit(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "a"}, {Label: "b"}}
+	h := newPickerHarness(items) // Query=false
+
+	h.p.HandleEvent(ctrlEnter())
+
+	if h.submitCount != 0 {
+		t.Fatalf("classic picker must not submit on Ctrl-Enter, got %d",
+			h.submitCount)
+	}
+}
+
 func TestPickerPasteBatchesFilterRecompute(t *testing.T) {
 	mockScreenSize(t)
 	items := []PickerItem{{Label: "alpha"}, {Label: "beta"}}
@@ -1374,4 +1423,49 @@ func containsInt(s []int, v int) bool {
 		}
 	}
 	return false
+}
+
+func TestPickerTabFiresOnTab(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "alpha"}, {Label: "beta"}}
+	var tabCount int
+	p := NewPicker(PickerOptions{
+		Title: "test",
+		Items: items,
+		Query: true,
+		Geometry: Geometry{
+			Kind: GeomScreenRect,
+			Rect: ScreenRect{X: 0, Y: 0, W: 40, H: 12},
+		},
+		OnTab: func() { tabCount++ },
+	})
+
+	p.HandleEvent(key(tcell.KeyTab))
+	if tabCount != 1 {
+		t.Fatalf("OnTab in Query mode: count=%d, want 1", tabCount)
+	}
+
+	pc := NewPicker(PickerOptions{
+		Title: "test",
+		Items: items,
+		Geometry: Geometry{
+			Kind: GeomScreenRect,
+			Rect: ScreenRect{X: 0, Y: 0, W: 40, H: 12},
+		},
+		OnTab: func() { tabCount++ },
+	})
+	pc.HandleEvent(key(tcell.KeyTab))
+	if tabCount != 2 {
+		t.Fatalf("OnTab in Classic mode: count=%d, want 2", tabCount)
+	}
+}
+
+func TestPickerTabNoCallbackIsNoOp(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+	h.p.HandleEvent(runeKey('a'))
+	h.p.HandleEvent(key(tcell.KeyTab))
+	if h.p.query != "a" {
+		t.Fatalf("Tab without OnTab: query mutated to %q, want \"a\"", h.p.query)
+	}
 }
