@@ -587,6 +587,66 @@ func DefaultAllSettings() map[string]any {
 	return allsettings
 }
 
+// The layer labels returned by GetSettingOrigin.
+const (
+	SettingOriginDefault     = "default"
+	SettingOriginGlobal      = "global"
+	SettingOriginLocal       = "local"
+	SettingOriginVolatile    = "volatile"
+	SettingOriginBufferLocal = "buffer-local"
+)
+
+// GetSettingOrigin classifies which configuration layer determined
+// option's effective value and returns that value alongside a label
+// naming the layer. bufSettings and bufLocalSettings mirror a
+// buffer's Settings and LocalSettings maps; this package cannot
+// import *buffer.Buffer directly (internal/buffer already imports
+// internal/config, so that would cycle). Pass nil, nil to classify a
+// global-only option, or when no buffer context is available.
+//
+// Precedence, highest first: buffer-local (an explicit `setlocal` on
+// this buffer) beats volatile (a session-only override, e.g. a CLI
+// flag or a temporary `:set`) beats local (settings.local.json) beats
+// global (settings.json) beats default.
+//
+// Buffer-local is checked ahead of volatile because SetGlobalOptionNative
+// always clears every open buffer's LocalSettings entry for the option
+// it just set, so the two can only coexist when a `setlocal` ran after
+// an earlier volatile set; the more recent, more specific per-buffer
+// action is what actually explains the value shown.
+//
+// ft:/glob: overrides are a separate layer applied per path/filetype
+// and are not modeled here.
+func GetSettingOrigin(option string, bufSettings map[string]any, bufLocalSettings map[string]bool) (value any, layer string) {
+	if bufLocalSettings != nil {
+		if _, ok := bufLocalSettings[option]; ok {
+			if v, ok := bufSettings[option]; ok {
+				return v, SettingOriginBufferLocal
+			}
+		}
+	}
+	if VolatileSettings[option] {
+		if v, ok := GlobalSettings[option]; ok {
+			return v, SettingOriginVolatile
+		}
+	}
+	if v, ok := parsedLocalSettings[option]; ok && !isNestedSetting(v) {
+		return v, SettingOriginLocal
+	}
+	if v, ok := parsedSettings[option]; ok && !isNestedSetting(v) {
+		return v, SettingOriginGlobal
+	}
+	return DefaultAllSettings()[option], SettingOriginDefault
+}
+
+// isNestedSetting reports whether v is one of the ft:/glob: nested
+// override maps rather than a scalar setting value, mirroring the
+// map-type check used throughout this file (e.g. validateParsedSettings,
+// ParsedSettings).
+func isNestedSetting(v any) bool {
+	return strings.HasPrefix(reflect.TypeOf(v).String(), "map")
+}
+
 // GetNativeValue parses and validates a value for a given option
 func GetNativeValue(option, value string) (any, error) {
 	curVal := GetGlobalOption(option)
