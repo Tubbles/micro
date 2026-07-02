@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -384,7 +383,7 @@ func WriteSettings(filename string) error {
 			}
 		}
 
-		txt, _ := json.MarshalIndent(parsedSettings, "", "    ")
+		txt, _ := util.MarshalIndentNoEscape(parsedSettings)
 		txt = append(txt, '\n')
 		err = writeFile(filename, txt)
 	}
@@ -407,7 +406,7 @@ func OverwriteSettings(filename string) error {
 			}
 		}
 
-		txt, _ := json.MarshalIndent(parsedSettings, "", "    ")
+		txt, _ := util.MarshalIndentNoEscape(parsedSettings)
 		txt = append(txt, '\n')
 		err = writeFile(filename, txt)
 	}

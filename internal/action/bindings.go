@@ -1,7 +1,6 @@
 package action
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -337,7 +336,7 @@ func TryBindKey(k, v string, overwrite bool, writeToFile bool) (bool, error) {
 
 		BindKey(k, v, Binder["buffer"])
 
-		txt, _ := json.MarshalIndent(parsed, "", "    ")
+		txt, _ := util.MarshalIndentNoEscape(parsed)
 		txt = append(txt, '\n')
 
 		if writeToFile {
@@ -389,7 +388,7 @@ func UnbindKey(k string) error {
 			delete(config.Bindings["buffer"], k)
 		}
 
-		txt, _ := json.MarshalIndent(parsed, "", "    ")
+		txt, _ := util.MarshalIndentNoEscape(parsed)
 		txt = append(txt, '\n')
 		return writeFile(filename, txt)
 	}
