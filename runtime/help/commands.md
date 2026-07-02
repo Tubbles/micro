@@ -86,6 +86,12 @@ quotes here but these are not necessary when entering the command in micro.
 * `reset 'option'`: resets the given option to its default value. This will
    also remove the entry from `settings.json`.
 
+* `options`: opens a picker listing every option, its effective value, and
+   which configuration layer supplied it. Selecting an option switches the
+   picker to a value editor for it, with `Enter` applying the value for this
+   session only and `Ctrl-Enter` applying it permanently. See the `options`
+   help topic for details.
+
 * `show 'option'`: shows the current value of the given option.
 
 * `showkey 'key'`: Show the action(s) bound to a given key. For example
