@@ -108,6 +108,7 @@ var defaultCommonSettings = map[string]any{
 	"tabmovement":             false,
 	"tabsize":                 float64(4),
 	"tabstospaces":            false,
+	"textfilterselectword":    true,
 	"truecolor":               "auto",
 	"useprimary":              true,
 	"wordwrap":                false,

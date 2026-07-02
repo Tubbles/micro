@@ -157,6 +157,11 @@ quotes here but these are not necessary when entering the command in micro.
    command as standard input and replaces the selection with the stdout of
    the shell command.  For example, to sort a list of numbers, first select
    them, and then execute `> textfilter sort -n`.
+   If a cursor has no selection, the behaviour is controlled by the
+   `textfilterselectword` option: by default the word at the cursor is
+   selected and filtered. With `textfilterselectword` set to `false` the
+   command is instead invoked with an empty standard input and its output
+   is inserted at the cursor position.
 
 * `log`: opens a log of all messages and debug statements.
 
