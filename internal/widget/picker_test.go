@@ -15,13 +15,19 @@ import (
 // pickerHarness builds a Picker with a fixed geometry and a fake
 // clock so tests are deterministic.
 type pickerHarness struct {
-	p           *Picker
-	selectCount int
-	closeCount  int
-	submitCount int
-	lastSelect  int
-	lastSubmit  string
-	clock       time.Time
+	p               *Picker
+	selectCount     int
+	closeCount      int
+	submitCount     int
+	selectCtrlCount int
+	submitCtrlCount int
+	escCount        int
+	escHandled      bool
+	lastSelect      int
+	lastSubmit      string
+	lastSelectCtrl  int
+	lastSubmitCtrl  string
+	clock           time.Time
 }
 
 func newPickerHarness(items []PickerItem) *pickerHarness {
@@ -38,9 +44,12 @@ func newPickerHarnessOpts(items []PickerItem, query bool) *pickerHarness {
 			Kind: GeomScreenRect,
 			Rect: ScreenRect{X: 10, Y: 5, W: 40, H: 12},
 		},
-		OnSelect: func(i int) { h.selectCount++; h.lastSelect = i },
-		OnSubmit: func(s string) { h.submitCount++; h.lastSubmit = s },
-		OnClose:  func() { h.closeCount++ },
+		OnSelect:     func(i int) { h.selectCount++; h.lastSelect = i },
+		OnSubmit:     func(s string) { h.submitCount++; h.lastSubmit = s },
+		OnSelectCtrl: func(i int) { h.selectCtrlCount++; h.lastSelectCtrl = i },
+		OnSubmitCtrl: func(s string) { h.submitCtrlCount++; h.lastSubmitCtrl = s },
+		OnClose:      func() { h.closeCount++ },
+		OnEsc:        func() bool { h.escCount++; return h.escHandled },
 	})
 	h.p.nowFn = func() time.Time { return h.clock }
 	return h
@@ -267,6 +276,48 @@ func TestPickerEscFiresOnClose(t *testing.T) {
 	}
 }
 
+func TestPickerOnEscHandledKeepsPickerOpen(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "a"}}
+	h := newPickerHarness(items)
+	h.escHandled = true
+	Open(h.p)
+	t.Cleanup(func() { CloseActive() })
+
+	h.p.HandleEvent(key(tcell.KeyEsc))
+
+	if h.escCount != 1 {
+		t.Fatalf("OnEsc: count=%d, want 1", h.escCount)
+	}
+	if h.closeCount != 0 {
+		t.Fatalf("OnClose must not fire when OnEsc reports handled, got %d", h.closeCount)
+	}
+	if Active() != h.p {
+		t.Fatalf("picker should remain the active widget when OnEsc reports handled")
+	}
+}
+
+func TestPickerOnEscUnhandledStillCloses(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "a"}}
+	h := newPickerHarness(items)
+	h.escHandled = false
+	Open(h.p)
+	t.Cleanup(func() { CloseActive() })
+
+	h.p.HandleEvent(key(tcell.KeyEsc))
+
+	if h.escCount != 1 {
+		t.Fatalf("OnEsc: count=%d, want 1", h.escCount)
+	}
+	if h.closeCount != 1 {
+		t.Fatalf("OnClose should fire when OnEsc reports unhandled, got %d", h.closeCount)
+	}
+	if Active() != nil {
+		t.Fatalf("active widget should be cleared when OnEsc reports unhandled")
+	}
+}
+
 func TestPickerRunesAreSwallowed_Classic(t *testing.T) {
 	mockScreenSize(t)
 	items := []PickerItem{{Label: "a"}, {Label: "b"}}
@@ -375,6 +426,66 @@ func TestPickerEnterOnMatchUsesItemIndex(t *testing.T) {
 	}
 	if h.submitCount != 0 {
 		t.Fatalf("OnSubmit must not fire when a match exists")
+	}
+}
+
+func TestPickerCtrlEnterOnMatchFiresOnSelectCtrl(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "zero"}, {Label: "one"}, {Label: "two"}}
+	h := newPickerHarnessOpts(items, true)
+
+	h.p.HandleEvent(runeKey('t'))
+	h.p.HandleEvent(runeKey('w'))
+	h.p.HandleEvent(ctrlKey(tcell.KeyEnter))
+
+	if h.selectCtrlCount != 1 || h.lastSelectCtrl != 2 {
+		t.Fatalf("OnSelectCtrl: count=%d last=%d, want 1/2",
+			h.selectCtrlCount, h.lastSelectCtrl)
+	}
+	if h.selectCount != 0 {
+		t.Fatalf("plain OnSelect must not fire on Ctrl-Enter when OnSelectCtrl is set, got %d",
+			h.selectCount)
+	}
+}
+
+func TestPickerCtrlEnterOnNoMatchFiresOnSubmitCtrl(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "alpha"}}
+	h := newPickerHarnessOpts(items, true)
+
+	h.p.HandleEvent(runeKey('z'))
+	h.p.HandleEvent(runeKey('z'))
+	h.p.HandleEvent(ctrlKey(tcell.KeyEnter))
+
+	if h.submitCtrlCount != 1 || h.lastSubmitCtrl != "zz" {
+		t.Fatalf("OnSubmitCtrl: count=%d last=%q, want 1/zz",
+			h.submitCtrlCount, h.lastSubmitCtrl)
+	}
+	if h.submitCount != 0 {
+		t.Fatalf("plain OnSubmit must not fire on Ctrl-Enter when OnSubmitCtrl is set, got %d",
+			h.submitCount)
+	}
+}
+
+func TestPickerCtrlEnterFallsBackWhenCtrlVariantNil(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "a"}, {Label: "b"}}
+	h := &pickerHarness{clock: time.Unix(1_700_000_000, 0)}
+	h.p = NewPicker(PickerOptions{
+		Items: items,
+		Query: true,
+		Geometry: Geometry{
+			Kind: GeomScreenRect,
+			Rect: ScreenRect{X: 10, Y: 5, W: 40, H: 12},
+		},
+		OnSelect: func(i int) { h.selectCount++; h.lastSelect = i },
+	})
+
+	h.p.HandleEvent(ctrlKey(tcell.KeyEnter))
+
+	if h.selectCount != 1 || h.lastSelect != 0 {
+		t.Fatalf("Ctrl-Enter should fall back to OnSelect when OnSelectCtrl is nil: count=%d last=%d",
+			h.selectCount, h.lastSelect)
 	}
 }
 
@@ -843,6 +954,54 @@ func TestPickerRefreshItemsKeepsQuery(t *testing.T) {
 	if h.p.Current() != 0 || h.p.top != 0 {
 		t.Fatalf("RefreshItems must reset current/top to 0, got current=%d top=%d",
 			h.p.Current(), h.p.top)
+	}
+}
+
+func TestPickerQueryGetterReflectsTypedText(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "alpha"}}, true)
+	h.p.HandleEvent(runeKey('a'))
+	h.p.HandleEvent(runeKey('b'))
+	if got := h.p.Query(); got != "ab" {
+		t.Fatalf("Query() = %q, want %q", got, "ab")
+	}
+}
+
+// TestPickerSetItemsThenSetQueryRestoresFilter models the round trip
+// an in-place mode switch needs: SetItems (which always clears the
+// query, e.g. swapping to a picker's edit-mode item set) followed by
+// SetQuery to restore a query captured before the switch.
+func TestPickerSetItemsThenSetQueryRestoresFilter(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{
+		{Label: "alpha"}, {Label: "beta"}, {Label: "gamma"},
+	}, true)
+	h.p.HandleEvent(runeKey('a'))
+	saved := h.p.Query()
+	if saved != "a" {
+		t.Fatalf("setup: query=%q", saved)
+	}
+
+	// Simulate switching to a different item set (query mode) and back.
+	h.p.SetItems([]PickerItem{{Label: "true"}, {Label: "false"}})
+	if h.p.Query() != "" {
+		t.Fatalf("SetItems should have cleared the query, got %q", h.p.Query())
+	}
+	h.p.SetItems([]PickerItem{
+		{Label: "alpha"}, {Label: "beta"}, {Label: "gamma"},
+	})
+	h.p.SetQuery(saved)
+
+	if got := h.p.Query(); got != "a" {
+		t.Fatalf("SetQuery did not restore query: got %q, want %q", got, "a")
+	}
+	// "a" fuzzy-matches all three labels (alpha, beta, gamma each
+	// contain the letter); the point here is just that SetQuery
+	// recomputed matches (non-nil) rather than leaving the stale nil
+	// left over from the SetItems reset.
+	if h.p.matches == nil || len(h.p.matches) != 3 {
+		t.Fatalf("SetQuery must recompute the filter: got %d matches, want 3",
+			len(h.p.matches))
 	}
 }
 
