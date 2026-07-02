@@ -67,30 +67,6 @@ func isFilesystemRoot(p string) bool {
 	return cleaned == vol+string(filepath.Separator)
 }
 
-// editorAreaRect returns the picker rect with a 2-cell margin on
-// every side of the editor area, accounting for the tab bar and
-// info bar.
-func editorAreaRect() widget.ScreenRect {
-	sw, sh := screen.Screen.Size()
-	iOff := config.GetInfoBarOffset()
-	tabBar := 0
-	if Tabs != nil && len(Tabs.List) > 1 {
-		tabBar = 1
-	}
-	const margin = 2
-	x := margin
-	y := tabBar + margin
-	w := sw - 2*margin
-	h := (sh - tabBar - iOff) - 2*margin
-	if w < 0 {
-		w = 0
-	}
-	if h < 0 {
-		h = 0
-	}
-	return widget.ScreenRect{X: x, Y: y, W: w, H: h}
-}
-
 // indexOfLabel returns the index of the first item whose Label
 // equals label, or -1 if no such item exists.
 func indexOfLabel(items []widget.PickerItem, label string) int {
@@ -212,7 +188,7 @@ func openFileExplorer(invoker *BufPane, start string, selectName string) {
 		Items:    items,
 		Hint:     buildExplorerHint(showHidden, showIgnored),
 		Query:    true,
-		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: editorAreaRect()},
+		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: widgetOverlayRect()},
 		OnCtrlH:  toggleHidden,
 		OnCtrlI:  toggleIgnored,
 		OnSelect: func(idx int) {
