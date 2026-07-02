@@ -16,7 +16,18 @@ import (
 // at the top of the screen
 type TabList struct {
 	*display.TabWindow
-	List []*Tab
+	List    []*Tab
+	PathBar *display.PathBar
+}
+
+// pathBarOffset returns 1 if the global "pathbar" setting is on, else 0.
+// The offset is the number of extra rows the path bar consumes at the
+// top of the editor area.
+func pathBarOffset() int {
+	if on, _ := config.GetGlobalOption("pathbar").(bool); on {
+		return 1
+	}
+	return 0
 }
 
 // NewTabList creates a TabList from a list of buffers by creating a Tab
@@ -24,17 +35,19 @@ type TabList struct {
 func NewTabList(bufs []*buffer.Buffer) *TabList {
 	w, h := screen.Screen.Size()
 	iOffset := config.GetInfoBarOffset()
+	pOffset := pathBarOffset()
 	tl := new(TabList)
 	tl.List = make([]*Tab, len(bufs))
 	if tabBarVisible(len(bufs)) {
 		for i, b := range bufs {
-			tl.List[i] = NewTabFromBuffer(0, 1, w, h-1-iOffset, b)
+			tl.List[i] = NewTabFromBuffer(0, 1+pOffset, w, h-1-pOffset-iOffset, b)
 		}
 	} else {
-		tl.List[0] = NewTabFromBuffer(0, 0, w, h-iOffset, bufs[0])
+		tl.List[0] = NewTabFromBuffer(0, pOffset, w, h-pOffset-iOffset, bufs[0])
 	}
 	tl.TabWindow = display.NewTabWindow(w, 0)
 	tl.Names = make([]string, len(bufs))
+	tl.PathBar = display.NewPathBar()
 
 	return tl
 }
@@ -86,19 +99,27 @@ func tabBarVisible(numTabs int) bool {
 func (t *TabList) Resize() {
 	w, h := screen.Screen.Size()
 	iOffset := config.GetInfoBarOffset()
+	pOffset := pathBarOffset()
 	InfoBar.Resize(w, h-1)
 	if tabBarVisible(len(t.List)) {
 		for _, p := range t.List {
-			p.Y = 1
-			p.Node.Resize(w, h-1-iOffset)
+			p.Y = 1 + pOffset
+			p.Node.Resize(w, h-1-pOffset-iOffset)
 			p.Resize()
 		}
 	} else if len(t.List) == 1 {
-		t.List[0].Y = 0
-		t.List[0].Node.Resize(w, h-iOffset)
+		t.List[0].Y = pOffset
+		t.List[0].Node.Resize(w, h-pOffset-iOffset)
 		t.List[0].Resize()
 	}
 	t.TabWindow.Resize(w, h)
+	if t.PathBar != nil {
+		pathY := 0
+		if len(t.List) > 1 {
+			pathY = 1
+		}
+		t.PathBar.Resize(pathY, w)
+	}
 }
 
 // HandleEvent checks for a resize event or a mouse event on the tab bar
@@ -150,6 +171,15 @@ func (t *TabList) Display() {
 	t.UpdateNames()
 	if tabBarVisible(len(t.List)) {
 		t.TabWindow.Display()
+	}
+	if t.PathBar != nil && pathBarOffset() == 1 {
+		var b *buffer.Buffer
+		if active := t.Active(); active >= 0 && active < len(t.List) {
+			if bp := t.List[active].CurPane(); bp != nil {
+				b = bp.Buf
+			}
+		}
+		t.PathBar.Display(b)
 	}
 }
 
