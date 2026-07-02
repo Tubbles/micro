@@ -508,3 +508,122 @@ func TestApplyJump_clearsExtraCursorsOnDestination(t *testing.T) {
 		t.Errorf("after jump: cursor at %+v, want X:0 Y:2", got)
 	}
 }
+
+// setupFocusedPane wires makeTestPane into a resized, focused pane and installs
+// a fresh global Jumps list, returning the pane, the list, and a restore func.
+// Resize is required because the bare harness yields BufView height 0 (the
+// zero-layout trap): the >= half-screen threshold divides by that height, so
+// the tests assert it is positive here. OnCursorMove reads the receiver's
+// suppress flag but pushes to the global Jumps, so both must be the same
+// object for the assertions to observe the push.
+func setupFocusedPane(t *testing.T, buf *buffer.Buffer) (*BufPane, *JumpList, func()) {
+	t.Helper()
+	bp, restoreTabs := makeTestPane(buf)
+	bp.Resize(80, 24)
+	if bp.BufView().Height <= 0 {
+		t.Fatalf("harness BufView height = %d, want > 0", bp.BufView().Height)
+	}
+	jl := newTestList(10)
+	prevJumps := Jumps
+	Jumps = jl
+	return bp, jl, func() {
+		Jumps = prevJumps
+		restoreTabs()
+	}
+}
+
+func TestOnCursorMove_farMoveRecordsOrigin(t *testing.T) {
+	b := buffer.NewBufferFromString(strings.Repeat("x\n", 100), "", buffer.BTDefault)
+	bp, jl, restore := setupFocusedPane(t, b)
+	defer restore()
+
+	origin := buffer.Loc{X: 0, Y: 2}
+	Jumps.OnCursorMove(b.SharedBuffer, origin, buffer.Loc{X: 0, Y: 80})
+
+	got, _ := snapshot(jl)
+	want := [][2]int{{int(bp.ID()), 2}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("entries = %v, want %v", got, want)
+	}
+}
+
+func TestOnCursorMove_subThresholdDoesNotRecord(t *testing.T) {
+	b := buffer.NewBufferFromString(strings.Repeat("x\n", 100), "", buffer.BTDefault)
+	_, jl, restore := setupFocusedPane(t, b)
+	defer restore()
+
+	// BufView height is 23, so height/2 == 11; a 6-line move is below it.
+	Jumps.OnCursorMove(b.SharedBuffer, buffer.Loc{X: 0, Y: 2}, buffer.Loc{X: 0, Y: 8})
+
+	if got := len(jl.entries); got != 0 {
+		t.Fatalf("entries len = %d, want 0 (sub-threshold move)", got)
+	}
+}
+
+func TestOnCursorMove_nonFocusedBufferIgnored(t *testing.T) {
+	b := buffer.NewBufferFromString(strings.Repeat("x\n", 100), "", buffer.BTDefault)
+	_, jl, restore := setupFocusedPane(t, b)
+	defer restore()
+
+	// A far move reported against a buffer that is not the focused pane's is
+	// filtered out (background-split / info-bar cursors).
+	other := buffer.NewBufferFromString(strings.Repeat("y\n", 100), "", buffer.BTDefault)
+	Jumps.OnCursorMove(other.SharedBuffer, buffer.Loc{X: 0, Y: 2}, buffer.Loc{X: 0, Y: 80})
+
+	if got := len(jl.entries); got != 0 {
+		t.Fatalf("entries len = %d, want 0 (move on non-focused buffer)", got)
+	}
+}
+
+func TestOnCursorMove_suppressedDoesNothing(t *testing.T) {
+	b := buffer.NewBufferFromString(strings.Repeat("x\n", 100), "", buffer.BTDefault)
+	_, jl, restore := setupFocusedPane(t, b)
+	defer restore()
+
+	// Covers applyJump's own moves, which run inside withSuppression.
+	jl.suppress = true
+	Jumps.OnCursorMove(b.SharedBuffer, buffer.Loc{X: 0, Y: 2}, buffer.Loc{X: 0, Y: 80})
+
+	if got := len(jl.entries); got != 0 {
+		t.Fatalf("entries len = %d, want 0 (suppressed)", got)
+	}
+}
+
+func TestOnCursorMove_dedupsAgainstExecActionPush(t *testing.T) {
+	// A whitelisted mover pushes the origin via execAction, then the same move
+	// fires the hook carrying that same origin. pushLocked's adjacency dedup
+	// must collapse the two into a single entry so JumpBack has one stop.
+	b := buffer.NewBufferFromString(strings.Repeat("x\n", 100), "", buffer.BTDefault)
+	bp, jl, restore := setupFocusedPane(t, b)
+	defer restore()
+
+	origin := buffer.Loc{X: 0, Y: 2}
+	Jumps.Push(bp.ID(), b.SharedBuffer, origin)
+	Jumps.OnCursorMove(b.SharedBuffer, origin, buffer.Loc{X: 0, Y: 80})
+
+	if got := len(jl.entries); got != 1 {
+		t.Fatalf("entries len = %d, want 1 (execAction push + hook dedup)", got)
+	}
+}
+
+func TestOnCursorMove_endToEndThroughGotoLoc(t *testing.T) {
+	// Exercise the full path: a far Cursor.GotoLoc fires the registered hook,
+	// which resolves the focused pane and records the origin. Mirrors the
+	// OnTextEdit end-to-end test's listener-swap pattern.
+	b := buffer.NewBufferFromString(strings.Repeat("x\n", 100), "", buffer.BTDefault)
+	bp, jl, restore := setupFocusedPane(t, b)
+	defer restore()
+
+	prev := buffer.OnCursorMoveListeners
+	buffer.OnCursorMoveListeners = []func(*buffer.SharedBuffer, buffer.Loc, buffer.Loc){jl.OnCursorMove}
+	defer func() { buffer.OnCursorMoveListeners = prev }()
+
+	// Cursor starts at {0,0}; a far GotoLoc must record that origin.
+	bp.Cursor.GotoLoc(buffer.Loc{X: 0, Y: 80})
+
+	got, _ := snapshot(jl)
+	want := [][2]int{{int(bp.ID()), 0}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("entries = %v, want %v", got, want)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
+	"github.com/micro-editor/micro/v2/internal/util"
 )
 
 // DefaultJumpListMax is the cap on how many jump entries the list retains. When
@@ -62,6 +63,7 @@ var bigJumpActions = map[string]bool{
 
 func init() {
 	buffer.RegisterOnTextEditListener(Jumps.OnTextEdit)
+	buffer.RegisterOnCursorMoveListener(Jumps.OnCursorMove)
 }
 
 // Push records a cursor position from an automatic source (the
@@ -180,6 +182,55 @@ func (jl *JumpList) OnTextEdit(b *buffer.SharedBuffer, start, end buffer.Loc, ev
 		if jl.entries[i].Buf == b {
 			jl.entries[i].Loc = buffer.ShiftLoc(jl.entries[i].Loc, start, end, eventType, lastnl, textX, b.LineArray)
 		}
+	}
+}
+
+// OnCursorMove is registered with buffer.RegisterOnCursorMoveListener at init
+// time. It records the origin of a cursor move on the focused pane's buffer
+// when that move spans at least half a screen, catching plugin-driven
+// navigation (e.g. LSP go-to-definition) that moves the cursor via
+// Cursor.GotoLoc without going through the execAction whitelist. A very near
+// move is intentionally not recorded.
+//
+// Only the focused pane's buffer is considered: this filters info-bar and
+// background-split cursors (which is why the info/history.go recall sites use
+// GotoLocBare as belt-and-suspenders rather than the sole guard).
+func (jl *JumpList) OnCursorMove(buf *buffer.SharedBuffer, old, new buffer.Loc) {
+	// Read suppression under the lock then release it: applyJump's own
+	// moves run inside withSuppression, and this early-out also avoids the
+	// Tabs walk below on every ordinary cursor step.
+	jl.mu.Lock()
+	suppressed := jl.suppress
+	jl.mu.Unlock()
+	if suppressed {
+		return
+	}
+
+	if Tabs == nil {
+		return
+	}
+	active := Tabs.Active()
+	if active < 0 || active >= len(Tabs.List) {
+		return
+	}
+	bp := Tabs.List[active].CurPane()
+	if bp == nil {
+		return
+	}
+	if bp.Buf == nil || bp.Buf.SharedBuffer != buf {
+		return
+	}
+
+	// A zero-layout or info window yields height 0, which would make the
+	// >= height/2 test >= 0 and record every move. Guard it.
+	height := bp.BufView().Height
+	if height <= 0 {
+		return
+	}
+
+	d := bp.Diff(bp.SLocFromLoc(old), bp.SLocFromLoc(new))
+	if util.Abs(d) >= height/2 {
+		Jumps.Push(bp.ID(), bp.Buf.SharedBuffer, old)
 	}
 }
 

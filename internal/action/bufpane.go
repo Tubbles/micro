@@ -386,6 +386,27 @@ func (h *BufPane) GotoLoc(loc buffer.Loc) {
 	h.Relocate()
 }
 
+// GotoLocBare is GotoLoc that fires no cursor-move listeners (it uses
+// Cursor.GotoLocBare). Use it for view-centering and per-keystroke callers
+// that reposition the cursor but must not record a jump.
+func (h *BufPane) GotoLocBare(loc buffer.Loc) {
+	sloc := h.SLocFromLoc(loc)
+	d := h.Diff(h.SLocFromLoc(h.Cursor.Loc), sloc)
+
+	h.Cursor.GotoLocBare(loc)
+
+	// If the new location is far away from the previous one,
+	// ensure the cursor is at 25% of the window height
+	height := h.BufView().Height
+	if util.Abs(d) >= height {
+		v := h.GetView()
+		v.StartLine = h.Scroll(sloc, -height/4)
+		h.ScrollAdjust()
+		v.StartCol = 0
+	}
+	h.Relocate()
+}
+
 func (h *BufPane) initialRelocate() {
 	sloc := h.SLocFromLoc(h.Cursor.Loc)
 	height := h.BufView().Height
