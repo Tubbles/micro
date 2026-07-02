@@ -647,6 +647,34 @@ func (h *BufPane) execAction(action BufAction, name string, te *tcell.EventMouse
 	return success
 }
 
+// runBufActionByName looks up name in BufKeyActions and runs it,
+// once per cursor for actions registered in MultiActions or once on
+// the active cursor otherwise. Returns false, doing nothing, if name
+// is not a known key action (in particular, this never runs a mouse
+// action). Shared by RunActionCmd and the command palette's
+// paletteAction dispatch, the two sites that need to invoke a
+// resolved action name outside of BufMapEvent's own chain loop.
+func runBufActionByName(h *BufPane, name string) bool {
+	fn, ok := BufKeyActions[name]
+	if !ok {
+		return false
+	}
+
+	success := true
+	if _, multi := MultiActions[name]; multi {
+		for _, c := range h.Buf.GetCursors() {
+			h.Buf.SetCurCursor(c.Num)
+			h.Cursor = c
+			success = success && h.execAction(fn, name, nil)
+		}
+	} else {
+		h.Buf.SetCurCursor(0)
+		h.Cursor = h.Buf.GetActiveCursor()
+		success = h.execAction(fn, name, nil)
+	}
+	return success
+}
+
 func (h *BufPane) completeAction(action string) {
 	h.PluginCB("on" + action)
 }

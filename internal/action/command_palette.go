@@ -427,30 +427,16 @@ func (h *BufPane) CommandPaletteCmd(args []string) {
 // same code paths a real keystroke or command-bar invocation would,
 // so plugin pre/on hooks fire and macros record consistently.
 //
-// The action-kind branch duplicates the MultiActions per-cursor
-// loop from BufMapEvent (mirrored by RunActionCmd on the
-// runaction-command branch, commit 6ea16cf1). When both branches
-// land in integration this body and that one should be folded into
-// a shared helper.
+// The action-kind branch shares its MultiActions per-cursor dispatch
+// with RunActionCmd via runBufActionByName.
 func executePaletteEntry(h *BufPane, e paletteEntry) {
 	switch e.Kind {
 	case paletteAction:
-		fn, ok := BufKeyActions[e.Name]
-		if !ok {
+		if _, ok := BufKeyActions[e.Name]; !ok {
 			return
 		}
 		recordHistory(historyEntry{Kind: historyAction, Name: e.Name})
-		if _, multi := MultiActions[e.Name]; multi {
-			for _, c := range h.Buf.GetCursors() {
-				h.Buf.SetCurCursor(c.Num)
-				h.Cursor = c
-				h.execAction(fn, e.Name, nil)
-			}
-		} else {
-			h.Buf.SetCurCursor(0)
-			h.Cursor = h.Buf.GetActiveCursor()
-			h.execAction(fn, e.Name, nil)
-		}
+		runBufActionByName(h, e.Name)
 	case paletteCommand:
 		recordHistory(historyEntry{Kind: historyCommand, Name: e.Name})
 		h.HandleCommand(e.Name)

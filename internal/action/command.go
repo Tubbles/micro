@@ -907,14 +907,18 @@ func (h *BufPane) RunActionCmd(args []string) {
 		}
 
 		var success bool
-		if _, multi := MultiActions[name]; multi {
-			success = true
-			for _, c := range h.Buf.GetCursors() {
-				h.Buf.SetCurCursor(c.Num)
-				h.Cursor = c
-				success = success && h.execAction(afn, name, nil)
-			}
+		if _, ok := BufKeyActions[name]; ok {
+			// The common case: a plain action name, or a lua:/command:
+			// atom whose derived name happens to collide with one
+			// (vanishingly unlikely). runBufActionByName re-resolves it
+			// by name, which is fine since BufKeyActions is where
+			// parseBufActionChain found it in the first place.
+			success = runBufActionByName(h, name)
 		} else {
+			// command:/command-edit:/lua: atoms: afn is already
+			// resolved and never appears in MultiActions, so a single
+			// execAction call matches what runBufActionByName would do
+			// for a non-multi action anyway.
 			h.Buf.SetCurCursor(0)
 			h.Cursor = h.Buf.GetActiveCursor()
 			success = h.execAction(afn, name, nil)
