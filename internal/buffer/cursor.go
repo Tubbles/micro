@@ -362,6 +362,79 @@ func (c *Cursor) SelectWord() {
 	c.Loc = c.CurSelection[1]
 }
 
+// wordRangeUnder returns the [start, end) range covering the word the
+// cursor sits on. Returns ok=false when the cursor is on an empty line,
+// whitespace, or punctuation. Used by WordUnder and WordOrSelection so
+// they share one boundary-finding implementation.
+func (c *Cursor) wordRangeUnder() (Loc, Loc, bool) {
+	if len(c.buf.LineBytes(c.Y)) == 0 {
+		return Loc{}, Loc{}, false
+	}
+	if !util.IsWordChar(c.RuneUnder(c.X)) {
+		return Loc{}, Loc{}, false
+	}
+
+	forward, backward := c.X, c.X
+
+	for backward > 0 && util.IsWordChar(c.RuneUnder(backward-1)) {
+		backward--
+	}
+
+	lineLen := util.CharacterCount(c.buf.LineBytes(c.Y)) - 1
+	for forward < lineLen && util.IsWordChar(c.RuneUnder(forward+1)) {
+		forward++
+	}
+
+	return Loc{backward, c.Y}, Loc{forward, c.Y}.Move(1, c.buf), true
+}
+
+// WordUnder returns the word the cursor is currently inside, without
+// mutating the cursor or its selection. Returns (word, true) when the
+// cursor sits on a word character, ("", false) otherwise (empty line,
+// whitespace, or punctuation).
+func (c *Cursor) WordUnder() (string, bool) {
+	s, e, ok := c.wordRangeUnder()
+	if !ok {
+		return "", false
+	}
+	return string(c.buf.Substr(s, e)), true
+}
+
+// WordOrSelection returns the query that hlselection / find-word actions
+// should use, picked from the cursor's current selection or the word
+// under the cursor:
+//   - single-line selection: query = selection text, wholeWord = false,
+//     span = the selection.
+//   - cursor on a word: query = WordUnder, wholeWord = true,
+//     span = the word's range.
+//   - multi-line selection, whitespace, punctuation, empty line:
+//     ok = false.
+//
+// The returned span lets callers detect "we're already on the match" and
+// skip past it (used by FindNextWord / FindPreviousWord).
+func (c *Cursor) WordOrSelection() (query string, wholeWord bool, span [2]Loc, ok bool) {
+	if c.HasSelection() {
+		s, e := c.CurSelection[0], c.CurSelection[1]
+		if s.GreaterThan(e) {
+			s, e = e, s
+		}
+		if s.Y != e.Y {
+			return "", false, [2]Loc{}, false
+		}
+		// A shrinking edit (e.g. file reload) can leave the selection
+		// out of bounds: Relocate clamps only Loc, not CurSelection.
+		if !InBounds(s, c.buf) || !InBounds(e, c.buf) {
+			return "", false, [2]Loc{}, false
+		}
+		return string(c.buf.Substr(s, e)), false, [2]Loc{s, e}, true
+	}
+	s, e, ok := c.wordRangeUnder()
+	if !ok {
+		return "", false, [2]Loc{}, false
+	}
+	return string(c.buf.Substr(s, e)), true, [2]Loc{s, e}, true
+}
+
 // AddWordToSelection adds the word the cursor is currently on
 // to the selection
 func (c *Cursor) AddWordToSelection() {
