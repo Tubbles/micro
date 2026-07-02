@@ -396,6 +396,9 @@ func (h *BufPane) CommandPalette() {
 		OnSubmit: func(query string) {
 			widget.CloseActive()
 			recordHistory(historyEntry{Kind: historyFreeText, Name: query})
+			if runFreeTextActionChain(h, query) {
+				return
+			}
 			h.HandleCommand(query)
 		},
 		OnTab: func() {
@@ -421,6 +424,88 @@ func (h *BufPane) CommandPalette() {
 // ignored.
 func (h *BufPane) CommandPaletteCmd(args []string) {
 	h.CommandPalette()
+}
+
+// paletteFreeTextResolvesAsActionChain reports whether query would
+// resolve, atom by atom, as an action chain: every atom is either a
+// command:/command-edit: prefix (both always resolve), a lua:
+// atom whose plugin.fn resolves, or a plain BufKeyActions name.
+// Atoms that would only resolve via BufMouseActions are treated as
+// not resolving, since dispatching one from free text has no
+// tcell.EventMouse to run it with.
+//
+// This mirrors parseBufActionChain's resolution rules without its
+// side effect: parseBufActionChain reports an unresolved atom via
+// screen.TermMessage, which blocks on a terminal-suspending "press
+// enter to continue" prompt. That is fine for a bindings.json load
+// error or an explicit "> runaction" typo, but firing it on every
+// ordinary free-text command (e.g. "help options") would make the
+// palette unusable, so resolution is checked here first and
+// parseBufActionChain is only called once every atom is known to
+// resolve cleanly.
+func paletteFreeTextResolvesAsActionChain(query string) bool {
+	if strings.TrimSpace(query) == "" {
+		return false
+	}
+
+	action := query
+	for action != "" {
+		var a string
+		a, _, action = nextActionChainAtom(action)
+
+		switch {
+		case strings.HasPrefix(a, "command:"), strings.HasPrefix(a, "command-edit:"):
+			// always resolves
+		case strings.HasPrefix(a, "lua:"):
+			fn := strings.SplitN(a, ":", 2)[1]
+			if LuaAction(fn, KeyEvent{}) == nil {
+				return false
+			}
+		default:
+			if _, ok := BufKeyActions[a]; !ok {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// runFreeTextActionChain runs query as an action chain, dispatching
+// through execAction per atom just like a real key binding, when
+// every atom resolves per paletteFreeTextResolvesAsActionChain.
+// Returns false without running anything when query does not
+// resolve as an action chain, so OnSubmit falls back to
+// HandleCommand. A single word like "save" is both a valid command
+// and a valid action name; per D-22's runaction precedent this
+// treats it as the action.
+//
+// Because the gate above only accepts atoms that re-resolve via
+// BufKeyActions, command:/command-edit:, or lua:, every afn
+// parseBufActionChain returns here is a BufKeyAction; no mouse-event
+// guard is needed at dispatch time.
+func runFreeTextActionChain(h *BufPane, query string) bool {
+	if !paletteFreeTextResolvesAsActionChain(query) {
+		return false
+	}
+
+	actionfns, names, types := parseBufActionChain(query, KeyEvent{})
+	for i, afn := range actionfns {
+		name := names[i]
+
+		var success bool
+		if _, ok := BufKeyActions[name]; ok {
+			success = runBufActionByName(h, name)
+		} else {
+			h.Buf.SetCurCursor(0)
+			h.Cursor = h.Buf.GetActiveCursor()
+			success = h.execAction(afn, name, nil)
+		}
+
+		if (!success && types[i] == '&') || (success && types[i] == '|') {
+			break
+		}
+	}
+	return true
 }
 
 // executePaletteEntry dispatches the selected entry through the
