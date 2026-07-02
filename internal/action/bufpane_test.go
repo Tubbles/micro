@@ -34,7 +34,8 @@ func silenceTermMessage(t *testing.T) {
 }
 
 // registerFakeLuaPlugin defines a Lua plugin table with a single
-// function that returns true, and registers it in config.Plugins so
+// function that returns true and counts its own calls in the global
+// "<name>_<fn>_calls", and registers it in config.Plugins so
 // LuaAction/config.FindPlugin can resolve "name.fn". Removed again
 // on test cleanup so it cannot leak into other tests.
 func registerFakeLuaPlugin(t *testing.T, name, fn string) {
@@ -42,7 +43,8 @@ func registerFakeLuaPlugin(t *testing.T, name, fn string) {
 	if ulua.L == nil {
 		ulua.L = lua.NewState()
 	}
-	src := name + " = {}\nfunction " + name + "." + fn + "(bp)\n  return true\nend\n"
+	counter := name + "_" + fn + "_calls"
+	src := name + " = {}\n" + counter + " = 0\nfunction " + name + "." + fn + "(bp)\n  " + counter + " = " + counter + " + 1\n  return true\nend\n"
 	if err := ulua.L.DoString(src); err != nil {
 		t.Fatal(err)
 	}

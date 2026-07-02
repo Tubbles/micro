@@ -856,37 +856,73 @@ func (h *BufPane) ShowKeyCmd(args []string) {
 	}
 }
 
-// RunActionCmd runs a buffer action by name as if it had been triggered
-// by a keybinding. For actions registered in MultiActions the action
-// runs once per cursor, matching BufMapEvent semantics so multi-cursor
-// behaviour is preserved when invoking via the command bar.
+// chainHasBareCommandAtom reports whether any atom in a runaction
+// action chain is a bare "command:" invocation. "command-edit:" is
+// not flagged: it opens a distinct editable prompt, unlike
+// "command:" which just runs the command, so it does not hit the
+// same "> runaction command:foo is just > foo" redundancy (D-22).
+func chainHasBareCommandAtom(action string) bool {
+	for action != "" {
+		var a string
+		a, _, action = nextActionChainAtom(action)
+		if strings.HasPrefix(a, "command:") {
+			return true
+		}
+	}
+	return false
+}
+
+// RunActionCmd runs a buffer action, action chain (A,B / A|B / A&B),
+// or lua:plug.fn atom as if it had been triggered by a keybinding,
+// via the same parseBufActionChain used for key bindings. For
+// actions registered in MultiActions the action runs once per
+// cursor, matching BufMapEvent semantics so multi-cursor behaviour
+// is preserved when invoking via the command bar.
+//
+// A bare command: atom is rejected (D-22): "> runaction command:foo"
+// is exactly "> foo" typed directly, so allowing it would be
+// pointless. Mouse actions are rejected too, since they read the
+// triggering tcell.EventMouse, which is nil from the command bar.
+// Unknown atoms are reported by parseBufActionChain itself (the same
+// TermMessage path an unresolvable bindings.json entry takes).
 func (h *BufPane) RunActionCmd(args []string) {
 	if len(args) < 1 {
 		InfoBar.Error("Not enough arguments: provide an action name")
 		return
 	}
-	name := args[0]
+	chain := args[0]
 
-	fn, ok := BufKeyActions[name]
-	if !ok {
-		if _, isMouse := BufMouseActions[name]; isMouse {
-			InfoBar.Error(name, " is a mouse action and cannot be run from the command bar")
-			return
-		}
-		InfoBar.Error("Unknown action ", name)
+	if chainHasBareCommandAtom(chain) {
+		InfoBar.Error("runaction does not accept command: atoms, run the command directly instead")
 		return
 	}
 
-	if _, multi := MultiActions[name]; multi {
-		for _, c := range h.Buf.GetCursors() {
-			h.Buf.SetCurCursor(c.Num)
-			h.Cursor = c
-			h.execAction(fn, name, nil)
+	actionfns, names, types := parseBufActionChain(chain, KeyEvent{})
+
+	for i, afn := range actionfns {
+		name := names[i]
+		if _, isMouse := afn.(BufMouseAction); isMouse {
+			InfoBar.Error(name, " is a mouse action and cannot be run from the command bar")
+			return
 		}
-	} else {
-		h.Buf.SetCurCursor(0)
-		h.Cursor = h.Buf.GetActiveCursor()
-		h.execAction(fn, name, nil)
+
+		var success bool
+		if _, multi := MultiActions[name]; multi {
+			success = true
+			for _, c := range h.Buf.GetCursors() {
+				h.Buf.SetCurCursor(c.Num)
+				h.Cursor = c
+				success = success && h.execAction(afn, name, nil)
+			}
+		} else {
+			h.Buf.SetCurCursor(0)
+			h.Cursor = h.Buf.GetActiveCursor()
+			success = h.execAction(afn, name, nil)
+		}
+
+		if (!success && types[i] == '&') || (success && types[i] == '|') {
+			break
+		}
 	}
 }
 
