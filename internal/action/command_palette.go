@@ -10,15 +10,17 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-// paletteKind discriminates the three categories the command palette
-// surfaces: built-in buffer actions, commands, and Lua plugin
-// functions.
+// paletteKind discriminates the four categories the command palette
+// surfaces: built-in buffer actions, commands, Lua plugin functions,
+// and one-argument-level command invocations (D-20/D-21, e.g.
+// "help options").
 type paletteKind int
 
 const (
 	paletteAction paletteKind = iota
 	paletteCommand
 	paletteLua
+	paletteCommandArg
 )
 
 // paletteEntry is one row in the command palette. Bindings is the
@@ -37,7 +39,7 @@ type paletteEntry struct {
 // dispatch shape consumed by BufMapEvent's parser.
 func (e paletteEntry) actionString() string {
 	switch e.Kind {
-	case paletteCommand:
+	case paletteCommand, paletteCommandArg:
 		return "command:" + e.Name
 	case paletteLua:
 		return "lua:" + e.Name
@@ -97,6 +99,7 @@ func buildPaletteEntries() []paletteEntry {
 				Bindings: rev["command:"+name],
 			})
 		}
+		out = append(out, buildCommandArgPaletteEntries(rev)...)
 	}
 
 	if isPaletteEnabled("commandpalette.lua") {
@@ -185,6 +188,8 @@ func paletteKindTag(k paletteKind) string {
 		return "cmd    "
 	case paletteLua:
 		return "lua    "
+	case paletteCommandArg:
+		return "arg    "
 	}
 	return ""
 }
@@ -446,6 +451,13 @@ func executePaletteEntry(h *BufPane, e paletteEntry) {
 		}
 	case paletteCommand:
 		recordHistory(historyEntry{Kind: historyCommand, Name: e.Name})
+		h.HandleCommand(e.Name)
+	case paletteCommandArg:
+		// The whole "<cmd> <arg>" label is dispatched verbatim through
+		// the command bar, same as a free-text entry the user typed
+		// themselves; there is no single-word command name to key a
+		// historyCommand entry on.
+		recordHistory(historyEntry{Kind: historyFreeText, Name: e.Name})
 		h.HandleCommand(e.Name)
 	case paletteLua:
 		a := LuaAction(e.Name, KeyEvent{})

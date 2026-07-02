@@ -111,7 +111,14 @@ quotes here but these are not necessary when entering the command in micro.
    when micro restarts. The three kinds of entries can be toggled
    independently with `commandpalette.actions`,
    `commandpalette.commands` and `commandpalette.lua` (defaults all
-   `true`). `commandpalette.historysize` (default `20`) caps the
+   `true`). With `commandpalette.commands` on, the palette also lists
+   one argument level for commands whose completer can enumerate a
+   fixed set of candidates, as separate filterable entries such as
+   `help options`, `set tabsize` or `plugin install`. Selecting one of
+   these runs the whole line through the command bar, exactly like
+   picking a plain command entry does. Commands whose only argument is
+   a filename, such as `open` and `vsplit`, are excluded from this
+   listing. `commandpalette.historysize` (default `20`) caps the
    history; set it to `0` to disable history entirely (Tab becomes a
    no-op and nothing is recorded). No default key binding ships;
    users who want a VSCode-style entry point can add
