@@ -203,6 +203,24 @@ Coming soon!
 It is also possible to disable any of the default key bindings by use of the
 `None` action in the user's `bindings.json` file.
 
+## Local machine overrides
+
+Alongside `bindings.json`, micro reads an optional second bindings file at
+`$XDG_CONFIG_HOME/micro/bindings.local.json` (typically
+`~/.config/micro/bindings.local.json`). It uses the same syntax as
+`bindings.json`, including pane type maps, and any key bound in
+`bindings.local.json` overrides the same key in `bindings.json`. The intent
+is to keep `bindings.json` clean enough to check into version control or
+sync between machines, while keeping machine-specific bindings (keys that
+only one terminal delivers, hardware-specific keyboards) in
+`bindings.local.json`.
+
+The editor never writes to `bindings.local.json`. The `> bind` and
+`> unbind` commands always persist to `bindings.json`, so a binding saved
+there stays shadowed by a conflicting local override on the next start or
+`> reload`. If you want to change an override permanently, edit
+`bindings.local.json` by hand.
+
 ## Bindable actions and bindable keys
 
 The list of default keybindings contains most of the possible actions and keys
