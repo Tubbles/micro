@@ -4,9 +4,12 @@ import (
 	"sort"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Tubbles/tcell/v3"
 	"github.com/sahilm/fuzzy"
+
+	"github.com/micro-editor/micro/v2/internal/clipboard"
 )
 
 // pickerHarness builds a Picker with a fixed geometry and a fake
@@ -566,6 +569,57 @@ func TestPickerPasteSkipsControlKeys(t *testing.T) {
 	if h.p.qcur != 3 {
 		t.Fatalf("paste with controls: qcur=%d, want 3 (dropped keys must not advance caret)",
 			h.p.qcur)
+	}
+}
+
+func TestPickerCtrlVPastesClipboardIntoQuery(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarnessOpts([]PickerItem{{Label: "x"}}, true)
+
+	oldMethod := clipboard.CurrentMethod
+	clipboard.CurrentMethod = clipboard.Internal
+	t.Cleanup(func() { clipboard.CurrentMethod = oldMethod })
+	if err := clipboard.Write("ab\ncd", clipboard.ClipboardReg); err != nil {
+		t.Fatalf("seeding clipboard: %v", err)
+	}
+
+	calls := 0
+	oldFind := fuzzyFind
+	fuzzyFind = func(pattern string, data []string) fuzzy.Matches {
+		calls++
+		return oldFind(pattern, data)
+	}
+	t.Cleanup(func() { fuzzyFind = oldFind })
+
+	// Reset the counter right before the paste so the count reflects
+	// only the Ctrl-V event, not any setup filtering above.
+	calls = 0
+
+	// NewEventKeyEx (not NewEventKey) is required here: tcell's plain
+	// NewEventKey re-folds {KeyRune, "v", ModCtrl} into the legacy
+	// KeyCtrlV constant (key.go's non-advanced ctrl-letter folding),
+	// which would never reach the KeyRune case below. NewEventKeyEx
+	// uses the advanced/CSI-u normalization rules and keeps the event
+	// as {KeyRune, "v", ModCtrl}, matching what a real kitty/zellij
+	// keypress delivers.
+	h.p.HandleEvent(tcell.NewEventKeyEx(tcell.KeyRune, "v", tcell.ModCtrl, true, 0, 1))
+
+	// The embedded "\n" must flatten to a space (a query line holds
+	// no control chars), and no literal "v" must appear anywhere in
+	// the result.
+	if h.p.query != "ab cd" {
+		t.Fatalf("Ctrl-V paste: query=%q, want %q", h.p.query, "ab cd")
+	}
+	if want := utf8.RuneCountInString("ab cd"); h.p.qcur != want {
+		t.Fatalf("Ctrl-V paste: qcur=%d, want %d", h.p.qcur, want)
+	}
+	// "ab cd" parses into two space-separated AND-group atoms ("ab",
+	// "cd"), so the single recomputeFilter() the paste triggers drives
+	// fuzzyFind twice, once per atom. Per-character insertion of the 5
+	// chars would recompute far more than twice, so calls == 2 proves
+	// the paste does one recompute, not one per character.
+	if calls != 2 {
+		t.Fatalf("Ctrl-V paste: filter ran %d times, want 2", calls)
 	}
 }
 

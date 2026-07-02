@@ -9,6 +9,7 @@ import (
 	"github.com/Tubbles/tcell/v3"
 	"github.com/sahilm/fuzzy"
 
+	"github.com/micro-editor/micro/v2/internal/clipboard"
 	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/util"
 )
@@ -321,6 +322,23 @@ func (p *Picker) handleKeyQuery(e *tcell.EventKey) {
 			p.deleteAtCaret()
 		}
 	case tcell.KeyRune:
+		// Ctrl-V pastes the system clipboard into the query at the
+		// caret, the same splice used by the bracketed-paste End
+		// path, so a query line stays a single line: embedded
+		// newlines and carriage returns are flattened to spaces.
+		if e.Modifiers()&tcell.ModCtrl != 0 && strings.ToLower(e.Str()) == "v" {
+			text, err := clipboard.Read(clipboard.ClipboardReg)
+			if err != nil {
+				return
+			}
+			text = strings.ReplaceAll(text, "\n", " ")
+			text = strings.ReplaceAll(text, "\r", " ")
+			off := byteOffsetForRune(p.query, p.qcur)
+			p.query = p.query[:off] + text + p.query[off:]
+			p.qcur += utf8.RuneCountInString(text)
+			p.recomputeFilter()
+			return
+		}
 		// v3 reports keystrokes as a grapheme cluster string rather
 		// than a single rune. Take the first rune; multi-rune
 		// clusters are truncated on the keystroke path.
