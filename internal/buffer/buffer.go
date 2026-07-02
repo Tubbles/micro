@@ -471,7 +471,7 @@ func NewBuffer(r io.Reader, size int64, path string, btype BufType, cmd Command)
 				b.GetActiveCursor().SetSelectionEnd(match[1])
 				b.GetActiveCursor().OrigSelection[0] = b.GetActiveCursor().CurSelection[0]
 				b.GetActiveCursor().OrigSelection[1] = b.GetActiveCursor().CurSelection[1]
-				b.GetActiveCursor().GotoLoc(match[1])
+				b.GetActiveCursor().GotoLocBare(match[1])
 			}
 			b.LastSearch = cmd.SearchRegex
 			b.LastSearchRegex = true

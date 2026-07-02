@@ -140,6 +140,23 @@ func RegisterOnTextEditListener(fn func(b *SharedBuffer, start, end Loc, eventTy
 	OnTextEditListeners = append(OnTextEditListeners, fn)
 }
 
+// OnCursorMoveListeners are invoked, in registration order, after each
+// Cursor.GotoLoc that actually moved a live cursor (old is the pre-move
+// location, new is the post-move location). Only GotoLoc fires them; the
+// side-effect-free GotoLocBare does not, so internal non-navigation callers
+// can reposition a cursor without notifying listeners. Listeners that hold
+// their own Loc values (e.g. the action package's jump list) use old/new to
+// decide whether the move is worth recording.
+var OnCursorMoveListeners []func(b *SharedBuffer, old, new Loc)
+
+// RegisterOnCursorMoveListener appends fn to the OnCursorMove pipeline. There
+// is no remove API: listeners are expected to live for the duration of the
+// process. Idempotent calls (registering the same fn twice) will fire it
+// twice; callers must dedupe themselves if that matters.
+func RegisterOnCursorMoveListener(fn func(b *SharedBuffer, old, new Loc)) {
+	OnCursorMoveListeners = append(OnCursorMoveListeners, fn)
+}
+
 // ExecuteTextEvent runs a text event
 func ExecuteTextEvent(t *TextEvent, buf *SharedBuffer) {
 	if t.EventType == TextEventInsert {
