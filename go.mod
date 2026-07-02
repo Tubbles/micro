@@ -1,7 +1,7 @@
 module github.com/micro-editor/micro/v2
 
 require (
-	github.com/Tubbles/tcell/v3 v3.2.1-0.20260421202238-e3a401435ba9
+	github.com/Tubbles/tcell/v3 v3.2.1-0.20260702173539-90f195f9bb08
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/dustin/go-humanize v1.0.0
 	github.com/go-errors/errors v1.0.1
@@ -16,7 +16,7 @@ require (
 	github.com/yuin/gopher-lua v1.1.1
 	github.com/zyedidia/clipper v0.1.1
 	github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3
-	golang.org/x/text v0.36.0
+	golang.org/x/text v0.38.0
 	gopkg.in/yaml.v2 v2.2.8
 	layeh.com/gopher-luar v1.0.11
 )
@@ -30,8 +30,8 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/term v0.44.0 // indirect
 )
 
 replace github.com/kballard/go-shellquote => github.com/micro-editor/go-shellquote v0.0.0-20250101105543-feb6c39314f5
