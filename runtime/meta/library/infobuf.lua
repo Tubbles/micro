@@ -143,6 +143,15 @@ InfoBuf.GetWord = nil
 ---@type fun(self: InfoBuf, ...: any)
 InfoBuf.GutterMessage = nil
 
+---@type fun(self: InfoBuf, pos: Loc): boolean
+InfoBuf.HLSelectionAt = nil
+
+---@type fun(self: InfoBuf, b: Buffer, pos: Loc): boolean
+InfoBuf.HLSelectionMatch = nil
+
+---@type fun(self: InfoBuf): boolean
+InfoBuf.HasName = nil
+
 ---@type fun(self: InfoBuf, tabsize: integer): string
 InfoBuf.IndentString = nil
 
@@ -178,6 +187,9 @@ InfoBuf.MergeCursors = nil
 
 ---@type fun(self: InfoBuf, ...: any)
 InfoBuf.Message = nil
+
+---@type fun(self: InfoBuf, loc: Loc): Message[]
+InfoBuf.MessagesUnderLoc = nil
 
 ---@type fun(self: InfoBuf): boolean
 InfoBuf.Modified = nil
@@ -328,6 +340,9 @@ InfoBuf.UpdateCursors = nil
 
 ---@type fun(self: InfoBuf)
 InfoBuf.UpdateDiff = nil
+
+---@type fun(self: InfoBuf)
+InfoBuf.UpdateHLSelection = nil
 
 ---@type fun(self: InfoBuf): string?
 InfoBuf.UpdateModTime = nil

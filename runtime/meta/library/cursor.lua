@@ -140,7 +140,13 @@ Cursor.UpN = nil
 ---@type fun(self: Cursor)
 Cursor.WordLeft = nil
 
+---@type fun(self: Cursor): string, boolean, Loc[], boolean
+Cursor.WordOrSelection = nil
+
 ---@type fun(self: Cursor)
 Cursor.WordRight = nil
+
+---@type fun(self: Cursor): string, boolean
+Cursor.WordUnder = nil
 
 return Cursor

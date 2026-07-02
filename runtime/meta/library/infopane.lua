@@ -93,11 +93,35 @@ InfoPane.CommandComplete = nil
 ---@type fun(self: InfoPane): boolean
 InfoPane.CommandMode = nil
 
+---@type fun(self: InfoPane)
+InfoPane.CommandPalette = nil
+
+---@type fun(self: InfoPane, args: string[])
+InfoPane.CommandPaletteCmd = nil
+
 ---@type fun(self: InfoPane): boolean
 InfoPane.Copy = nil
 
 ---@type fun(self: InfoPane): boolean
+InfoPane.CopyAbsolutePath = nil
+
+---@type fun(self: InfoPane, args: string[])
+InfoPane.CopyAbsolutePathCmd = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.CopyFileName = nil
+
+---@type fun(self: InfoPane, args: string[])
+InfoPane.CopyFileNameCmd = nil
+
+---@type fun(self: InfoPane): boolean
 InfoPane.CopyLine = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.CopyRelativePath = nil
+
+---@type fun(self: InfoPane, args: string[])
+InfoPane.CopyRelativePathCmd = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.CursorDown = nil
@@ -192,7 +216,7 @@ InfoPane.DoKeyEvent = nil
 ---@type fun(self: InfoPane, e: MouseEvent, te: any): boolean
 InfoPane.DoMouseEvent = nil
 
----@type fun(self: InfoPane, r: integer)
+---@type fun(self: InfoPane, s: string)
 InfoPane.DoRuneInsert = nil
 
 ---@type fun(self: InfoPane, option: string, nativeValue: any)
@@ -212,6 +236,12 @@ InfoPane.Duplicate = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.DuplicateLine = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.DuplicateLineDown = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.DuplicateLineUp = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.End = nil
@@ -237,6 +267,12 @@ InfoPane.ExecuteCommand = nil
 ---@type fun(self: InfoPane): boolean
 InfoPane.ExternallyModified = nil
 
+---@type fun(self: InfoPane): boolean
+InfoPane.FileExplorerAtCwd = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.FileExplorerAtFile = nil
+
 ---@type fun(self: InfoPane): string
 InfoPane.FileType = nil
 
@@ -256,7 +292,13 @@ InfoPane.FindNext = nil
 InfoPane.FindNextDiffLine = nil
 
 ---@type fun(self: InfoPane): boolean
+InfoPane.FindNextWord = nil
+
+---@type fun(self: InfoPane): boolean
 InfoPane.FindPrevious = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.FindPreviousWord = nil
 
 ---@type fun(self: InfoPane)
 InfoPane.Fini = nil
@@ -303,6 +345,12 @@ InfoPane.GotoLoc = nil
 ---@type fun(self: InfoPane, ...: any)
 InfoPane.GutterMessage = nil
 
+---@type fun(self: InfoPane, pos: Loc): boolean
+InfoPane.HLSelectionAt = nil
+
+---@type fun(self: InfoPane, b: Buffer, pos: Loc): boolean
+InfoPane.HLSelectionMatch = nil
+
 ---@type fun(self: InfoPane): boolean
 InfoPane.HSplitAction = nil
 
@@ -329,6 +377,9 @@ InfoPane.HandleEvent = nil
 
 ---@type fun(self: InfoPane, e: Event): boolean
 InfoPane.HasKeyEvent = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.HasName = nil
 
 ---@type fun(self: InfoPane, args: string[])
 InfoPane.HelpCmd = nil
@@ -372,14 +423,26 @@ InfoPane.InsertTab = nil
 ---@type fun(self: InfoPane): boolean
 InfoPane.IsActive = nil
 
+---@type fun(self: InfoPane): boolean
+InfoPane.JumpBack = nil
+
 ---@type fun(self: InfoPane, args: string[])
 InfoPane.JumpCmd = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.JumpForward = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.JumpLine = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.JumpToMatchingBrace = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.JumpToNextMessage = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.JumpToPrevMessage = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.LastSplit = nil
@@ -423,6 +486,9 @@ InfoPane.MergeCursors = nil
 ---@type fun(self: InfoPane, ...: any)
 InfoPane.Message = nil
 
+---@type fun(self: InfoPane, loc: Loc): Message[]
+InfoPane.MessagesUnderLoc = nil
+
 ---@type fun(self: InfoPane): boolean
 InfoPane.Modified = nil
 
@@ -438,6 +504,9 @@ InfoPane.MousePress = nil
 ---@type fun(self: InfoPane, e: any): boolean
 InfoPane.MouseRelease = nil
 
+---@type fun(self: InfoPane, e: any): boolean
+InfoPane.MouseSelectTo = nil
+
 ---@type fun(self: InfoPane, n: integer)
 InfoPane.MoveCursorDown = nil
 
@@ -450,6 +519,12 @@ InfoPane.MoveLinesDown = nil
 ---@type fun(self: InfoPane): boolean
 InfoPane.MoveLinesUp = nil
 
+---@type fun(self: InfoPane): boolean
+InfoPane.MovePaneToNext = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.MovePaneToPrevious = nil
+
 ---@type fun(self: InfoPane, deltas: Delta[])
 InfoPane.MultipleReplace = nil
 
@@ -458,6 +533,9 @@ InfoPane.Name = nil
 
 ---@type fun(self: InfoPane, args: string[])
 InfoPane.NewTabCmd = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.NextLeafSplit = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.NextSplit = nil
@@ -479,6 +557,12 @@ InfoPane.OpenCmd = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.OpenFile = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.OpenFilePickerAtCwd = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.OpenFilePickerAtFile = nil
 
 ---@type fun(self: InfoPane)
 InfoPane.OpenLogBuf = nil
@@ -517,6 +601,9 @@ InfoPane.PluginCB = nil
 InfoPane.PluginCmd = nil
 
 ---@type fun(self: InfoPane): boolean
+InfoPane.PreviousLeafSplit = nil
+
+---@type fun(self: InfoPane): boolean
 InfoPane.PreviousSplit = nil
 
 ---@type fun(self: InfoPane): boolean
@@ -524,6 +611,9 @@ InfoPane.PreviousTab = nil
 
 ---@type fun(self: InfoPane, prompt: string, msg: string, ptype: string, eventcb: fun(a0: string), donecb: fun(a0: string, a1: boolean))
 InfoPane.Prompt = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.PushJump = nil
 
 ---@type fun(self: InfoPane, args: string[])
 InfoPane.PwdCmd = nil
@@ -614,6 +704,9 @@ InfoPane.Retab = nil
 
 ---@type fun(self: InfoPane, args: string[])
 InfoPane.RetabCmd = nil
+
+---@type fun(self: InfoPane, args: string[])
+InfoPane.RunActionCmd = nil
 
 ---@type fun(self: InfoPane, args: string[])
 InfoPane.RunCmd = nil
@@ -801,6 +894,9 @@ InfoPane.ShellMode = nil
 ---@type fun(self: InfoPane, args: string[])
 InfoPane.ShowCmd = nil
 
+---@type fun(self: InfoPane): boolean
+InfoPane.ShowFullMessage = nil
+
 ---@type fun(self: InfoPane, args: string[])
 InfoPane.ShowKeyCmd = nil
 
@@ -818,6 +914,9 @@ InfoPane.SpawnCursorAtLoc = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.SpawnMultiCursor = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.SpawnMultiCursorAll = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.SpawnMultiCursorDown = nil
@@ -935,6 +1034,9 @@ InfoPane.UpdateCursors = nil
 
 ---@type fun(self: InfoPane)
 InfoPane.UpdateDiff = nil
+
+---@type fun(self: InfoPane)
+InfoPane.UpdateHLSelection = nil
 
 ---@type fun(self: InfoPane): string?
 InfoPane.UpdateModTime = nil

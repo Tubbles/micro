@@ -48,11 +48,35 @@ BufPane.Close = nil
 ---@type fun(self: BufPane): boolean
 BufPane.CommandMode = nil
 
+---@type fun(self: BufPane)
+BufPane.CommandPalette = nil
+
+---@type fun(self: BufPane, args: string[])
+BufPane.CommandPaletteCmd = nil
+
 ---@type fun(self: BufPane): boolean
 BufPane.Copy = nil
 
 ---@type fun(self: BufPane): boolean
+BufPane.CopyAbsolutePath = nil
+
+---@type fun(self: BufPane, args: string[])
+BufPane.CopyAbsolutePathCmd = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.CopyFileName = nil
+
+---@type fun(self: BufPane, args: string[])
+BufPane.CopyFileNameCmd = nil
+
+---@type fun(self: BufPane): boolean
 BufPane.CopyLine = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.CopyRelativePath = nil
+
+---@type fun(self: BufPane, args: string[])
+BufPane.CopyRelativePathCmd = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.CursorDown = nil
@@ -135,7 +159,7 @@ BufPane.DoKeyEvent = nil
 ---@type fun(self: BufPane, e: MouseEvent, te: any): boolean
 BufPane.DoMouseEvent = nil
 
----@type fun(self: BufPane, r: integer)
+---@type fun(self: BufPane, s: string)
 BufPane.DoRuneInsert = nil
 
 ---@type fun(self: BufPane): boolean
@@ -143,6 +167,12 @@ BufPane.Duplicate = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.DuplicateLine = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.DuplicateLineDown = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.DuplicateLineUp = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.End = nil
@@ -157,6 +187,12 @@ BufPane.Escape = nil
 BufPane.EvalCmd = nil
 
 ---@type fun(self: BufPane): boolean
+BufPane.FileExplorerAtCwd = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.FileExplorerAtFile = nil
+
+---@type fun(self: BufPane): boolean
 BufPane.Find = nil
 
 ---@type fun(self: BufPane): boolean
@@ -166,7 +202,13 @@ BufPane.FindLiteral = nil
 BufPane.FindNext = nil
 
 ---@type fun(self: BufPane): boolean
+BufPane.FindNextWord = nil
+
+---@type fun(self: BufPane): boolean
 BufPane.FindPrevious = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.FindPreviousWord = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.FirstSplit = nil
@@ -234,14 +276,26 @@ BufPane.InsertTab = nil
 ---@type fun(self: BufPane): boolean
 BufPane.IsActive = nil
 
+---@type fun(self: BufPane): boolean
+BufPane.JumpBack = nil
+
 ---@type fun(self: BufPane, args: string[])
 BufPane.JumpCmd = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.JumpForward = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.JumpLine = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.JumpToMatchingBrace = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.JumpToNextMessage = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.JumpToPrevMessage = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.LastSplit = nil
@@ -270,6 +324,9 @@ BufPane.MousePress = nil
 ---@type fun(self: BufPane, e: any): boolean
 BufPane.MouseRelease = nil
 
+---@type fun(self: BufPane, e: any): boolean
+BufPane.MouseSelectTo = nil
+
 ---@type fun(self: BufPane, n: integer)
 BufPane.MoveCursorDown = nil
 
@@ -282,11 +339,20 @@ BufPane.MoveLinesDown = nil
 ---@type fun(self: BufPane): boolean
 BufPane.MoveLinesUp = nil
 
+---@type fun(self: BufPane): boolean
+BufPane.MovePaneToNext = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.MovePaneToPrevious = nil
+
 ---@type fun(self: BufPane): string
 BufPane.Name = nil
 
 ---@type fun(self: BufPane, args: string[])
 BufPane.NewTabCmd = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.NextLeafSplit = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.NextSplit = nil
@@ -305,6 +371,12 @@ BufPane.OpenCmd = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.OpenFile = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.OpenFilePickerAtCwd = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.OpenFilePickerAtFile = nil
 
 ---@type fun(self: BufPane)
 BufPane.OpenLogBuf = nil
@@ -343,10 +415,16 @@ BufPane.PluginCB = nil
 BufPane.PluginCmd = nil
 
 ---@type fun(self: BufPane): boolean
+BufPane.PreviousLeafSplit = nil
+
+---@type fun(self: BufPane): boolean
 BufPane.PreviousSplit = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.PreviousTab = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.PushJump = nil
 
 ---@type fun(self: BufPane, args: string[])
 BufPane.PwdCmd = nil
@@ -407,6 +485,9 @@ BufPane.Retab = nil
 
 ---@type fun(self: BufPane, args: string[])
 BufPane.RetabCmd = nil
+
+---@type fun(self: BufPane, args: string[])
+BufPane.RunActionCmd = nil
 
 ---@type fun(self: BufPane, args: string[])
 BufPane.RunCmd = nil
@@ -543,6 +624,9 @@ BufPane.ShellMode = nil
 ---@type fun(self: BufPane, args: string[])
 BufPane.ShowCmd = nil
 
+---@type fun(self: BufPane): boolean
+BufPane.ShowFullMessage = nil
+
 ---@type fun(self: BufPane, args: string[])
 BufPane.ShowKeyCmd = nil
 
@@ -557,6 +641,9 @@ BufPane.SpawnCursorAtLoc = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.SpawnMultiCursor = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.SpawnMultiCursorAll = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.SpawnMultiCursorDown = nil

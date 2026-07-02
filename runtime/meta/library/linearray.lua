@@ -12,6 +12,9 @@ LineArray.Bytes = nil
 ---@type fun(self: LineArray): Loc
 LineArray.End = nil
 
+---@type fun(self: LineArray, b: Buffer, pos: Loc): boolean
+LineArray.HLSelectionMatch = nil
+
 ---@type fun(self: LineArray, lineN: integer): integer[]
 LineArray.LineBytes = nil
 

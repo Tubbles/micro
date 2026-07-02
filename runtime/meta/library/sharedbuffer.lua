@@ -38,6 +38,9 @@ SharedBuffer.DisableReload = nil
 ---@type fun(self: SharedBuffer): Loc
 SharedBuffer.End = nil
 
+---@type fun(self: SharedBuffer, b: Buffer, pos: Loc): boolean
+SharedBuffer.HLSelectionMatch = nil
+
 ---@type fun(self: SharedBuffer, lineN: integer): integer[]
 SharedBuffer.LineBytes = nil
 
