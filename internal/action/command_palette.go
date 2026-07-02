@@ -6,7 +6,6 @@ import (
 
 	"github.com/micro-editor/micro/v2/internal/config"
 	ulua "github.com/micro-editor/micro/v2/internal/lua"
-	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/widget"
 	lua "github.com/yuin/gopher-lua"
 )
@@ -265,31 +264,6 @@ func historyPaletteItems(atlas []paletteEntry, hist []historyEntry) []widget.Pic
 	return items
 }
 
-// commandPaletteRect computes the on-screen rect for the palette
-// overlay, leaving a 2-cell margin around the editor area and
-// accounting for the tab bar (when more than one tab is open) and
-// the info bar.
-func commandPaletteRect() widget.ScreenRect {
-	sw, sh := screen.Screen.Size()
-	iOff := config.GetInfoBarOffset()
-	tabBar := 0
-	if Tabs != nil && len(Tabs.List) > 1 {
-		tabBar = 1
-	}
-	const margin = 2
-	x := margin
-	y := tabBar + margin
-	w := sw - 2*margin
-	h := (sh - tabBar - iOff) - 2*margin
-	if w < 0 {
-		w = 0
-	}
-	if h < 0 {
-		h = 0
-	}
-	return widget.ScreenRect{X: x, Y: y, W: w, H: h}
-}
-
 // paletteMode discriminates the two views the picker can show. Atlas
 // is the registered-action catalog; History is the per-session
 // most-recent-first list of items previously dispatched through this
@@ -400,7 +374,7 @@ func (h *BufPane) CommandPalette() {
 		Hint:     paletteHint(mode, size),
 		Query:    true,
 		Items:    itemsFor(mode),
-		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: commandPaletteRect()},
+		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: widgetOverlayRect()},
 		OnSelect: func(idx int) {
 			widget.CloseActive()
 			if mode == paletteModeHistory {
