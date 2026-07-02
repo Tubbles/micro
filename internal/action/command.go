@@ -1082,7 +1082,7 @@ func (h *BufPane) ReplaceCmd(args []string) {
 
 			h.Cursor.SetSelectionStart(locs[0])
 			h.Cursor.SetSelectionEnd(locs[1])
-			h.GotoLoc(locs[0])
+			h.GotoLocBare(locs[0])
 			h.Buf.LastSearch = search
 			h.Buf.LastSearchRegex = true
 			h.Buf.HighlightSearch = h.Buf.Settings["hlsearch"].(bool)

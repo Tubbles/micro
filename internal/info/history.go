@@ -97,7 +97,7 @@ func (i *InfoBuf) UpHistory(history []string) {
 	if i.HistoryNum > 0 && i.HasPrompt && !i.HasYN {
 		i.HistoryNum--
 		i.Replace(i.Start(), i.End(), history[i.HistoryNum])
-		i.Buffer.GetActiveCursor().GotoLoc(i.End())
+		i.Buffer.GetActiveCursor().GotoLocBare(i.End())
 	}
 }
 
@@ -106,7 +106,7 @@ func (i *InfoBuf) DownHistory(history []string) {
 	if i.HistoryNum < len(history)-1 && i.HasPrompt && !i.HasYN {
 		i.HistoryNum++
 		i.Replace(i.Start(), i.End(), history[i.HistoryNum])
-		i.Buffer.GetActiveCursor().GotoLoc(i.End())
+		i.Buffer.GetActiveCursor().GotoLocBare(i.End())
 	}
 }
 
@@ -154,6 +154,6 @@ func (i *InfoBuf) searchHistory(history []string, down bool) {
 	if found != -1 {
 		i.HistoryNum = found
 		i.Replace(i.Start(), i.End(), history[found])
-		c.GotoLoc(i.End())
+		c.GotoLocBare(i.End())
 	}
 }
