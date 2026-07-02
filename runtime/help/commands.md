@@ -91,6 +91,46 @@ quotes here but these are not necessary when entering the command in micro.
 * `showkey 'key'`: Show the action(s) bound to a given key. For example
    running `> showkey Ctrl-c` will display `Copy`.
 
+* `runaction 'action'`: runs the named buffer action once, as if its
+   keybinding had been pressed. The name is the action identifier used in
+   `bindings.json`, for example `> runaction DuplicateLine` or
+   `> runaction CursorEnd`. Action names are case-sensitive and the
+   command bar tab-completes them. Per-cursor actions (those listed in
+   `MultiActions`) run once per cursor, matching how a real keybinding
+   would behave with multiple cursors. Mouse actions cannot be invoked
+   this way because they require a mouse event payload.
+
+* `commandpalette`: opens a searchable picker that lists every buffer
+   action, every command, and every Lua plugin function, with
+   the keys bound to each entry shown alongside. Type to fuzzy-filter,
+   `Up`/`Down` to move, `Enter` to run, `Esc` to cancel. The bindings
+   column is part of the search haystack, so a query like
+   `ctrl-shift-x` filters down to whatever is bound to that keystroke
+   (assuming the binding is a single token; chain-bound entries do
+   not surface their bindings in v1). If the typed query matches no
+   entry, `Enter` instead runs the query as a command line, exactly as
+   if you had typed it after `Ctrl-E`. That lets the palette double as
+   a free-text command bar for cases that need arguments, e.g.
+   `saveas foo.txt`, `help commands`, `set tabsize 4`. `Ctrl-Enter`
+   forces the command-line dispatch even when the fuzzy matcher has
+   highlighted a row, so a query like `ltm exec` can be sent verbatim
+   instead of running whatever was highlighted (requires a CSI-u
+   terminal such as kitty, or a multiplexer that forwards CSI-u;
+   legacy terminals collapse `Ctrl-Enter` to `Enter`). The picker has
+   two modes: Atlas (the full catalog) and History (the most-recent
+   items you dispatched through this palette in this session). `Tab`
+   toggles between them; the palette opens in History when history
+   is non-empty, else in Atlas. Re-running an item from History also
+   moves it back to the top. History is in-memory only and resets
+   when micro restarts. The three kinds of entries can be toggled
+   independently with `commandpalette.actions`,
+   `commandpalette.commands` and `commandpalette.lua` (defaults all
+   `true`). `commandpalette.historysize` (default `20`) caps the
+   history; set it to `0` to disable history entirely (Tab becomes a
+   no-op and nothing is recorded). No default key binding ships;
+   users who want a VSCode-style entry point can add
+   `"CtrlShiftP": "command:commandpalette"` to bindings.json.
+
 * `run 'sh-command'`: runs the given shell command in the background. The
    command's output will be displayed in one line when it finishes running.
 

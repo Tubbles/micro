@@ -32,41 +32,43 @@ var commands map[string]Command
 
 func InitCommands() {
 	commands = map[string]Command{
-		"set":         {(*BufPane).SetCmd, OptionValueComplete},
-		"setlocal":    {(*BufPane).SetLocalCmd, OptionValueComplete},
-		"toggle":      {(*BufPane).ToggleCmd, OptionValueComplete},
-		"togglelocal": {(*BufPane).ToggleLocalCmd, OptionValueComplete},
-		"reset":       {(*BufPane).ResetCmd, OptionValueComplete},
-		"show":        {(*BufPane).ShowCmd, OptionComplete},
-		"showkey":     {(*BufPane).ShowKeyCmd, nil},
-		"run":         {(*BufPane).RunCmd, nil},
-		"bind":        {(*BufPane).BindCmd, nil},
-		"unbind":      {(*BufPane).UnbindCmd, nil},
-		"quit":        {(*BufPane).QuitCmd, nil},
-		"goto":        {(*BufPane).GotoCmd, nil},
-		"jump":        {(*BufPane).JumpCmd, nil},
-		"save":        {(*BufPane).SaveCmd, nil},
-		"replace":     {(*BufPane).ReplaceCmd, nil},
-		"replaceall":  {(*BufPane).ReplaceAllCmd, nil},
-		"vsplit":      {(*BufPane).VSplitCmd, buffer.FileComplete},
-		"hsplit":      {(*BufPane).HSplitCmd, buffer.FileComplete},
-		"tab":         {(*BufPane).NewTabCmd, buffer.FileComplete},
-		"help":        {(*BufPane).HelpCmd, HelpComplete},
-		"eval":        {(*BufPane).EvalCmd, nil},
-		"log":         {(*BufPane).ToggleLogCmd, nil},
-		"plugin":      {(*BufPane).PluginCmd, PluginComplete},
-		"reload":      {(*BufPane).ReloadCmd, nil},
-		"reopen":      {(*BufPane).ReopenCmd, nil},
-		"cd":          {(*BufPane).CdCmd, buffer.FileComplete},
-		"pwd":         {(*BufPane).PwdCmd, nil},
-		"open":        {(*BufPane).OpenCmd, buffer.FileComplete},
-		"tabmove":     {(*BufPane).TabMoveCmd, nil},
-		"tabswitch":   {(*BufPane).TabSwitchCmd, nil},
-		"term":        {(*BufPane).TermCmd, nil},
-		"memusage":    {(*BufPane).MemUsageCmd, nil},
-		"retab":       {(*BufPane).RetabCmd, nil},
-		"raw":         {(*BufPane).RawCmd, nil},
-		"textfilter":  {(*BufPane).TextFilterCmd, nil},
+		"set":            {(*BufPane).SetCmd, OptionValueComplete},
+		"setlocal":       {(*BufPane).SetLocalCmd, OptionValueComplete},
+		"toggle":         {(*BufPane).ToggleCmd, OptionValueComplete},
+		"togglelocal":    {(*BufPane).ToggleLocalCmd, OptionValueComplete},
+		"reset":          {(*BufPane).ResetCmd, OptionValueComplete},
+		"show":           {(*BufPane).ShowCmd, OptionComplete},
+		"showkey":        {(*BufPane).ShowKeyCmd, nil},
+		"run":            {(*BufPane).RunCmd, nil},
+		"bind":           {(*BufPane).BindCmd, nil},
+		"unbind":         {(*BufPane).UnbindCmd, nil},
+		"quit":           {(*BufPane).QuitCmd, nil},
+		"goto":           {(*BufPane).GotoCmd, nil},
+		"jump":           {(*BufPane).JumpCmd, nil},
+		"save":           {(*BufPane).SaveCmd, nil},
+		"replace":        {(*BufPane).ReplaceCmd, nil},
+		"replaceall":     {(*BufPane).ReplaceAllCmd, nil},
+		"vsplit":         {(*BufPane).VSplitCmd, buffer.FileComplete},
+		"hsplit":         {(*BufPane).HSplitCmd, buffer.FileComplete},
+		"tab":            {(*BufPane).NewTabCmd, buffer.FileComplete},
+		"help":           {(*BufPane).HelpCmd, HelpComplete},
+		"eval":           {(*BufPane).EvalCmd, nil},
+		"log":            {(*BufPane).ToggleLogCmd, nil},
+		"plugin":         {(*BufPane).PluginCmd, PluginComplete},
+		"reload":         {(*BufPane).ReloadCmd, nil},
+		"reopen":         {(*BufPane).ReopenCmd, nil},
+		"cd":             {(*BufPane).CdCmd, buffer.FileComplete},
+		"pwd":            {(*BufPane).PwdCmd, nil},
+		"open":           {(*BufPane).OpenCmd, buffer.FileComplete},
+		"tabmove":        {(*BufPane).TabMoveCmd, nil},
+		"tabswitch":      {(*BufPane).TabSwitchCmd, nil},
+		"term":           {(*BufPane).TermCmd, nil},
+		"memusage":       {(*BufPane).MemUsageCmd, nil},
+		"retab":          {(*BufPane).RetabCmd, nil},
+		"raw":            {(*BufPane).RawCmd, nil},
+		"runaction":      {(*BufPane).RunActionCmd, ActionComplete},
+		"textfilter":     {(*BufPane).TextFilterCmd, nil},
+		"commandpalette": {(*BufPane).CommandPaletteCmd, nil},
 	}
 }
 
@@ -872,6 +874,40 @@ func (h *BufPane) ShowKeyCmd(args []string) {
 		InfoBar.Message(action)
 	} else {
 		InfoBar.Message(args[0], " has no binding")
+	}
+}
+
+// RunActionCmd runs a buffer action by name as if it had been triggered
+// by a keybinding. For actions registered in MultiActions the action
+// runs once per cursor, matching BufMapEvent semantics so multi-cursor
+// behaviour is preserved when invoking via the command bar.
+func (h *BufPane) RunActionCmd(args []string) {
+	if len(args) < 1 {
+		InfoBar.Error("Not enough arguments: provide an action name")
+		return
+	}
+	name := args[0]
+
+	fn, ok := BufKeyActions[name]
+	if !ok {
+		if _, isMouse := BufMouseActions[name]; isMouse {
+			InfoBar.Error(name, " is a mouse action and cannot be run from the command bar")
+			return
+		}
+		InfoBar.Error("Unknown action ", name)
+		return
+	}
+
+	if _, multi := MultiActions[name]; multi {
+		for _, c := range h.Buf.GetCursors() {
+			h.Buf.SetCurCursor(c.Num)
+			h.Cursor = c
+			h.execAction(fn, name, nil)
+		}
+	} else {
+		h.Buf.SetCurCursor(0)
+		h.Cursor = h.Buf.GetActiveCursor()
+		h.execAction(fn, name, nil)
 	}
 }
 

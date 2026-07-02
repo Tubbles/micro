@@ -75,11 +75,15 @@ type PickerOptions struct {
 	// OnCtrlI, when non-nil and Query is true, fires for Ctrl-I key
 	// presses. Used by the file pickers to toggle the show-ignored
 	// state (gitignored entries, plus the literal .git directory)
-	// while the picker is open. KeyCtrlI shares its tcell value (9)
-	// with KeyTab; the picker has no Tab handling today, so the
-	// collision is harmless. A future Tab feature must arbitrate
-	// before adding to handleKeyQuery.
+	// while the picker is open. In tcell v3 KeyCtrlI (73) is distinct
+	// from KeyTab (9), so Ctrl-I and Tab are independent hooks.
 	OnCtrlI func()
+	// OnTab fires when the user presses Tab. The picker itself has no
+	// notion of what Tab does; callers wire it to whatever in-picker
+	// state change makes sense (e.g. mode toggles). Nil leaves Tab as
+	// a silent no-op, preserving v1 behaviour for callers that don't
+	// opt in.
+	OnTab func()
 }
 
 // Picker is a generic list-of-rows overlay widget.
@@ -285,6 +289,10 @@ func (p *Picker) handleKeyClassic(e *tcell.EventKey) {
 		p.activate()
 	case tcell.KeyEsc:
 		CloseActive()
+	case tcell.KeyTab:
+		if p.opts.OnTab != nil {
+			p.opts.OnTab()
+		}
 	}
 	// All other keys (incl. typed runes) are silently swallowed in
 	// the classic (non-Query) picker.
@@ -301,9 +309,27 @@ func (p *Picker) handleKeyQuery(e *tcell.EventKey) {
 	case tcell.KeyPgDn:
 		p.move(p.bodyHeight())
 	case tcell.KeyEnter:
-		p.activate()
+		// Ctrl-Enter forces the OnSubmit path even when a fuzzy match
+		// is highlighted, so the user can dispatch the typed query
+		// verbatim. Requires a CSI-u terminal; legacy terminals
+		// collapse Ctrl-Enter into plain Enter.
+		if e.Modifiers()&tcell.ModCtrl != 0 {
+			p.submitQuery()
+		} else {
+			p.activate()
+		}
 	case tcell.KeyEsc:
 		CloseActive()
+	case tcell.KeyTab:
+		if p.opts.OnTab != nil {
+			p.opts.OnTab()
+		}
+	case tcell.KeyCtrlI:
+		// In tcell v3 KeyCtrlI (73) is distinct from KeyTab (9), so
+		// kitty/CSI-u Ctrl-I lands here without colliding with Tab.
+		if p.opts.OnCtrlI != nil {
+			p.opts.OnCtrlI()
+		}
 	case tcell.KeyHome:
 		p.qcur = 0
 	case tcell.KeyEnd:
@@ -338,12 +364,6 @@ func (p *Picker) handleKeyQuery(e *tcell.EventKey) {
 			p.opts.OnCtrlH()
 		} else {
 			p.deleteBeforeCaret()
-		}
-	case tcell.KeyCtrlI:
-		// KeyCtrlI shares the tcell value (9) with KeyTab. The picker
-		// has no Tab handling today; OnCtrlI is the only consumer.
-		if p.opts.OnCtrlI != nil {
-			p.opts.OnCtrlI()
 		}
 	case tcell.KeyDelete:
 		if e.Modifiers()&tcell.ModCtrl != 0 {
@@ -620,6 +640,16 @@ func (p *Picker) activate() {
 	if p.opts.OnSelect != nil {
 		p.opts.OnSelect(idx)
 	}
+}
+
+// submitQuery fires OnSubmit with the current query regardless of the
+// highlighted row. No-op when Query mode is off, the query is empty,
+// or no OnSubmit handler is wired.
+func (p *Picker) submitQuery() {
+	if !p.opts.Query || p.query == "" || p.opts.OnSubmit == nil {
+		return
+	}
+	p.opts.OnSubmit(p.query)
 }
 
 // bodyHeight is the row count the visible item list can span. It
