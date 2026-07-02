@@ -647,8 +647,29 @@ make a binding that only affects the command bar, use the `command` subgroup:
 ```
 
 The possible pane types are `buffer` (normal buffer), `command` (command bar),
-and `terminal` (terminal pane). The defaults for the command and terminal panes
-are given below:
+and `terminal` (terminal pane).
+
+Bindings inside the `command` subgroup can also use the `command:` and `lua:`
+prefixes described above in "Binding commands" and "Binding Lua functions".
+The command or Lua function runs against the buffer pane behind the command
+bar, not the command bar itself, so `setlocal`/`togglelocal` and similar
+apply to the buffer as expected even while the command bar is focused. For
+example, this rebinds `Alt-i` so that pressing it while a Find prompt is
+open toggles case-sensitivity for the search:
+
+```json
+{
+    "command": {
+        "Alt-i": "command:togglelocal ignorecase"
+    }
+}
+```
+
+`command-edit:` cannot be used inside the `command` subgroup, since it would
+try to open a second command prompt on top of the one that is already
+focused; micro reports an error and ignores such a binding.
+
+The defaults for the command and terminal panes are given below:
 
 ```
 {

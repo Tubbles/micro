@@ -432,3 +432,42 @@ func TestMultiCursor(t *testing.T) {
 func TestSettingsPersistence(t *testing.T) {
 	// TODO
 }
+
+// TestCommandScopeBinding checks that a "command" scope binding can run a
+// command:-prefixed action while an infobar prompt (e.g. Find) is focused,
+// and that the key is consumed instead of falling through to the prompt's
+// rune-insert fallback. Regression test for the gap where infoMapKey only
+// resolved bare action names, so a binding like
+// "command:togglelocal ignorecase" silently failed and the key was typed
+// into the prompt instead.
+func TestCommandScopeBinding(t *testing.T) {
+	file := createTestFile(t, "base content")
+
+	openFile(file)
+
+	pane := action.MainTab().CurPane()
+	initial, ok := pane.Buf.Settings["ignorecase"].(bool)
+	if !ok {
+		t.Fatal("ignorecase setting is not a bool")
+	}
+
+	action.BindKey("Alt-i", "command:togglelocal ignorecase", action.Binder["command"])
+
+	// Open the Find prompt.
+	injectKey(tcell.KeyCtrlF, rune(tcell.KeyCtrlF), tcell.ModCtrl)
+
+	// Send Alt-i the way a real terminal would: ESC immediately followed
+	// by the rune. injectKey doesn't thread modifiers through to the raw
+	// bytes it sends, so build the legacy meta-escape sequence directly
+	// and feed it through the same mt/drainEvents primitives injectKey
+	// itself uses.
+	mt.SendRaw([]byte{0x1b, 'i'})
+	drainEvents()
+
+	assert.Equal(t, !initial, pane.Buf.Settings["ignorecase"],
+		"command: binding should have toggled ignorecase on the real buffer")
+	assert.Equal(t, "", string(action.InfoBar.LineBytes(0)),
+		"Alt-i should not have been inserted into the prompt")
+
+	injectKey(tcell.KeyEscape, 0, tcell.ModNone)
+}

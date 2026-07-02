@@ -2,11 +2,13 @@ package action
 
 import (
 	"bytes"
+	"strings"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/config"
 	"github.com/micro-editor/micro/v2/internal/display"
 	"github.com/micro-editor/micro/v2/internal/info"
+	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/util"
 	"github.com/Tubbles/tcell/v3"
 )
@@ -33,7 +35,24 @@ func InfoMapEvent(k Event, action string) {
 }
 
 func infoMapKey(k Event, action string) {
-	if f, ok := InfoKeyActions[action]; ok {
+	if strings.HasPrefix(action, "command:") {
+		cmd := strings.SplitN(action, ":", 2)[1]
+		InfoBufBindings.RegisterKeyBinding(k, BufKeyActionGeneral(CommandAction(cmd)))
+	} else if strings.HasPrefix(action, "command-edit:") {
+		// A command-edit prompt cannot be opened on top of the prompt
+		// that is already focused to receive this key.
+		screen.TermMessage("Error in bindings: action", action, "cannot be used in the command scope")
+	} else if strings.HasPrefix(action, "lua:") {
+		fn := strings.SplitN(action, ":", 2)[1]
+		afn := LuaAction(fn, k)
+		if afn == nil {
+			screen.TermMessage("Lua Error:", fn, "does not exist")
+			return
+		}
+		if f, ok := afn.(BufKeyAction); ok {
+			InfoBufBindings.RegisterKeyBinding(k, BufKeyActionGeneral(f))
+		}
+	} else if f, ok := InfoKeyActions[action]; ok {
 		InfoBindings.RegisterKeyBinding(k, InfoKeyActionGeneral(f))
 	} else if f, ok := BufKeyActions[action]; ok {
 		InfoBufBindings.RegisterKeyBinding(k, BufKeyActionGeneral(f))
