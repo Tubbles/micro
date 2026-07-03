@@ -31,6 +31,14 @@ type CursorLoc struct {
 // relative when the file is under the workspace dir, absolute
 // otherwise, or empty for a scratch buffer) and a Cursor.
 //
+// Content holds a scratch (unnamed, unsaved) leaf's buffer text
+// inline: such a leaf has no file on disk to reload from, so its
+// text has to travel in the state itself. It is only ever populated
+// by the persistent scratch workspace's save path (scratch.json,
+// D-55); a dir-backed workspace's own state never sets it, so an
+// unnamed leaf there still restores empty, exactly as before this
+// field was added.
+//
 // Kind follows the user-facing split actions/commands (VSplit
 // produces panes side by side, HSplit produces panes stacked), which
 // is the transpose of micro's internal views.SplitType naming
@@ -41,6 +49,7 @@ type Node struct {
 	Proportion float64    `json:"proportion,omitempty"`
 	Children   []*Node    `json:"children,omitempty"`
 	Path       string     `json:"path,omitempty"`
+	Content    string     `json:"content,omitempty"`
 	Cursor     *CursorLoc `json:"cursor,omitempty"`
 }
 

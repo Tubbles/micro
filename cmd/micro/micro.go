@@ -258,6 +258,24 @@ func LoadInput(args []string) []*buffer.Buffer {
 	return buffers
 }
 
+// nonFlagArgs strips the +LINE[:COL] and +/REGEX flags LoadInput
+// recognizes (posFlagr, searchFlagr) from args, leaving only the
+// positional file/dir arguments. Shared by workspaceDirArg (which
+// dir-filters the result) and main's scratch-workspace restore check
+// (D-55): restoring the persistent scratch session only makes sense
+// when nothing remains, matching LoadInput's own "no input file"
+// branch.
+func nonFlagArgs(args []string) []string {
+	var files []string
+	for _, a := range args {
+		if posFlagr.MatchString(a) || searchFlagr.MatchString(a) {
+			continue
+		}
+		files = append(files, a)
+	}
+	return files
+}
+
 // workspaceDirArg inspects args the same way LoadInput does (skipping
 // +LINE[:COL] and +/REGEX flags) to decide whether this invocation
 // is `micro DIR`, opening a dir-backed workspace (D-52). A single
@@ -268,13 +286,7 @@ func LoadInput(args []string) []*buffer.Buffer {
 // than reported directly so the caller can decide how to surface it
 // before the screen is up.
 func workspaceDirArg(args []string) (dir string, err error) {
-	var files []string
-	for _, a := range args {
-		if posFlagr.MatchString(a) || searchFlagr.MatchString(a) {
-			continue
-		}
-		files = append(files, a)
-	}
+	files := nonFlagArgs(args)
 
 	var dirs []string
 	for _, f := range files {
@@ -503,15 +515,30 @@ func main() {
 			screen.TermMessage(err)
 		}
 	} else {
-		b := LoadInput(args)
-
-		if len(b) == 0 {
-			// No buffers to open
-			screen.Screen.Fini()
-			runtime.Goexit()
+		restored := false
+		if len(nonFlagArgs(args)) == 0 && isatty.IsTerminal(os.Stdin.Fd()) {
+			// Bare `micro`, no file/stdin argument: the only shape of
+			// invocation that restores the persistent scratch
+			// workspace's previous session instead of LoadInput's
+			// usual empty buffer.
+			var restoreErr error
+			restored, restoreErr = action.RestoreScratchWorkspaceAtStartup()
+			if restoreErr != nil {
+				screen.TermMessage(restoreErr)
+			}
 		}
 
-		action.InitTabs(b)
+		if !restored {
+			b := LoadInput(args)
+
+			if len(b) == 0 {
+				// No buffers to open
+				screen.Screen.Fini()
+				runtime.Goexit()
+			}
+
+			action.InitTabs(b)
+		}
 	}
 
 	err = config.RunPluginFn("init")

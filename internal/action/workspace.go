@@ -52,7 +52,16 @@ func childWeight(parent, c *views.Node) float64 {
 // under n is worth saving) alongside the ordered list of surviving
 // leaf panes, which the caller uses to translate the tab's active
 // pane into an index into the saved (pruned) leaf order.
-func encodeNode(n *views.Node, paneByID map[uint64]Pane, dir string) (*workspace.Node, []*BufPane) {
+//
+// captureContent is the persistent scratch workspace's opt-in (D-55):
+// when true, a leaf with no path also gets its buffer's live text
+// copied into Content, since a scratch buffer has no file to reload
+// from on restore. It only applies to BTDefault buffers: the same
+// empty-path leaf shape also covers auxiliary panes (log, help, raw,
+// ...), whose content is never meant to be replayed as user text.
+// Dir-backed workspaces pass false and behave exactly as before this
+// field existed.
+func encodeNode(n *views.Node, paneByID map[uint64]Pane, dir string, captureContent bool) (*workspace.Node, []*BufPane) {
 	if n.IsLeaf() {
 		p, ok := paneByID[n.ID()]
 		if !ok {
@@ -69,6 +78,9 @@ func encodeNode(n *views.Node, paneByID map[uint64]Pane, dir string) (*workspace
 			Path:   encodeLeafPath(bp, dir),
 			Cursor: &workspace.CursorLoc{X: cur.X, Y: cur.Y},
 		}
+		if captureContent && node.Path == "" && bp.Buf.Type == buffer.BTDefault {
+			node.Content = string(bp.Buf.Bytes())
+		}
 		return node, []*BufPane{bp}
 	}
 
@@ -76,7 +88,7 @@ func encodeNode(n *views.Node, paneByID map[uint64]Pane, dir string) (*workspace
 	var weights []float64
 	var leaves []*BufPane
 	for _, c := range n.Children() {
-		ec, el := encodeNode(c, paneByID, dir)
+		ec, el := encodeNode(c, paneByID, dir, captureContent)
 		if ec == nil {
 			continue
 		}
@@ -117,14 +129,14 @@ func encodeNode(n *views.Node, paneByID map[uint64]Pane, dir string) (*workspace
 
 // encodeTab converts one live Tab into its saved form, or nil if the
 // tab held nothing worth saving (e.g. it only ever contained a
-// terminal pane).
-func encodeTab(t *Tab, dir string) *workspace.TabState {
+// terminal pane). See encodeNode for captureContent.
+func encodeTab(t *Tab, dir string, captureContent bool) *workspace.TabState {
 	paneByID := make(map[uint64]Pane, len(t.Panes))
 	for _, p := range t.Panes {
 		paneByID[p.ID()] = p
 	}
 
-	layout, leaves := encodeNode(t.Node, paneByID, dir)
+	layout, leaves := encodeNode(t.Node, paneByID, dir, captureContent)
 	if layout == nil {
 		return nil
 	}
@@ -155,7 +167,10 @@ func firstLeaf(node *workspace.Node) *workspace.Node {
 // openLeafBuffer resolves node's saved path against dir (relative
 // paths are workspace-relative, D-54) and opens it with the saved
 // cursor position via buffer.Command.StartCursor, the same mechanism
-// LoadInput uses for a `+LINE:COL` CLI argument.
+// LoadInput uses for a `+LINE:COL` CLI argument. A path-less leaf
+// becomes an unnamed buffer seeded from node.Content, which is empty
+// for a dir-backed workspace (encodeNode never sets it there) and the
+// saved text for a persistent scratch workspace leaf (D-55).
 func openLeafBuffer(node *workspace.Node, dir string) (*buffer.Buffer, error) {
 	cmd := buffer.Command{StartCursor: buffer.Loc{X: -1, Y: -1}}
 	if node.Cursor != nil {
@@ -163,7 +178,7 @@ func openLeafBuffer(node *workspace.Node, dir string) (*buffer.Buffer, error) {
 	}
 
 	if node.Path == "" {
-		return buffer.NewBufferFromStringWithCommand("", "", buffer.BTDefault, cmd), nil
+		return buffer.NewBufferFromStringWithCommand(node.Content, "", buffer.BTDefault, cmd), nil
 	}
 
 	path := node.Path
@@ -284,6 +299,32 @@ func buildTab(ts workspace.TabState, dir string, x, y, width, height int) (*Tab,
 	return tab, nil
 }
 
+// buildTabsFromState converts a decoded State's tabs into live *Tab
+// values sized to width x height, resolving each leaf's path against
+// dir (workspace-relative when the leaf stored a relative path).
+// Shared by loadWorkspaceState (dir-backed) and the persistent
+// scratch workspace's own loader (D-55), whose leaves always store
+// absolute paths, making dir irrelevant there ("" is passed).
+func buildTabsFromState(state *workspace.State, dir string, width, height int) (tabs []*Tab, activeTab int, err error) {
+	if len(state.Tabs) == 0 {
+		return nil, 0, errors.New("workspace state has no tabs")
+	}
+
+	y, h := tabListGeometry(len(state.Tabs), width, height)
+
+	tabs = make([]*Tab, 0, len(state.Tabs))
+	for _, ts := range state.Tabs {
+		tab, err := buildTab(ts, dir, 0, y, width, h)
+		if err != nil {
+			return nil, 0, err
+		}
+		tabs = append(tabs, tab)
+	}
+
+	activeTab = util.Clamp(state.ActiveTab, 0, len(tabs)-1)
+	return tabs, activeTab, nil
+}
+
 // loadWorkspaceState decodes dir's saved state, if any, and replays
 // it into a fresh []*Tab sized to width x height. The bool result
 // reports whether a saved state existed; when false the caller
@@ -295,23 +336,8 @@ func loadWorkspaceState(configDir, dir string, width, height int) (tabs []*Tab, 
 	if err != nil || !existed {
 		return nil, 0, existed, err
 	}
-	if len(state.Tabs) == 0 {
-		return nil, 0, true, errors.New("workspace state has no tabs")
-	}
-
-	y, h := tabListGeometry(len(state.Tabs), width, height)
-
-	tabs = make([]*Tab, 0, len(state.Tabs))
-	for _, ts := range state.Tabs {
-		tab, err := buildTab(ts, dir, 0, y, width, h)
-		if err != nil {
-			return nil, 0, true, err
-		}
-		tabs = append(tabs, tab)
-	}
-
-	activeTab = util.Clamp(state.ActiveTab, 0, len(tabs)-1)
-	return tabs, activeTab, true, nil
+	tabs, activeTab, err = buildTabsFromState(state, dir, width, height)
+	return tabs, activeTab, true, err
 }
 
 // saveWorkspaceState captures the live Tabs into a workspace.State
@@ -329,7 +355,7 @@ func saveWorkspaceState(dir string) error {
 	}
 
 	for _, t := range Tabs.List {
-		ts := encodeTab(t, dir)
+		ts := encodeTab(t, dir, false)
 		if ts == nil {
 			continue
 		}

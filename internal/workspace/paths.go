@@ -39,6 +39,14 @@ func RecentPath(configDir string) string {
 	return filepath.Join(Dir(configDir), "recent.json")
 }
 
+// ScratchStatePath returns the path the persistent scratch
+// workspace's state is saved to (D-55). Unlike StatePath, this is a
+// single fixed name: there is exactly one scratch workspace, so it
+// needs no escaped-dir key.
+func ScratchStatePath(configDir string) string {
+	return filepath.Join(Dir(configDir), "scratch.json")
+}
+
 // IdeMicroDir returns the human-edited config directory for a dir-
 // backed workspace: ${dir}/.ide/micro/ (D-50). Unlike Dir/StatePath/
 // RecentPath, which live under configDir, this tree lives inside the
