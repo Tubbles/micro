@@ -37,3 +37,16 @@ A workspace's layout is saved when you switch to a different workspace, when you
 Workspace state is kept separate from your project. The saved layout and the most-recently-used workspace list are machine-local files under `ConfigDir/workspaces/`, normally `~/.config/micro/workspaces/`. Nothing is written into the project directory itself, so opening a workspace never shows up as noise in the project's own version control status.
 
 `micro -clean` will offer to remove workspace state files whose directory no longer exists on disk.
+
+## Workspace config
+
+Unlike the machine-local state above, a workspace can also carry human-edited config that lives inside the project itself, under `${dir}/.ide/micro/`:
+
+* `settings.json` and `settings.local.json` add two more layers to the settings precedence chain, above your own `settings.json` and `settings.local.json` and below command-line flags. See `> help options` for the full precedence order and the `set`/`setlocal`/`ft:`/`glob:` syntax, which is identical here.
+* `bindings.local.json` adds one more layer to the key-binding chain, above your own `bindings.json` and `bindings.local.json`. It uses the same format as `bindings.json` (see `> help keybindings`).
+
+`${dir}/.ide/micro/settings.json` is meant to be checked into the project's own version control, so a team can share editor settings the same way they share a `.editorconfig`. The two `.local.json` siblings are for a contributor's own machine or personal preference and are not meant to be committed. Micro never writes to either `.local.json` file; edit them by hand.
+
+Both layers are loaded when a dir-backed workspace is opened or switched to, and cleared when no dir-backed workspace is active. Switching from one workspace to another replaces the previous workspace's config with the new one rather than merging them.
+
+Use `> setworkspace <option> <value>` to write an option into the active workspace's own `settings.json`, the same way `> set` writes to your own `settings.json`. It is only valid while a dir-backed workspace is open, otherwise it reports an error in the info bar. There is no `setworkspace`-equivalent command for bindings: edit `bindings.local.json` by hand, same as `bindings.local.json` at the user level.
