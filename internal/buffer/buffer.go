@@ -20,6 +20,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/config"
 	ulua "github.com/micro-editor/micro/v2/internal/lua"
 	"github.com/micro-editor/micro/v2/internal/screen"
+	"github.com/micro-editor/micro/v2/internal/tshighlight"
 	"github.com/micro-editor/micro/v2/internal/util"
 	"github.com/micro-editor/micro/v2/pkg/highlight"
 	dmp "github.com/sergi/go-diff/diffmatchpatch"
@@ -117,6 +118,19 @@ type SharedBuffer struct {
 	// This stores the highlighting rules and filetype detection info
 	SyntaxDef *highlight.Def
 
+	// tsHighlighter holds the tree-sitter parse/highlight state, used
+	// instead of Highlighter/SyntaxDef when the "treesitter" setting is
+	// on and tshighlight has a grammar for tsFiletype. It is created (or
+	// recreated, if the filetype changed) lazily by Match, not here:
+	// unlike the regex engine, tree-sitter has no separate eager
+	// initial-highlight call to hook, so Match creating it on first read
+	// covers both the initial parse and later filetype changes with one
+	// code path. tsDirty marks that the buffer changed since the last
+	// tree-sitter reparse; see Match and MarkModified.
+	tsHighlighter *tshighlight.Buffer
+	tsFiletype    string
+	tsDirty       bool
+
 	ModifiedThisFrame bool
 
 	// Hash of the original buffer -- empty if fastdirty is on
@@ -195,10 +209,60 @@ func (b *SharedBuffer) MarkModified(start, end int) {
 		}
 		b.Highlighter.HighlightMatches(b, start, l)
 	}
+	// Tree-sitter reparsing is deferred to Match, not done here: see
+	// Match's doc comment for why.
+	b.tsDirty = true
 
 	for i := start; i <= end; i++ {
 		b.LineArray.invalidateSearchMatches(i)
 	}
+}
+
+// Match returns the syntax highlighting groups for line y. When the
+// "treesitter" setting is on and tshighlight has a grammar for the
+// buffer's filetype, this returns tree-sitter-derived groups; otherwise
+// it falls through to LineArray's regex-engine-filled LineMatch,
+// unchanged from before tree-sitter existed. Both engines fill the same
+// highlight.LineMatch shape (rune-column breakpoints to a
+// highlight.Group), so colorschemes need no changes either way: see
+// config.GetColor's longest-dot-prefix fallback.
+func (b *SharedBuffer) Match(y int) highlight.LineMatch {
+	if b.Settings["treesitter"].(bool) {
+		if tsb := b.treesitterBuffer(); tsb != nil {
+			return tsb.LineMatch(y)
+		}
+	}
+	return b.LineArray.Match(y)
+}
+
+// treesitterBuffer returns this buffer's tshighlight.Buffer, lazily
+// creating it (or recreating it, if the filetype changed since the last
+// call) and reparsing it if the buffer has changed since the last
+// reparse. Returns nil if no grammar exists for the current filetype,
+// which callers treat as "fall back to the regex engine".
+//
+// Reparsing here instead of eagerly in MarkModified means an edit to a
+// buffer that is not currently being drawn (a background tab, or many
+// MarkModified calls in a tight loop such as macro playback or
+// replace-all before the next render) reparses at most once, right
+// before the next line of it is actually read, rather than once per
+// edit.
+func (b *SharedBuffer) treesitterBuffer() *tshighlight.Buffer {
+	filetype, _ := b.Settings["filetype"].(string)
+	if b.tsHighlighter == nil || b.tsFiletype != filetype {
+		tsb, ok := tshighlight.NewBuffer(filetype)
+		b.tsHighlighter = tsb
+		b.tsFiletype = filetype
+		b.tsDirty = ok
+	}
+	if b.tsHighlighter == nil {
+		return nil
+	}
+	if b.tsDirty {
+		b.tsHighlighter.Reparse(b.Bytes())
+		b.tsDirty = false
+	}
+	return b.tsHighlighter
 }
 
 // DisableReload disables future reloads of this sharedbuffer
