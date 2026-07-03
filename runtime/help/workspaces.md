@@ -50,3 +50,19 @@ Unlike the machine-local state above, a workspace can also carry human-edited co
 Both layers are loaded when a dir-backed workspace is opened or switched to, and cleared when no dir-backed workspace is active. Switching from one workspace to another replaces the previous workspace's config with the new one rather than merging them.
 
 Use `> setworkspace <option> <value>` to write an option into the active workspace's own `settings.json`, the same way `> set` writes to your own `settings.json`. It is only valid while a dir-backed workspace is open, otherwise it reports an error in the info bar. There is no `setworkspace`-equivalent command for bindings: edit `bindings.local.json` by hand, same as `bindings.local.json` at the user level.
+
+## The scratch workspace
+
+A session with no dir-backed workspace open, whether that is a bare `micro`, `micro somefile.txt`, or a session that has never run `> opendir`, is the scratch workspace. It behaves like any other workspace, except it has no directory of its own: its working directory is simply whatever the process started in.
+
+There is exactly one persistent scratch workspace, shared by every instance of micro on the machine. Its saved layout lives in `ConfigDir/workspaces/scratch.json`, separate from any dir-backed workspace's state. Because an unnamed, unsaved buffer has no file on disk to reload from, the scratch workspace's saved state carries such a buffer's text inline, so it comes back exactly as you left it.
+
+Starting `micro` with no directory, file or piped input restores the previous scratch session from `scratch.json`, the same way opening a dir-backed workspace replays its own saved layout. A first-ever run, with no `scratch.json` yet, opens a single empty tab instead. The scratch session is saved back to `scratch.json` when you switch to a dir-backed workspace and when you quit, including a signal-driven exit, the same triggers a dir-backed workspace's layout is saved on.
+
+### Single-instance persistence
+
+Since the scratch workspace is shared, only one running instance of micro is allowed to persist it at a time, to avoid two instances overwriting each other's `scratch.json`. The first scratch instance to start claims a lock file, `ConfigDir/workspaces/scratch.lock`, and becomes the instance responsible for saving and restoring `scratch.json`. Every later scratch instance, while that lock is held, still runs a fully functional scratch workspace, it just does not save its session to `scratch.json`, and shows a one-line notice explaining why.
+
+The lock records the pid and hostname of the instance holding it. If a later scratch instance starts and finds the lock already held by a process on the same machine that is no longer running, it takes the lock over and becomes the new persisting instance. This only happens once per stale lock: it is meant to recover from a crash that skipped the normal cleanup, not to fight over the lock repeatedly.
+
+A lock held by a different hostname is always left alone, never taken over, even if the process it names looks like it is no longer running. `ConfigDir` is commonly synced between machines, so a lock written on one machine can end up visible on another, where there is no way to check whether that pid is actually still alive there.
