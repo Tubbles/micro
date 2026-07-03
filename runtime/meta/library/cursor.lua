@@ -59,6 +59,9 @@ Cursor.Goto = nil
 ---@type fun(self: Cursor, l: Loc)
 Cursor.GotoLoc = nil
 
+---@type fun(self: Cursor, l: Loc)
+Cursor.GotoLocBare = nil
+
 ---@type fun(self: Cursor, b: Loc): boolean
 Cursor.GreaterEqual = nil
 
@@ -140,7 +143,13 @@ Cursor.UpN = nil
 ---@type fun(self: Cursor)
 Cursor.WordLeft = nil
 
+---@type fun(self: Cursor): string, boolean, Loc[], boolean
+Cursor.WordOrSelection = nil
+
 ---@type fun(self: Cursor)
 Cursor.WordRight = nil
+
+---@type fun(self: Cursor): string, boolean
+Cursor.WordUnder = nil
 
 return Cursor

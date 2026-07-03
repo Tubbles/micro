@@ -106,6 +106,22 @@ preCopy = nil
 ---@type fun(bp: BufPane)
 onCopy = nil
 
+---Called before the CopyAbsolutePath action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preCopyAbsolutePath = nil
+
+---Called after the CopyAbsolutePath action runs.
+---@type fun(bp: BufPane)
+onCopyAbsolutePath = nil
+
+---Called before the CopyFileName action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preCopyFileName = nil
+
+---Called after the CopyFileName action runs.
+---@type fun(bp: BufPane)
+onCopyFileName = nil
+
 ---Called before the CopyLine action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 preCopyLine = nil
@@ -113,6 +129,14 @@ preCopyLine = nil
 ---Called after the CopyLine action runs.
 ---@type fun(bp: BufPane)
 onCopyLine = nil
+
+---Called before the CopyRelativePath action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preCopyRelativePath = nil
+
+---Called after the CopyRelativePath action runs.
+---@type fun(bp: BufPane)
+onCopyRelativePath = nil
 
 ---Called before the CursorDown action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
@@ -226,6 +250,22 @@ preCycleAutocompleteBack = nil
 ---@type fun(bp: BufPane)
 onCycleAutocompleteBack = nil
 
+---Called before the CycleBuffersBackward action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preCycleBuffersBackward = nil
+
+---Called after the CycleBuffersBackward action runs.
+---@type fun(bp: BufPane)
+onCycleBuffersBackward = nil
+
+---Called before the CycleBuffersForward action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preCycleBuffersForward = nil
+
+---Called after the CycleBuffersForward action runs.
+---@type fun(bp: BufPane)
+onCycleBuffersForward = nil
+
 ---Called before the Delete action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 preDelete = nil
@@ -314,6 +354,22 @@ preDuplicateLine = nil
 ---@type fun(bp: BufPane)
 onDuplicateLine = nil
 
+---Called before the DuplicateLineDown action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preDuplicateLineDown = nil
+
+---Called after the DuplicateLineDown action runs.
+---@type fun(bp: BufPane)
+onDuplicateLineDown = nil
+
+---Called before the DuplicateLineUp action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preDuplicateLineUp = nil
+
+---Called after the DuplicateLineUp action runs.
+---@type fun(bp: BufPane)
+onDuplicateLineUp = nil
+
 ---Called before the End action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 preEnd = nil
@@ -337,6 +393,22 @@ preEscape = nil
 ---Called after the Escape action runs.
 ---@type fun(bp: BufPane)
 onEscape = nil
+
+---Called before the FileExplorerAtCwd action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preFileExplorerAtCwd = nil
+
+---Called after the FileExplorerAtCwd action runs.
+---@type fun(bp: BufPane)
+onFileExplorerAtCwd = nil
+
+---Called before the FileExplorerAtFile action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preFileExplorerAtFile = nil
+
+---Called after the FileExplorerAtFile action runs.
+---@type fun(bp: BufPane)
+onFileExplorerAtFile = nil
 
 ---Called before the Find action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
@@ -362,6 +434,14 @@ preFindNext = nil
 ---@type fun(bp: BufPane)
 onFindNext = nil
 
+---Called before the FindNextWord action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preFindNextWord = nil
+
+---Called after the FindNextWord action runs.
+---@type fun(bp: BufPane)
+onFindNextWord = nil
+
 ---Called before the FindPrevious action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 preFindPrevious = nil
@@ -369,6 +449,14 @@ preFindPrevious = nil
 ---Called after the FindPrevious action runs.
 ---@type fun(bp: BufPane)
 onFindPrevious = nil
+
+---Called before the FindPreviousWord action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preFindPreviousWord = nil
+
+---Called after the FindPreviousWord action runs.
+---@type fun(bp: BufPane)
+onFindPreviousWord = nil
 
 ---Called before the FirstSplit action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
@@ -458,6 +546,22 @@ preInsertTab = nil
 ---@type fun(bp: BufPane)
 onInsertTab = nil
 
+---Called before the JumpBack action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preJumpBack = nil
+
+---Called after the JumpBack action runs.
+---@type fun(bp: BufPane)
+onJumpBack = nil
+
+---Called before the JumpForward action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preJumpForward = nil
+
+---Called after the JumpForward action runs.
+---@type fun(bp: BufPane)
+onJumpForward = nil
+
 ---Called before the JumpLine action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 preJumpLine = nil
@@ -473,6 +577,22 @@ preJumpToMatchingBrace = nil
 ---Called after the JumpToMatchingBrace action runs.
 ---@type fun(bp: BufPane)
 onJumpToMatchingBrace = nil
+
+---Called before the JumpToNextMessage action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preJumpToNextMessage = nil
+
+---Called after the JumpToNextMessage action runs.
+---@type fun(bp: BufPane)
+onJumpToNextMessage = nil
+
+---Called before the JumpToPrevMessage action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preJumpToPrevMessage = nil
+
+---Called after the JumpToPrevMessage action runs.
+---@type fun(bp: BufPane)
+onJumpToPrevMessage = nil
 
 ---Called before the LastSplit action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
@@ -506,6 +626,30 @@ preMoveLinesUp = nil
 ---@type fun(bp: BufPane)
 onMoveLinesUp = nil
 
+---Called before the MovePaneToNext action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preMovePaneToNext = nil
+
+---Called after the MovePaneToNext action runs.
+---@type fun(bp: BufPane)
+onMovePaneToNext = nil
+
+---Called before the MovePaneToPrevious action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preMovePaneToPrevious = nil
+
+---Called after the MovePaneToPrevious action runs.
+---@type fun(bp: BufPane)
+onMovePaneToPrevious = nil
+
+---Called before the NextLeafSplit action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preNextLeafSplit = nil
+
+---Called after the NextLeafSplit action runs.
+---@type fun(bp: BufPane)
+onNextLeafSplit = nil
+
 ---Called before the NextSplit action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 preNextSplit = nil
@@ -537,6 +681,22 @@ preOpenFile = nil
 ---Called after the OpenFile action runs.
 ---@type fun(bp: BufPane)
 onOpenFile = nil
+
+---Called before the OpenFilePickerAtCwd action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preOpenFilePickerAtCwd = nil
+
+---Called after the OpenFilePickerAtCwd action runs.
+---@type fun(bp: BufPane)
+onOpenFilePickerAtCwd = nil
+
+---Called before the OpenFilePickerAtFile action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preOpenFilePickerAtFile = nil
+
+---Called after the OpenFilePickerAtFile action runs.
+---@type fun(bp: BufPane)
+onOpenFilePickerAtFile = nil
 
 ---Called before the OutdentLine action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
@@ -610,6 +770,14 @@ prePlayMacro = nil
 ---@type fun(bp: BufPane)
 onPlayMacro = nil
 
+---Called before the PreviousLeafSplit action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+prePreviousLeafSplit = nil
+
+---Called after the PreviousLeafSplit action runs.
+---@type fun(bp: BufPane)
+onPreviousLeafSplit = nil
+
 ---Called before the PreviousSplit action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 prePreviousSplit = nil
@@ -625,6 +793,14 @@ prePreviousTab = nil
 ---Called after the PreviousTab action runs.
 ---@type fun(bp: BufPane)
 onPreviousTab = nil
+
+---Called before the PushJump action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+prePushJump = nil
+
+---Called after the PushJump action runs.
+---@type fun(bp: BufPane)
+onPushJump = nil
 
 ---Called before the Quit action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
@@ -882,6 +1058,14 @@ preShellMode = nil
 ---@type fun(bp: BufPane)
 onShellMode = nil
 
+---Called before the ShowFullMessage action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preShowFullMessage = nil
+
+---Called after the ShowFullMessage action runs.
+---@type fun(bp: BufPane)
+onShowFullMessage = nil
+
 ---Called before the SkipMultiCursor action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 preSkipMultiCursor = nil
@@ -905,6 +1089,14 @@ preSpawnMultiCursor = nil
 ---Called after the SpawnMultiCursor action runs.
 ---@type fun(bp: BufPane)
 onSpawnMultiCursor = nil
+
+---Called before the SpawnMultiCursorAll action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preSpawnMultiCursorAll = nil
+
+---Called after the SpawnMultiCursorAll action runs.
+---@type fun(bp: BufPane)
+onSpawnMultiCursorAll = nil
 
 ---Called before the SpawnMultiCursorDown action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
