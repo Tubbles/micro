@@ -212,6 +212,7 @@ type ServerCapabilities struct {
 	DocumentFormattingProvider      json.RawMessage      `json:"documentFormattingProvider,omitempty"`
 	DocumentRangeFormattingProvider json.RawMessage      `json:"documentRangeFormattingProvider,omitempty"`
 	RenameProvider                  json.RawMessage      `json:"renameProvider,omitempty"`
+	ReferencesProvider              json.RawMessage      `json:"referencesProvider,omitempty"`
 	PositionEncoding                PositionEncodingKind `json:"positionEncoding,omitempty"`
 }
 
@@ -350,6 +351,24 @@ type DocumentRangeFormattingParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
 	Range        Range                  `json:"range"`
 	Options      FormattingOptions      `json:"options"`
+}
+
+// ReferenceContext carries whether the declaration of the symbol
+// under the cursor should be included among a textDocument/references
+// result's locations, alongside every other reference.
+type ReferenceContext struct {
+	IncludeDeclaration bool `json:"includeDeclaration"`
+}
+
+// ReferenceParams are the parameters of the textDocument/references
+// request. TextDocumentPositionParams is embedded rather than nested
+// under its own field because the LSP spec defines ReferenceParams as
+// TextDocumentPositionParams plus a sibling "context" field, so
+// "textDocument", "position", and "context" must all marshal at the
+// top level.
+type ReferenceParams struct {
+	TextDocumentPositionParams
+	Context ReferenceContext `json:"context"`
 }
 
 // RenameParams are the parameters of the textDocument/rename request.

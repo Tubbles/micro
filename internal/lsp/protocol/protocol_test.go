@@ -111,6 +111,52 @@ func TestWorkspaceEditDocumentChangesArrayRoundTrip(t *testing.T) {
 	}
 }
 
+// TestReferenceParamsMarshalsFlat pins the wire shape the LSP spec
+// requires: ReferenceParams embeds TextDocumentPositionParams, so
+// "textDocument" and "position" must appear as top-level siblings of
+// "context", not nested under a "textDocumentPositionParams" key.
+func TestReferenceParamsMarshalsFlat(t *testing.T) {
+	params := ReferenceParams{
+		TextDocumentPositionParams: TextDocumentPositionParams{
+			TextDocument: TextDocumentIdentifier{URI: "file:///a.go"},
+			Position:     Position{Line: 4, Character: 7},
+		},
+		Context: ReferenceContext{IncludeDeclaration: true},
+	}
+
+	out, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(out, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	if _, ok := decoded["textDocument"]; !ok {
+		t.Errorf("decoded = %+v, want top-level \"textDocument\"", decoded)
+	}
+	if _, ok := decoded["position"]; !ok {
+		t.Errorf("decoded = %+v, want top-level \"position\"", decoded)
+	}
+	context, ok := decoded["context"].(map[string]any)
+	if !ok {
+		t.Fatalf("decoded[context] = %+v, want an object", decoded["context"])
+	}
+	if got, want := context["includeDeclaration"], true; got != want {
+		t.Errorf(`decoded["context"]["includeDeclaration"] = %v, want %v`, got, want)
+	}
+
+	var roundTripped ReferenceParams
+	if err := json.Unmarshal(out, &roundTripped); err != nil {
+		t.Fatalf("Unmarshal(Marshal(params)): %v", err)
+	}
+	if roundTripped != params {
+		t.Errorf("round-tripped params = %+v, want %+v", roundTripped, params)
+	}
+}
+
 // TestFormattingOptionsJSONKeys pins the exact wire field names (LSP
 // is case-sensitive camelCase) and confirms the trim/final-newline
 // fields drop out of the payload at their zero value, since micro
