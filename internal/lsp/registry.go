@@ -125,6 +125,83 @@ func (r *Registry) Get(name, root string) (*Client, bool) {
 	return c, ok
 }
 
+// Definition returns the named server definition, if one is
+// registered. Exported for the `> lsp start|stop|restart` commands,
+// which resolve a server by name rather than by filetype.
+func (r *Registry) Definition(name string) (ServerDefinition, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	def, ok := r.definitions[name]
+	return def, ok
+}
+
+// ClientStatus summarizes one running client for `> lsp status`.
+type ClientStatus struct {
+	Name  string
+	Root  string
+	State string
+}
+
+// Clients returns a status snapshot of every client the registry is
+// currently tracking. A client that stopped on its own (the server
+// process died) rather than via Stop is still reported here, with
+// State() reading "stopped", since Stop is the only thing that removes
+// a registry entry; that is more useful for `> lsp status` than the
+// server silently vanishing from the report.
+func (r *Registry) Clients() []ClientStatus {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	statuses := make([]ClientStatus, 0, len(r.clients))
+	for key, c := range r.clients {
+		statuses = append(statuses, ClientStatus{Name: key.name, Root: key.root, State: c.State()})
+	}
+	return statuses
+}
+
+// Stop shuts down and forgets the running client for (name, root), if
+// any. The registry entry is removed synchronously (before the
+// shutdown handshake, which runs async), so a GetOrStart racing with
+// Stop starts a fresh client rather than reusing the one being torn
+// down. onDone runs on the main goroutine (via Events) with nil if
+// nothing was running for (name, root), or with Shutdown's error
+// otherwise.
+func (r *Registry) Stop(name, root string, onDone func(error)) {
+	r.mu.Lock()
+	key := registryKey{name, root}
+	c, ok := r.clients[key]
+	if ok {
+		delete(r.clients, key)
+	}
+	r.mu.Unlock()
+
+	if !ok {
+		post(func() { onDone(nil) })
+		return
+	}
+	c.Shutdown(onDone)
+}
+
+// Restart stops the running client for (name, root), if any, then
+// starts a fresh one via GetOrStart. This is what `> lsp restart`
+// calls; it replaces the old lspRestart Lua plugin's "killall the
+// process and hope the plugin notices" approach with a clean shutdown
+// handshake. onReady runs on the main goroutine (via Events) with the
+// new client, or an error if either step failed.
+//
+// Restart does not re-attach documents that were open against the old
+// client: their tracked Client pointer is now stopped, so further
+// edits are silently dropped (Notify no-ops on a stopped client) until
+// the buffer is closed and reopened, or the `lsp` option is toggled.
+func (r *Registry) Restart(ctx context.Context, name, root string, onReady func(*Client, error)) {
+	r.Stop(name, root, func(err error) {
+		if err != nil {
+			onReady(nil, err)
+			return
+		}
+		r.GetOrStart(ctx, name, root, onReady)
+	})
+}
+
 // GetOrStart returns the running client for (name, root), starting and
 // initializing one via r.starter if it doesn't exist yet. onReady runs
 // on the main goroutine (via Events) with the client once it is ready

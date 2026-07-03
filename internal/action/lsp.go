@@ -3,6 +3,7 @@ package action
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -191,3 +192,143 @@ func (h *BufPane) LspGotoDefinition() bool {
 	return true
 }
 
+// lspResolveServer resolves a server name and definition for the `> lsp
+// start|stop|restart` commands: an explicit name in args[0] if given,
+// otherwise the server registered for the current buffer's filetype
+// (the same resolution attach uses for auto-attach).
+func (h *BufPane) lspResolveServer(args []string) (name string, def lsp.ServerDefinition, ok bool) {
+	r := lsp.GetRegistry()
+	if r == nil {
+		InfoBar.Error("lsp: server registry is unavailable")
+		return "", lsp.ServerDefinition{}, false
+	}
+
+	if len(args) > 0 {
+		name = args[0]
+		def, ok = r.Definition(name)
+		if !ok {
+			InfoBar.Error("lsp: unknown server ", name)
+			return "", lsp.ServerDefinition{}, false
+		}
+		return name, def, true
+	}
+
+	filetype, _ := h.Buf.Settings["filetype"].(string)
+	name, def, ok = r.DefinitionForFiletype(filetype)
+	if !ok {
+		InfoBar.Error("lsp: no server configured for filetype ", filetype)
+		return "", lsp.ServerDefinition{}, false
+	}
+	return name, def, true
+}
+
+// lspStart implements `> lsp start [server]`.
+func (h *BufPane) lspStart(args []string) {
+	name, def, ok := h.lspResolveServer(args)
+	if !ok {
+		return
+	}
+	root := lsp.RootFor(def, h.Buf.AbsPath)
+
+	lsp.GetRegistry().GetOrStart(context.Background(), name, root, func(_ *lsp.Client, err error) {
+		if err != nil {
+			InfoBar.Error("lsp: starting ", name, ": ", err)
+			return
+		}
+		InfoBar.Message("lsp: ", name, " ready at ", root)
+	})
+}
+
+// lspStop implements `> lsp stop [server]`.
+func (h *BufPane) lspStop(args []string) {
+	name, def, ok := h.lspResolveServer(args)
+	if !ok {
+		return
+	}
+	root := lsp.RootFor(def, h.Buf.AbsPath)
+
+	r := lsp.GetRegistry()
+	if _, running := r.Get(name, root); !running {
+		InfoBar.Message("lsp: ", name, " is not running at ", root)
+		return
+	}
+	r.Stop(name, root, func(err error) {
+		if err != nil {
+			InfoBar.Error("lsp: stopping ", name, ": ", err)
+			return
+		}
+		InfoBar.Message("lsp: stopped ", name)
+	})
+}
+
+// lspRestart implements `> lsp restart [server]`.
+func (h *BufPane) lspRestart(args []string) {
+	name, def, ok := h.lspResolveServer(args)
+	if !ok {
+		return
+	}
+	root := lsp.RootFor(def, h.Buf.AbsPath)
+
+	lsp.GetRegistry().Restart(context.Background(), name, root, func(_ *lsp.Client, err error) {
+		if err != nil {
+			InfoBar.Error("lsp: restarting ", name, ": ", err)
+			return
+		}
+		InfoBar.Message("lsp: restarted ", name)
+	})
+}
+
+// lspStatus implements `> lsp status`: a snapshot of every running
+// server and attached document, written to the log buffer (the same
+// mechanism `> log` and `> plugin list` use) since the report is
+// multi-line and does not fit the single-line InfoBar.
+func (h *BufPane) lspStatus() {
+	r := lsp.GetRegistry()
+
+	var report strings.Builder
+	report.WriteString("LSP status\n")
+
+	var clients []lsp.ClientStatus
+	if r != nil {
+		clients = r.Clients()
+	}
+	if len(clients) == 0 {
+		report.WriteString("  no servers running\n")
+	}
+	for _, c := range clients {
+		fmt.Fprintf(&report, "  %s @ %s: %s\n", c.Name, c.Root, c.State)
+	}
+
+	report.WriteString("Attached documents\n")
+	docs := lsp.AttachedDocuments()
+	if len(docs) == 0 {
+		report.WriteString("  none\n")
+	}
+	for _, d := range docs {
+		fmt.Fprintf(&report, "  %s (%s @ %s): %d errors, %d warnings\n", d.URI, d.Server, d.Root, d.Errors, d.Warnings)
+	}
+
+	WriteLog(report.String())
+	h.OpenLogBuf()
+}
+
+// LspCmd implements `> lsp status|start|stop|restart [server]`.
+func (h *BufPane) LspCmd(args []string) {
+	if len(args) == 0 {
+		InfoBar.Error("lsp: usage: lsp status|start|stop|restart ['server']")
+		return
+	}
+
+	switch args[0] {
+	case "status":
+		h.lspStatus()
+	case "start":
+		h.lspStart(args[1:])
+	case "stop":
+		h.lspStop(args[1:])
+	case "restart":
+		h.lspRestart(args[1:])
+	default:
+		InfoBar.Error("lsp: unknown subcommand ", args[0])
+	}
+}

@@ -269,3 +269,24 @@ func (c *Client) PositionEncoding() protocol.PositionEncodingKind {
 	}
 	return c.posEncoding
 }
+
+// State returns a human-readable summary of the client's lifecycle
+// state, for `> lsp status`.
+func (c *Client) State() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch c.state {
+	case stateStarting:
+		return "starting"
+	case stateInitializing:
+		return "initializing"
+	case stateReady:
+		return "ready"
+	case stateShuttingDown:
+		return "shutting down"
+	case stateStopped:
+		return "stopped"
+	default:
+		return "unknown"
+	}
+}

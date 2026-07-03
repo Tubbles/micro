@@ -38,6 +38,15 @@ func defaultGetRegistry() *Registry {
 	return sharedRegistry
 }
 
+// GetRegistry returns the shared server registry used for buffer
+// attachment, building it lazily on first use. It is exported for the
+// `> lsp status|start|stop|restart` commands, which manage server
+// lifecycle outside the buffer-attach path that getRegistry otherwise
+// serves.
+func GetRegistry() *Registry {
+	return getRegistry()
+}
+
 // attachedDocument is the state documents tracks for one SharedBuffer
 // that has an outstanding textDocument/didOpen (no matching didClose
 // yet). client is nil while GetOrStart is still in flight, so events
@@ -242,6 +251,21 @@ func (t *documentTracker) remove(b *buffer.SharedBuffer) {
 	t.mu.Unlock()
 }
 
+// ClientFor returns the Client and URI a SharedBuffer is attached
+// under, if it is fully attached (an attach reservation with no client
+// yet, see attach, reports ok=false). It is exported for the hover and
+// goto-definition actions, which need to reach a buffer's LSP
+// connection without depending on documentTracker's internal shape.
+func ClientFor(b *buffer.SharedBuffer) (*Client, protocol.DocumentURI, bool) {
+	documents.mu.Lock()
+	defer documents.mu.Unlock()
+	doc, ok := documents.docs[b]
+	if !ok || doc.client == nil {
+		return nil, "", false
+	}
+	return doc.client, doc.uri, true
+}
+
 // documentByURI finds the attached document tracked under uri, if any,
 // along with its client and current version. It is used to route an
 // incoming server notification (such as textDocument/publishDiagnostics)
@@ -257,17 +281,41 @@ func documentByURI(uri protocol.DocumentURI) (b *buffer.SharedBuffer, client *Cl
 	return nil, nil, 0, false
 }
 
-// ClientFor returns the Client and URI a SharedBuffer is attached
-// under, if it is fully attached (an attach reservation with no client
-// yet, see attach, reports ok=false). It is exported for the hover and
-// goto-definition actions, which need to reach a buffer's LSP
-// connection without depending on documentTracker's internal shape.
-func ClientFor(b *buffer.SharedBuffer) (*Client, protocol.DocumentURI, bool) {
+// AttachedDocument summarizes one attached document for `> lsp status`.
+type AttachedDocument struct {
+	URI              protocol.DocumentURI
+	Server           string // server definition name, e.g. "go"
+	Root             string
+	Errors, Warnings int
+}
+
+// AttachedDocuments returns a snapshot of every buffer with an
+// outstanding textDocument/didOpen, for `> lsp status`. Attach
+// reservations still waiting on GetOrStart (client == nil) are
+// excluded, since they have no server or URI to report yet.
+func AttachedDocuments() []AttachedDocument {
 	documents.mu.Lock()
-	defer documents.mu.Unlock()
-	doc, ok := documents.docs[b]
-	if !ok || doc.client == nil {
-		return nil, "", false
+	snapshot := make(map[*buffer.SharedBuffer]*attachedDocument, len(documents.docs))
+	for b, doc := range documents.docs {
+		if doc.client != nil {
+			snapshot[b] = doc
+		}
 	}
-	return doc.client, doc.uri, true
+	documents.mu.Unlock()
+
+	docs := make([]AttachedDocument, 0, len(snapshot))
+	for b, doc := range snapshot {
+		errors, warnings := 0, 0
+		if buf := openBufferFor(b); buf != nil {
+			errors, warnings = countDiagnostics(buf, diagnosticsOwner(doc.client))
+		}
+		docs = append(docs, AttachedDocument{
+			URI:      doc.uri,
+			Server:   doc.client.Name,
+			Root:     doc.client.Root,
+			Errors:   errors,
+			Warnings: warnings,
+		})
+	}
+	return docs
 }

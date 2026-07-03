@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creachadair/jrpc2/handler"
+
 	"github.com/micro-editor/micro/v2/internal/config"
 )
 
@@ -168,6 +170,162 @@ func TestRegistryGetOrStartUsesStarterAndCachesClient(t *testing.T) {
 	got, ok := r.Get("go", root)
 	if !ok || got != gotClient {
 		t.Errorf("Get(%q, %q) = (%v, %v), want (%v, true)", "go", root, got, ok, gotClient)
+	}
+}
+
+func TestRegistryStopShutsDownAndForgetsClient(t *testing.T) {
+	withTempConfigDir(t)
+
+	r, err := NewRegistry()
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+
+	shutdownCalled := make(chan struct{}, 1)
+	exitCalled := make(chan struct{}, 1)
+	handlers, initializedCh := lifecycleHandlers(handler.Map{
+		"shutdown": handler.New(func(_ context.Context) error {
+			shutdownCalled <- struct{}{}
+			return nil
+		}),
+		"exit": handler.New(func(_ context.Context) error {
+			exitCalled <- struct{}{}
+			return nil
+		}),
+	})
+	ch := newFakeServer(t, handlers)
+	r.starter = func(name string, def ServerDefinition, root string) (*Client, error) {
+		return newClientOverChannel(name, root, ch), nil
+	}
+
+	root := t.TempDir()
+	started := make(chan struct{})
+	r.GetOrStart(context.Background(), "go", root, func(_ *Client, err error) {
+		if err != nil {
+			t.Errorf("GetOrStart: %v", err)
+		}
+		close(started)
+	})
+	drainEvents(t, 2*time.Second)
+	<-started
+	waitForSignal(t, initializedCh, "initialized")
+
+	stopDone := make(chan error, 1)
+	r.Stop("go", root, func(err error) { stopDone <- err })
+	drainEvents(t, 2*time.Second)
+
+	select {
+	case err := <-stopDone:
+		if err != nil {
+			t.Fatalf("Stop callback error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop never completed")
+	}
+	waitForSignal(t, shutdownCalled, "shutdown")
+	waitForSignal(t, exitCalled, "exit")
+
+	if _, ok := r.Get("go", root); ok {
+		t.Error("Get after Stop still finds a client, want it removed from the registry")
+	}
+}
+
+func TestRegistryStopOnNothingRunningReportsNilError(t *testing.T) {
+	withTempConfigDir(t)
+
+	r, err := NewRegistry()
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+
+	done := make(chan struct{})
+	var gotErr error
+	r.Stop("go", "/nowhere", func(err error) {
+		gotErr = err
+		close(done)
+	})
+	drainEvents(t, 2*time.Second)
+	<-done
+
+	if gotErr != nil {
+		t.Errorf("Stop on nothing running: got error %v, want nil", gotErr)
+	}
+}
+
+// TestRegistryRestartStopsThenStartsANewClient exercises `> lsp
+// restart`'s registry-level mechanics: Restart must shut down the
+// running client for (name, root) before invoking the starter again,
+// and must report a client distinct from the one that was stopped
+// (the same fake-starter substitution seam GetOrStart's own tests
+// use, so no real language server is launched).
+func TestRegistryRestartStopsThenStartsANewClient(t *testing.T) {
+	withTempConfigDir(t)
+
+	r, err := NewRegistry()
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+
+	handlers, initializedCh := lifecycleHandlers(handler.Map{
+		"shutdown": handler.New(func(_ context.Context) error { return nil }),
+		"exit":     handler.New(func(_ context.Context) error { return nil }),
+	})
+
+	var startedName, startedRoot string
+	starterCalls := 0
+	r.starter = func(name string, def ServerDefinition, root string) (*Client, error) {
+		starterCalls++
+		startedName, startedRoot = name, root
+		return newClientOverChannel(name, root, newFakeServer(t, handlers)), nil
+	}
+
+	root := t.TempDir()
+	firstStarted := make(chan struct{})
+	var firstClient *Client
+	r.GetOrStart(context.Background(), "go", root, func(c *Client, err error) {
+		if err != nil {
+			t.Errorf("initial GetOrStart: %v", err)
+		}
+		firstClient = c
+		close(firstStarted)
+	})
+	drainEvents(t, 2*time.Second)
+	<-firstStarted
+	waitForSignal(t, initializedCh, "initialized")
+
+	if starterCalls != 1 {
+		t.Fatalf("starter calls before Restart = %d, want 1", starterCalls)
+	}
+
+	restartDone := make(chan struct{})
+	var restartedClient *Client
+	var restartErr error
+	r.Restart(context.Background(), "go", root, func(c *Client, err error) {
+		restartedClient, restartErr = c, err
+		close(restartDone)
+	})
+
+	drainEvents(t, 2*time.Second) // Stop's onDone, which calls GetOrStart
+	waitForSignal(t, initializedCh, "initialized")
+	drainEvents(t, 2*time.Second) // the new client's Initialize onDone
+	<-restartDone
+
+	if restartErr != nil {
+		t.Fatalf("Restart: %v", restartErr)
+	}
+	if starterCalls != 2 {
+		t.Fatalf("starter calls after Restart = %d, want 2", starterCalls)
+	}
+	if startedName != "go" || startedRoot != root {
+		t.Errorf("starter called with (%q, %q), want (%q, %q)", startedName, startedRoot, "go", root)
+	}
+	if restartedClient == firstClient {
+		t.Error("Restart returned the same client that was stopped, want a fresh one")
+	}
+
+	got, ok := r.Get("go", root)
+	if !ok || got != restartedClient {
+		t.Errorf("Get(%q, %q) = (%v, %v), want (%v, true)", "go", root, got, ok, restartedClient)
 	}
 }
 
