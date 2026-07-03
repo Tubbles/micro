@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	"github.com/micro-editor/micro/v2/internal/action"
@@ -8,6 +9,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/config"
 	"github.com/micro-editor/micro/v2/internal/display"
 	"github.com/micro-editor/micro/v2/internal/screen"
+	"github.com/micro-editor/micro/v2/internal/workspace"
 )
 
 // withScratchConfigDir points config.ConfigDir at a fresh temp dir for
@@ -80,5 +82,42 @@ func TestScratchWorkspaceSaveAndRestoreCapturesContent(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("expected the restored scratch buffer to contain the saved content")
+	}
+}
+
+// TestScratchWorkspaceEphemeralDoesNotPersist proves the other half of
+// D-55: an instance that loses the lock claim runs a fully functional
+// scratch workspace but never writes scratch.json. A foreign-hostname
+// lock is used to force the ephemeral outcome deterministically (see
+// the lock-protocol unit tests in internal/workspace for same-host
+// live/dead-pid coverage), without depending on real OS pid liveness.
+func TestScratchWorkspaceEphemeralDoesNotPersist(t *testing.T) {
+	configDir := withScratchConfigDir(t)
+	resetTabsAfterScratchTest(t)
+
+	if err := os.MkdirAll(workspace.Dir(configDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(workspace.ScratchLockPath(configDir), []byte("999999 some-other-host"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outcome, err := action.ClaimScratchLockAtStartup()
+	if err != nil {
+		t.Fatalf("ClaimScratchLockAtStartup: %v", err)
+	}
+	if outcome != workspace.ScratchLockEphemeral {
+		t.Fatalf("outcome = %v, want ScratchLockEphemeral", outcome)
+	}
+
+	runCmd("tab")
+	injectString("should not persist")
+
+	if err := action.SaveActiveScratchWorkspace(); err != nil {
+		t.Fatalf("SaveActiveScratchWorkspace: %v", err)
+	}
+
+	if _, err := os.Stat(workspace.ScratchStatePath(configDir)); !os.IsNotExist(err) {
+		t.Fatalf("expected scratch.json not to be written by an ephemeral instance, stat err = %v", err)
 	}
 }

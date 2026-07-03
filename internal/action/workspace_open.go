@@ -14,16 +14,19 @@ import (
 )
 
 // SaveActiveWorkspace persists the layout of the currently active
-// dir-backed workspace, if any (a no-op otherwise). It is called on
-// every workspace switch (see OpenDirWorkspace) and wired into every
-// quit path, QuitAll, ForceQuit's exit branch, and cmd/micro's
-// signal/EOF exit(), so a crash-adjacent exit does not silently lose
-// the session (D-53).
+// workspace: a dir-backed one if currentWorkspaceDir names one, or
+// otherwise the persistent scratch workspace (D-55), gated on this
+// instance holding the scratch lock (see SaveActiveScratchWorkspace).
+// It is called on every workspace switch (see OpenDirWorkspace) and
+// wired into every quit path, QuitAll, ForceQuit's exit branch, and
+// cmd/micro's signal/EOF exit(), so a crash-adjacent exit does not
+// silently lose the session (D-53).
 func SaveActiveWorkspace() {
-	if currentWorkspaceDir == "" {
+	if currentWorkspaceDir != "" {
+		saveWorkspaceState(currentWorkspaceDir)
 		return
 	}
-	saveWorkspaceState(currentWorkspaceDir)
+	SaveActiveScratchWorkspace()
 }
 
 // relativizeOpenBufferPaths re-displays every open buffer's path

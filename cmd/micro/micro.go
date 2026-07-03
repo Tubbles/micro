@@ -341,6 +341,12 @@ func exit(rc int) {
 	// exit branch call this too, for the normal quit path.
 	action.SaveActiveWorkspace()
 
+	// Release the persistent scratch workspace's lock, if this
+	// instance holds it, so a later instance can claim it outright
+	// instead of having to wait for the dead-pid steal path (D-55).
+	// A no-op for an ephemeral instance, which never claimed it.
+	action.ReleaseScratchLockIfPersisting()
+
 	for _, b := range buffer.OpenBuffers {
 		if !b.Modified() {
 			b.Fini()
@@ -515,6 +521,13 @@ func main() {
 			screen.TermMessage(err)
 		}
 	} else {
+		// No dir-backed workspace: this session is the scratch
+		// workspace (D-52). Claim its single-instance persistence
+		// lock before anything might try to save it (D-55).
+		if _, err := action.ClaimScratchLockAtStartup(); err != nil {
+			screen.TermMessage(err)
+		}
+
 		restored := false
 		if len(nonFlagArgs(args)) == 0 && isatty.IsTerminal(os.Stdin.Fd()) {
 			// Bare `micro`, no file/stdin argument: the only shape of
