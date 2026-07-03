@@ -72,11 +72,31 @@ func (c *Cursor) Goto(b Cursor) {
 	c.StoreVisualX()
 }
 
-// GotoLoc puts the cursor at the given cursor's location and gives
-// the current cursor its selection too
-func (c *Cursor) GotoLoc(l Loc) {
+// GotoLocBare puts the cursor at the given location and fires no listeners.
+// It is the side-effect-free half of GotoLoc, used by internal non-navigation
+// callers (view-centering, per-keystroke incremental search, multicursor
+// setup, ...) that must not feed the jump list.
+func (c *Cursor) GotoLocBare(l Loc) {
 	c.X, c.Y = l.X, l.Y
 	c.StoreVisualX()
+}
+
+// GotoLoc puts the cursor at the given location and notifies the registered
+// OnCursorMove listeners with the pre- and post-move locations.
+//
+// GotoLoc MUST stay the hooked name: Lua plugins call it by name (e.g.
+// buf:GetActiveCursor():GotoLoc(...)) and cannot be changed, so this is the
+// only chokepoint that observes plugin-driven navigation. Do not "tidy" the
+// hook onto GotoLocBare.
+func (c *Cursor) GotoLoc(l Loc) {
+	old := c.Loc
+	c.GotoLocBare(l)
+	if c.buf == nil {
+		return
+	}
+	for _, fn := range OnCursorMoveListeners {
+		fn(c.buf.SharedBuffer, old, c.Loc)
+	}
 }
 
 // GetVisualX returns the x value of the cursor in visual spaces
