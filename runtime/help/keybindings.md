@@ -306,6 +306,7 @@ FileExplorerAtCwd
 FileExplorerAtFile
 OpenFilePickerAtCwd
 OpenFilePickerAtFile
+WorkspacePicker
 Start
 End
 PageUp
@@ -408,6 +409,15 @@ in place, otherwise open a new tab); typing a path that matches no
 entry and pressing `Enter` opens that path verbatim. `Esc` cancels.
 Symlinks are skipped to avoid cycles. Neither action is bound by
 default; add entries in `bindings.json` to use them.
+
+The `WorkspacePicker` action opens a centred picker listing recently
+opened dir-backed workspaces, most recent first, filterable by the
+typed query. `Enter` switches to the highlighted workspace, the same
+full switch `> opendir` performs (saving the current workspace,
+prompting to save modified buffers, then replaying the target's saved
+layout). `Esc` cancels. See `> help workspaces`. Not bound by
+default; add an entry in `bindings.json` to use it, or run
+`> workspaces`.
 
 
 The `CutLine` action cuts the current line and adds it to the previously cut
