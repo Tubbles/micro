@@ -529,11 +529,14 @@ func main() {
 		}
 
 		restored := false
-		if len(nonFlagArgs(args)) == 0 && isatty.IsTerminal(os.Stdin.Fd()) {
-			// Bare `micro`, no file/stdin argument: the only shape of
-			// invocation that restores the persistent scratch
-			// workspace's previous session instead of LoadInput's
-			// usual empty buffer.
+		if action.ScratchIsPersisting() && len(nonFlagArgs(args)) == 0 && isatty.IsTerminal(os.Stdin.Fd()) {
+			// Bare `micro`, no file/stdin argument, AND this instance
+			// owns the scratch lock: the only shape of invocation that
+			// restores the persistent scratch workspace's previous
+			// session instead of LoadInput's usual empty buffer. An
+			// ephemeral instance (another micro already holds the lock)
+			// starts blank so it never shows or clobbers the owner's
+			// session (D-55).
 			var restoreErr error
 			restored, restoreErr = action.RestoreScratchWorkspaceAtStartup()
 			if restoreErr != nil {

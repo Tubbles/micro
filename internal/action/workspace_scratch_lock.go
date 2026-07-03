@@ -9,10 +9,21 @@ import (
 
 // scratchIsPersisting records whether this process claimed the
 // persistent scratch workspace's lock at startup (see
-// ClaimScratchLockAtStartup). Only the persisting instance may write
-// scratch.json (D-55); every other instance still runs a fully
-// functional scratch workspace, it just never saves it.
+// ClaimScratchLockAtStartup). Only the persisting instance owns
+// scratch.json (D-55): it both restores the previous session at
+// startup and writes it back. Every other (ephemeral) instance still
+// runs a fully functional scratch workspace, but it starts blank and
+// never touches scratch.json in either direction.
 var scratchIsPersisting bool
+
+// ScratchIsPersisting reports whether this instance won the scratch
+// persistence lock at startup. main() uses it to gate both the
+// startup restore and, indirectly via the writers above, the saving
+// of scratch.json, so an ephemeral instance neither reads nor writes
+// another instance's session.
+func ScratchIsPersisting() bool {
+	return scratchIsPersisting
+}
 
 // ClaimScratchLockAtStartup attempts to claim the persistent scratch
 // workspace's single-instance lock (scratch.lock, D-55) for this
