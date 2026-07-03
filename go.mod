@@ -3,6 +3,7 @@ module github.com/micro-editor/micro/v2
 require (
 	github.com/Tubbles/tcell/v3 v3.2.1-0.20260702173539-90f195f9bb08
 	github.com/blang/semver v3.5.1+incompatible
+	github.com/creachadair/jrpc2 v1.3.5
 	github.com/dustin/go-humanize v1.0.0
 	github.com/go-errors/errors v1.0.1
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
@@ -24,12 +25,14 @@ require (
 require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
+	github.com/creachadair/mds v0.26.1 // indirect
 	github.com/creack/pty v1.1.18 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
 )
