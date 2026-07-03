@@ -82,10 +82,12 @@ func newClientOverChannel(name, root string, ch channel.Channel) *Client {
 	c := &Client{Name: name, Root: root, state: stateStarting}
 	c.rpc = jrpc2.NewClient(ch, &jrpc2.ClientOptions{
 		OnStop: c.handleStop,
-		// OnNotify (publishDiagnostics) and OnCallback (server->client
-		// requests such as workspace/configuration) are wired by the
-		// chunk that needs them; until then jrpc2's defaults apply
-		// (notifications logged and discarded, callbacks likewise).
+		// handleNotify routes textDocument/publishDiagnostics (see
+		// diagnostics.go); it is the only server->client notification
+		// v1 acts on. OnCallback (server->client requests such as
+		// workspace/configuration) is unwired: jrpc2's default applies
+		// (callbacks logged and discarded) until a later chunk needs it.
+		OnNotify: c.handleNotify,
 	})
 	return c
 }

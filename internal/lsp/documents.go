@@ -241,3 +241,18 @@ func (t *documentTracker) remove(b *buffer.SharedBuffer) {
 	delete(t.docs, b)
 	t.mu.Unlock()
 }
+
+// documentByURI finds the attached document tracked under uri, if any,
+// along with its client and current version. It is used to route an
+// incoming server notification (such as textDocument/publishDiagnostics)
+// back to the buffer it describes.
+func documentByURI(uri protocol.DocumentURI) (b *buffer.SharedBuffer, client *Client, version int32, ok bool) {
+	documents.mu.Lock()
+	defer documents.mu.Unlock()
+	for sb, doc := range documents.docs {
+		if doc.client != nil && doc.uri == uri {
+			return sb, doc.client, doc.version, true
+		}
+	}
+	return nil, nil, 0, false
+}
