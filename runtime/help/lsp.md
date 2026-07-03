@@ -3,8 +3,8 @@ directly to a language server over stdio (no plugin required) and
 provides diagnostics, hover information, and go to definition.
 
 This is v1 of native LSP support (read-only features plus the server
-lifecycle commands below) plus manual-trigger completion from v2.
-Formatting and references are not implemented yet.
+lifecycle commands below) plus manual-trigger completion, formatting,
+and rename from v2. References are not implemented yet.
 
 # Enabling LSP for a buffer
 
@@ -97,6 +97,15 @@ manage server processes, not which buffers are attached to them.
    the server returns any, opens a popup listing them. See "Completion"
    below for the popup's keys and current limitations.
 
+* `LspFormat`: formats the current buffer. With a selection, and if the
+   server supports range formatting, only the selected range is
+   formatted; otherwise (or with no selection) the whole document is
+   formatted. See "Formatting" below.
+
+* `LspRename`: prompts for a new name and renames the identifier under
+   the cursor everywhere the server finds a reference, which can span
+   multiple files. See "Rename" below.
+
 None of these actions has a default keybinding. Bind them the same way
 as any other action, for example:
 
@@ -104,6 +113,8 @@ as any other action, for example:
 > bind Alt-h LspHover
 > bind Alt-d LspGotoDefinition
 > bind Alt-c LspCompletion
+> bind Alt-f LspFormat
+> bind Alt-r LspRename
 ```
 
 # Completion
@@ -129,6 +140,53 @@ If a candidate is a snippet (the server marked it with
 including any `$1`/`${1:name}`-style placeholders. Expanding snippets
 into tab stops is not implemented, so a snippet completion inserts its
 raw placeholder syntax as plain text.
+
+# Formatting
+
+`LspFormat` sends the buffer's `tabsize` and `tabstospaces` settings to
+the server as the request's indent width and tabs-vs-spaces choice, so
+the formatter matches how the buffer is already configured. It does
+not ask the server to trim trailing whitespace or manage the final
+newline. Micro already does both of those itself at save time via the
+`rmtrailingws` and `eofnewline` options, so asking the server to redo
+them risks double-applying or fighting a setting already chosen on
+purpose.
+
+If the server advertises neither whole-document nor (with a selection
+active) range formatting, `LspFormat` shows a message in the InfoBar
+and does nothing.
+
+The `formatonsave` option (a per-buffer boolean, off by default) runs
+whole-document formatting automatically before every save, when the
+buffer is lsp-attached and the server supports it:
+
+```
+> setlocal formatonsave true
+```
+
+Formatting happens once per interactive save (the `Save` action, bound
+to `Ctrl-s` by default) before the file is written. It does not run
+before `SaveAs`, and the `SaveAll` action (which saves every open
+buffer without going through `Save`) does not format any of them
+either, even if they have `formatonsave` on. If the server returns a
+formatting error, the error is shown in the InfoBar but the save still
+goes ahead unformatted rather than being lost.
+
+# Rename
+
+`LspRename` prompts for a new name (prefilled with the identifier under
+the cursor) and sends `textDocument/rename`. The server decides which
+files are affected, which can include files other than the current
+buffer.
+
+Edits land in already-open buffers directly. A file the rename touches
+that is not currently open is loaded and edited too, and left open and
+modified rather than saved to disk automatically: micro never discards
+part of a rename just because a file was not already on screen, and
+never silently writes to a file you have not seen the diff for. After
+a rename completes, the InfoBar reports how many files were touched.
+Switch to each one (for example with `> open path/to/file`) to review
+and save it.
 
 # Diagnostics
 
