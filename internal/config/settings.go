@@ -62,6 +62,7 @@ var defaultCommonSettings = map[string]any{
 	"cursorline":      true,
 	"detectlimit":     float64(100),
 	"diffgutter":      false,
+	"editorconfig":    false,
 	"encoding":        "utf-8",
 	"eofnewline":      true,
 	"fastdirty":       false,
