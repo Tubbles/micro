@@ -397,6 +397,84 @@ turns to
 micro.InfoBar():Message()
 ```
 
+## Type stubs and IDE support
+
+micro ships LuaLS / lua-language-server type definitions for the plugin API
+under `runtime/meta/`. Wiring them up gets you autocomplete, hover docs,
+and undefined-symbol diagnostics in any editor with a Lua language server
+running. See `runtime/meta/README.md` for install steps.
+
+A few behaviors of the gopher-lua / gopher-luar bridge are not expressible
+in the type stubs and are documented here. Read this section once before
+writing your first plugin.
+
+### Pointer-vs-value field access
+
+When you read a struct field whose Go type is itself a value-typed struct,
+the bridge returns a pointer, not a value. For example, `msg.Start` (where
+`Start Loc`) returns `*Loc`. Reading `.X` and `.Y` works (the bridge
+auto-dereferences on field access), but passing the value to a function
+that takes `Loc` by value fails with
+`cannot use *buffer.Loc as type buffer.Loc`.
+
+The fix is to construct a fresh value via the module's constructor:
+
+```lua
+local buffer = import("micro/buffer")
+local fresh = buffer.Loc(msg.Start.X, msg.Start.Y)
+bp.Cursor:GotoLoc(fresh)
+```
+
+The same rule applies to `End`, `CurSelection`, `OrigSelection`, etc.
+Anywhere the type-stub annotation says "Loc", the runtime value you
+receive is wrapped as `*Loc`.
+
+### Slice iteration
+
+Calling `ipairs` on a Go-backed slice errors out: gopher-lua's `ipairs`
+calls `CheckTable` on its argument and Go slices are exposed as userdata,
+not tables. Use either of the working forms:
+
+```lua
+for i = 1, #messages do
+    local m = messages[i]
+    -- ...
+end
+
+-- or, using the slice's __call iterator:
+for i, m in messages() do
+    -- ...
+end
+```
+
+The `#slice` length operator does work, and indexing is 1-based (Lua
+convention) even for Go slices.
+
+### Lua 5.1 only
+
+gopher-lua targets Lua 5.1. Pin your language server settings accordingly
+(`Lua.runtime.version = "Lua 5.1"`). 5.2+ features that will not work:
+`goto`, integer subtype (`//`, integer-division semantics), `string.pack`,
+the `<close>` attribute, the native bitwise operators (`|`, `&`, `~`, `<<`,
+`>>`). For bitwise math use `bit32`.
+
+### Hook lifecycle and return-value semantics
+
+Hook functions are looked up by global name when an action runs. If your
+plugin defines a global `function preCursorUp(bp) ... end`, the editor
+finds and calls it.
+
+- `pre<Action>(bp)` runs before the action. Returning `false` cancels.
+- `on<Action>(bp)` runs after. Return values are ignored.
+- Lifecycle hooks (`init`, `preinit`, `postinit`, `deinit`) and buffer
+  hooks (`onBufferOpen`, `onBufferOptionChanged`, `onBeforeTextEvent`,
+  `onBufPaneOpen`, `onSetActive`) are similar but with their own
+  signatures (see `runtime/meta/library/_hooks.lua`).
+
+The hook list is generated from the same `BufKeyActions` map that defines
+the binding system, so every action verb you can bind in `bindings.json`
+also has matching `pre<Verb>` and `on<Verb>` hooks.
+
 ## Accessing the Go standard library
 
 It is possible for your lua code to access many of the functions in the Go
