@@ -440,7 +440,7 @@ func (w *BufWindow) displayBuffer() {
 	wordwrap := softwrap && b.Settings["wordwrap"].(bool)
 
 	tabsize := util.IntOpt(b.Settings["tabsize"])
-	colorcolumn := util.IntOpt(b.Settings["colorcolumn"])
+	colorcolumns := util.IntListOpt(b.Settings["colorcolumn"])
 
 	// this represents the current draw position
 	// within the current window
@@ -689,10 +689,14 @@ func (w *BufWindow) displayBuffer() {
 					}
 				}
 
-				if s, ok := config.Colorscheme["color-column"]; ok {
-					if colorcolumn != 0 && vloc.X-w.gutterOffset+w.StartCol == colorcolumn && !preservebg {
-						fg := s.GetForeground()
-						style = style.Background(fg)
+				if s, ok := config.Colorscheme["color-column"]; ok && !preservebg && len(colorcolumns) > 0 {
+					col := vloc.X - w.gutterOffset + w.StartCol
+					for _, cc := range colorcolumns {
+						if col == cc {
+							fg := s.GetForeground()
+							style = style.Background(fg)
+							break
+						}
 					}
 				}
 			}
@@ -838,10 +842,14 @@ func (w *BufWindow) displayBuffer() {
 		}
 		for i := vloc.X; i < maxWidth; i++ {
 			curStyle := style
-			if s, ok := config.Colorscheme["color-column"]; ok {
-				if colorcolumn != 0 && i-w.gutterOffset+w.StartCol == colorcolumn {
-					fg := s.GetForeground()
-					curStyle = style.Background(fg)
+			if s, ok := config.Colorscheme["color-column"]; ok && len(colorcolumns) > 0 {
+				col := i - w.gutterOffset + w.StartCol
+				for _, cc := range colorcolumns {
+					if col == cc {
+						fg := s.GetForeground()
+						curStyle = style.Background(fg)
+						break
+					}
 				}
 			}
 			screen.SetContent(i+w.X, vloc.Y+w.Y, ' ', nil, curStyle)
