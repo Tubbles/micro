@@ -99,6 +99,24 @@ func loadDefinitions() (map[string]ServerDefinition, error) {
 	return defs, nil
 }
 
+// DefinitionForFiletype returns the first server definition whose
+// Filetypes list contains filetype, along with the name it is
+// registered under. ok is false if no definition claims filetype. If
+// more than one definition claims the same filetype, which one is
+// returned is unspecified.
+func (r *Registry) DefinitionForFiletype(filetype string) (name string, def ServerDefinition, ok bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for n, d := range r.definitions {
+		for _, ft := range d.Filetypes {
+			if ft == filetype {
+				return n, d, true
+			}
+		}
+	}
+	return "", ServerDefinition{}, false
+}
+
 // Get returns the already-running client for (name, root), if any.
 func (r *Registry) Get(name, root string) (*Client, bool) {
 	r.mu.Lock()

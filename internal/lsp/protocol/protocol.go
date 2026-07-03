@@ -80,6 +80,37 @@ const (
 	TextDocumentSyncKindIncremental TextDocumentSyncKind = 2
 )
 
+// DidOpenTextDocumentParams are the parameters of the
+// textDocument/didOpen notification, sent once when the client starts
+// managing a text document.
+type DidOpenTextDocumentParams struct {
+	TextDocument TextDocumentItem `json:"textDocument"`
+}
+
+// DidChangeTextDocumentParams are the parameters of the
+// textDocument/didChange notification. Micro only ever sends a single
+// full-document TextDocumentContentChangeEvent (TextDocumentSyncKindFull);
+// incremental range-based changes are a v2 concern.
+type DidChangeTextDocumentParams struct {
+	TextDocument   VersionedTextDocumentIdentifier  `json:"textDocument"`
+	ContentChanges []TextDocumentContentChangeEvent `json:"contentChanges"`
+}
+
+// DidCloseTextDocumentParams are the parameters of the
+// textDocument/didClose notification, sent when the client stops
+// managing a text document.
+type DidCloseTextDocumentParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+}
+
+// DidSaveTextDocumentParams are the parameters of the
+// textDocument/didSave notification. Text is optional per the LSP
+// spec, but micro always includes the document's full content.
+type DidSaveTextDocumentParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Text         string                 `json:"text"`
+}
+
 // DiagnosticSeverity is the severity of a Diagnostic.
 type DiagnosticSeverity int32
 
