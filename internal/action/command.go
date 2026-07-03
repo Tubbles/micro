@@ -61,6 +61,7 @@ func InitCommands() {
 		"pwd":         {(*BufPane).PwdCmd, nil},
 		"open":        {(*BufPane).OpenCmd, buffer.FileComplete},
 		"opendir":     {(*BufPane).OpenDirCmd, buffer.FileComplete},
+		"workspaces":  {(*BufPane).WorkspacesCmd, nil},
 		"tabmove":     {(*BufPane).TabMoveCmd, nil},
 		"tabswitch":   {(*BufPane).TabSwitchCmd, nil},
 		"term":        {(*BufPane).TermCmd, nil},

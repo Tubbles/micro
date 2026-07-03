@@ -849,6 +849,7 @@ var BufKeyActions = map[string]BufKeyAction{
 	"FileExplorerAtFile":        (*BufPane).FileExplorerAtFile,
 	"OpenFilePickerAtCwd":       (*BufPane).OpenFilePickerAtCwd,
 	"OpenFilePickerAtFile":      (*BufPane).OpenFilePickerAtFile,
+	"WorkspacePicker":           (*BufPane).WorkspacePicker,
 	"Start":                     (*BufPane).Start,
 	"End":                       (*BufPane).End,
 	"PageUp":                    (*BufPane).PageUp,
