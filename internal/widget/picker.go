@@ -54,6 +54,14 @@ type PickerOptions struct {
 	// supplied index is into Items, not into the (possibly filtered)
 	// display list.
 	OnSelect func(index int)
+	// OnSelectCtrl, when non-nil, fires instead of OnSelect when the
+	// activating Enter was held with Ctrl (query pickers only; Ctrl
+	// has no meaning in the classic keymap). Lets a caller give
+	// Ctrl-Enter on a highlighted row a different meaning than plain
+	// Enter (e.g. apply a value permanently vs temporarily). Nil
+	// falls back to OnSelect, so Ctrl-Enter behaves like Enter for
+	// callers that don't opt in.
+	OnSelectCtrl func(index int)
 	// OnSubmit fires when the user presses Enter while Query is true,
 	// the query is non-empty, and the filter produced no matches. The
 	// callback receives the typed query verbatim. Use this to commit
@@ -61,15 +69,25 @@ type PickerOptions struct {
 	// is not in the directory listing"). Nil leaves no-match Enter as
 	// a silent no-op.
 	OnSubmit func(query string)
+	// OnSubmitCtrl mirrors OnSelectCtrl for the free-text submit path:
+	// it fires instead of OnSubmit when Ctrl-Enter triggered the
+	// no-match submit. Nil falls back to OnSubmit.
+	OnSubmitCtrl func(query string)
 	// OnClose fires when the user dismisses the picker (Esc, click
 	// outside). The callback should treat the picker as gone; the
 	// active slot is cleared by the dispatcher first.
 	OnClose func()
+	// OnEsc, when non-nil, is consulted before Esc closes the picker.
+	// Returning true means Esc was handled internally (e.g. walking
+	// back from a picker's own in-place edit mode to its list mode);
+	// the picker stays open and CloseActive is not called. Returning
+	// false, or a nil OnEsc, preserves v1 behaviour: Esc always
+	// closes.
+	OnEsc func() bool
 	// OnTab fires when the user presses Tab. The picker itself has no
 	// notion of what Tab does; callers wire it to whatever in-picker
-	// state change makes sense (e.g. mode toggles). Nil leaves Tab as
-	// a silent no-op, preserving v1 behaviour for callers that don't
-	// opt in.
+	// state change makes sense (e.g. the command palette's mode
+	// toggle). Nil leaves Tab as a silent no-op.
 	OnTab func()
 }
 
@@ -157,6 +175,22 @@ func (p *Picker) ResetQuery() {
 	p.matches = nil
 	p.current = 0
 	p.top = 0
+}
+
+// Query returns the currently typed query string.
+func (p *Picker) Query() string { return p.query }
+
+// SetQuery sets the typed query directly, moves the caret to its end,
+// and recomputes the filter, without touching Items, current, or top
+// beyond what recomputeFilter itself resets. Used by callers that
+// swap Items via SetItems (which always clears the query) and then
+// need to restore a previously captured query, e.g. a picker that
+// switches into an in-place edit mode and back, keeping the list's
+// filter intact across the round trip.
+func (p *Picker) SetQuery(s string) {
+	p.query = s
+	p.qcur = utf8.RuneCountInString(s)
+	p.recomputeFilter()
 }
 
 // SetCurrent moves the highlight to row i in the displayed list,
@@ -273,9 +307,9 @@ func (p *Picker) handleKeyClassic(e *tcell.EventKey) {
 	case tcell.KeyEnd:
 		p.SetCurrent(p.displayedLen() - 1)
 	case tcell.KeyEnter:
-		p.activate()
+		p.activate(false)
 	case tcell.KeyEsc:
-		CloseActive()
+		p.esc()
 	case tcell.KeyTab:
 		if p.opts.OnTab != nil {
 			p.opts.OnTab()
@@ -283,6 +317,15 @@ func (p *Picker) handleKeyClassic(e *tcell.EventKey) {
 	}
 	// All other keys (incl. typed runes) are silently swallowed in
 	// the classic (non-Query) picker.
+}
+
+// esc runs OnEsc (if wired) and only falls through to closing the
+// picker when OnEsc is nil or returns false.
+func (p *Picker) esc() {
+	if p.opts.OnEsc != nil && p.opts.OnEsc() {
+		return
+	}
+	CloseActive()
 }
 
 func (p *Picker) handleKeyQuery(e *tcell.EventKey) {
@@ -296,17 +339,9 @@ func (p *Picker) handleKeyQuery(e *tcell.EventKey) {
 	case tcell.KeyPgDn:
 		p.move(p.bodyHeight())
 	case tcell.KeyEnter:
-		// Ctrl-Enter forces the OnSubmit path even when a fuzzy match
-		// is highlighted, so the user can dispatch the typed query
-		// verbatim. Requires a CSI-u terminal; legacy terminals
-		// collapse Ctrl-Enter into plain Enter.
-		if e.Modifiers()&tcell.ModCtrl != 0 {
-			p.submitQuery()
-		} else {
-			p.activate()
-		}
+		p.activate(e.Modifiers()&tcell.ModCtrl != 0)
 	case tcell.KeyEsc:
-		CloseActive()
+		p.esc()
 	case tcell.KeyTab:
 		if p.opts.OnTab != nil {
 			p.opts.OnTab()
@@ -584,7 +619,7 @@ func (p *Picker) handleMouse(e *tcell.EventMouse) {
 		p.current = idx
 		p.lastClickTime = time.Time{}
 		p.lastClickRow = -1
-		p.activate()
+		p.activate(false)
 		return
 	}
 
@@ -611,11 +646,19 @@ func (p *Picker) move(delta int) {
 }
 
 // activate fires OnSelect for the highlighted row, OnSubmit for a
-// non-empty query with no matches, or no-op otherwise.
-func (p *Picker) activate() {
+// non-empty query with no matches, or no-op otherwise. When ctrl is
+// true (Ctrl-Enter) it prefers OnSelectCtrl/OnSubmitCtrl over the
+// plain callback, falling back to the plain one when the Ctrl variant
+// is nil, so the routing decision (row vs free-text) is identical
+// between Enter and Ctrl-Enter and only the fired callback differs.
+func (p *Picker) activate(ctrl bool) {
 	if p.opts.Query && p.query != "" && p.matches != nil && len(p.matches) == 0 {
-		if p.opts.OnSubmit != nil {
-			p.opts.OnSubmit(p.query)
+		cb := p.opts.OnSubmit
+		if ctrl && p.opts.OnSubmitCtrl != nil {
+			cb = p.opts.OnSubmitCtrl
+		}
+		if cb != nil {
+			cb(p.query)
 		}
 		return
 	}
@@ -626,19 +669,13 @@ func (p *Picker) activate() {
 	if idx < 0 {
 		return
 	}
-	if p.opts.OnSelect != nil {
-		p.opts.OnSelect(idx)
+	cb := p.opts.OnSelect
+	if ctrl && p.opts.OnSelectCtrl != nil {
+		cb = p.opts.OnSelectCtrl
 	}
-}
-
-// submitQuery fires OnSubmit with the current query regardless of the
-// highlighted row. No-op when Query mode is off, the query is empty,
-// or no OnSubmit handler is wired.
-func (p *Picker) submitQuery() {
-	if !p.opts.Query || p.query == "" || p.opts.OnSubmit == nil {
-		return
+	if cb != nil {
+		cb(idx)
 	}
-	p.opts.OnSubmit(p.query)
 }
 
 // bodyHeight is the row count the visible item list can span. It

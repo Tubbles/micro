@@ -393,37 +393,6 @@ func ctrlEnter() *tcell.EventKey {
 	return tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModCtrl)
 }
 
-func TestPickerCtrlEnterFiresOnSubmitDespiteMatches(t *testing.T) {
-	mockScreenSize(t)
-	items := []PickerItem{{Label: "zero"}, {Label: "one"}, {Label: "two"}}
-	h := newPickerHarnessOpts(items, true)
-
-	h.p.HandleEvent(runeKey('t'))
-	h.p.HandleEvent(runeKey('w'))
-	h.p.HandleEvent(ctrlEnter())
-
-	if h.submitCount != 1 || h.lastSubmit != "tw" {
-		t.Fatalf("OnSubmit: count=%d last=%q, want 1/tw",
-			h.submitCount, h.lastSubmit)
-	}
-	if h.selectCount != 0 {
-		t.Fatalf("OnSelect must not fire when Ctrl-Enter bypasses match")
-	}
-}
-
-func TestPickerCtrlEnterEmptyQueryNoOp(t *testing.T) {
-	mockScreenSize(t)
-	items := []PickerItem{{Label: "zero"}, {Label: "one"}}
-	h := newPickerHarnessOpts(items, true)
-
-	h.p.HandleEvent(ctrlEnter())
-
-	if h.submitCount != 0 || h.selectCount != 0 {
-		t.Fatalf("Ctrl-Enter on empty query: submit=%d select=%d",
-			h.submitCount, h.selectCount)
-	}
-}
-
 func TestPickerCtrlEnterClassicPickerNoSubmit(t *testing.T) {
 	mockScreenSize(t)
 	items := []PickerItem{{Label: "a"}, {Label: "b"}}

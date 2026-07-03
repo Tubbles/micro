@@ -332,10 +332,12 @@ func historyToPaletteKind(k historyKind) paletteKind {
 //   - With a non-empty query and zero matches, Enter falls through
 //     to OnSubmit, which dispatches the typed text as a command
 //     line via HandleCommand and records it as a free-text entry.
-//   - Ctrl-Enter forces the OnSubmit path even when matches exist,
-//     so a query like `ltm exec` can be dispatched verbatim instead
-//     of running whatever the fuzzy matcher highlighted. Requires a
-//     CSI-u terminal; legacy terminals collapse Ctrl-Enter to Enter.
+//
+// The palette wires no OnSelectCtrl/OnSubmitCtrl, so Ctrl-Enter routes
+// through the picker's shared hook model to the plain OnSelect/OnSubmit
+// path, i.e. it behaves like Enter here (the picker's Ctrl variant is
+// used by consumers like the options picker that need a second commit
+// mode).
 func (h *BufPane) CommandPalette() {
 	atlas := buildPaletteEntries()
 	atlasItems := paletteItems(atlas)
