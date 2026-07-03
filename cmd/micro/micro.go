@@ -330,8 +330,17 @@ func main() {
 		screen.TermMessage(err)
 		exit(1)
 	}
+	err = checkBackup("settings.local.json")
+	if err != nil {
+		screen.TermMessage(err)
+		exit(1)
+	}
 
 	err = config.ReadSettings()
+	if err != nil {
+		screen.TermMessage(err)
+	}
+	err = config.ReadLocalSettings()
 	if err != nil {
 		screen.TermMessage(err)
 	}

@@ -42,10 +42,7 @@ func NewTabList(bufs []*buffer.Buffer) *TabList {
 // UpdateNames makes sure that the list of names the tab window has access to is
 // correct
 func (t *TabList) UpdateNames() {
-	t.Names = t.Names[:0]
-	for _, p := range t.List {
-		t.Names = append(t.Names, p.Panes[p.active].Name())
-	}
+	t.Names = computeTabTitles(t.List)
 }
 
 // AddTab adds a new tab to this TabList

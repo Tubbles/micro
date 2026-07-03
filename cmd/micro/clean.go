@@ -82,9 +82,10 @@ func CleanConfig() {
 		if shouldContinue() {
 			for _, s := range unusedOptions {
 				delete(config.GlobalSettings, s)
+				config.DeleteParsedSetting(s)
 			}
 
-			err := config.OverwriteSettings(settingsFile)
+			err := config.WriteSettings(settingsFile)
 			if err != nil {
 				if errors.Is(err, util.ErrOverwrite) {
 					fmt.Println(err.Error())

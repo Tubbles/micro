@@ -574,6 +574,15 @@ func (b *Buffer) SetName(s string) {
 	b.name = s
 }
 
+// HasName reports whether SetName has assigned an explicit display
+// name to this buffer (as opposed to the buffer falling back to its
+// Path or to "No name"). Used by tab-title rendering to distinguish
+// path-backed buffers from special buffers like Help, Log, and the
+// Raw event viewer.
+func (b *Buffer) HasName() bool {
+	return b.name != ""
+}
+
 // Insert inserts the given string of text at the start location
 func (b *Buffer) Insert(start Loc, text string) {
 	if !b.Type.Readonly {
