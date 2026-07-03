@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -1574,6 +1575,61 @@ func (h *BufPane) CopyLine() bool {
 	h.Cursor.LastWrappedVisualX = origLastWrappedVisualX
 	h.Cursor.CurSelection = origSelection
 	h.Relocate()
+	return true
+}
+
+// CopyFileName copies the basename of the current buffer's file to the
+// system clipboard.
+func (h *BufPane) CopyFileName() bool {
+	if h.Buf.Path == "" {
+		InfoBar.Error("No filename")
+		return false
+	}
+	if err := clipboard.Write(filepath.Base(h.Buf.AbsPath), clipboard.ClipboardReg); err != nil {
+		InfoBar.Error(err)
+		return false
+	}
+	InfoBar.Message("Copied filename")
+	return true
+}
+
+// CopyRelativePath copies the current buffer's file path relative to the
+// current working directory to the system clipboard. b.Path can already be
+// absolute if the buffer was opened that way (file picker, command line),
+// so the relative form is recomputed from b.AbsPath against the live cwd.
+// Falls back to the absolute path if the file is outside cwd (the relative
+// form would escape via "..").
+func (h *BufPane) CopyRelativePath() bool {
+	if h.Buf.Path == "" {
+		InfoBar.Error("No filename")
+		return false
+	}
+	text := h.Buf.AbsPath
+	if wd, err := os.Getwd(); err == nil {
+		if rel, err := util.MakeRelative(h.Buf.AbsPath, wd); err == nil && !strings.HasPrefix(rel, "..") {
+			text = rel
+		}
+	}
+	if err := clipboard.Write(text, clipboard.ClipboardReg); err != nil {
+		InfoBar.Error(err)
+		return false
+	}
+	InfoBar.Message("Copied relative path")
+	return true
+}
+
+// CopyAbsolutePath copies the absolute filesystem path of the current
+// buffer's file to the system clipboard.
+func (h *BufPane) CopyAbsolutePath() bool {
+	if h.Buf.Path == "" {
+		InfoBar.Error("No filename")
+		return false
+	}
+	if err := clipboard.Write(h.Buf.AbsPath, clipboard.ClipboardReg); err != nil {
+		InfoBar.Error(err)
+		return false
+	}
+	InfoBar.Message("Copied absolute path")
 	return true
 }
 

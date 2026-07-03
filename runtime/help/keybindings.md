@@ -268,7 +268,10 @@ Center
 Undo
 Redo
 Copy
+CopyAbsolutePath
+CopyFileName
 CopyLine
+CopyRelativePath
 Cut
 CutLine
 Duplicate
