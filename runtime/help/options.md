@@ -120,6 +120,33 @@ Here are the available options:
 
     default value: `true`
 
+* `editorconfig`: when enabled, micro reads `.editorconfig` files (walking
+   upward from the file's directory until a file with `root = true` is
+   found) and applies their properties to matching buffers:
+
+    | editorconfig property        | micro option   |
+    |------------------------------ |--------------- |
+    | `indent_style`                | `tabstospaces` |
+    | `indent_size` / `tab_width`   | `tabsize`      |
+    | `end_of_line`                 | `fileformat`   |
+    | `charset`                     | `encoding`     |
+    | `trim_trailing_whitespace`    | `rmtrailingws` |
+    | `insert_final_newline`        | `eofnewline`   |
+    | `max_line_length`             | `colorcolumn`  |
+
+   `max_line_length` is applied as a visual guide only, not a hard wrap,
+   since micro has no hard-wrap behavior to map it onto. A property left
+   unset in the `.editorconfig` file leaves micro's setting untouched.
+   `end_of_line = cr` and `charset = utf-8-bom` are not representable
+   (micro has no legacy Mac line ending or byte order mark handling) and
+   are skipped, with a message shown the first time either is encountered.
+
+   editorconfig settings take precedence over `glob:`/`ft:` overlays,
+   fileformat autodetection, and values set by plugins on buffer open, but
+   a later interactive `setlocal` still wins over editorconfig.
+
+    default value: `false`
+
 * `encoding`: the encoding to open and save files with. Supported encodings
    are listed at https://www.w3.org/TR/encoding/.
 
@@ -575,6 +602,7 @@ so that you can see what the formatting should look like.
     "diffgutter": false,
     "divchars": "|-",
     "divreverse": true,
+    "editorconfig": false,
     "encoding": "utf-8",
     "eofnewline": true,
     "fakecursor": false,
