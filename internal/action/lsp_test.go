@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
+	"github.com/micro-editor/micro/v2/internal/lsp"
 	"github.com/micro-editor/micro/v2/internal/lsp/protocol"
 )
 
@@ -109,5 +110,31 @@ func TestGotoLoc(t *testing.T) {
 	want := buffer.Loc{X: 3, Y: 3}
 	if pane.got != want {
 		t.Errorf("gotoLoc delegated Loc = %v, want %v", pane.got, want)
+	}
+}
+
+func TestCompletionItemsConvertsLabelAndDetail(t *testing.T) {
+	candidates := []lsp.CompletionCandidate{
+		{Label: "foo", Detail: "func foo()"},
+		{Label: "bar"},
+	}
+
+	got := completionItems(candidates)
+
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+	if got[0].Label != "foo" || got[0].Detail != "func foo()" {
+		t.Errorf("got[0] = %+v, want Label=foo Detail=\"func foo()\"", got[0])
+	}
+	if got[1].Label != "bar" || got[1].Detail != "" {
+		t.Errorf("got[1] = %+v, want Label=bar Detail=\"\"", got[1])
+	}
+}
+
+func TestCompletionItemsEmpty(t *testing.T) {
+	got := completionItems(nil)
+	if len(got) != 0 {
+		t.Errorf("completionItems(nil) = %+v, want empty", got)
 	}
 }

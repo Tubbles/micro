@@ -12,6 +12,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/lsp"
 	"github.com/micro-editor/micro/v2/internal/lsp/protocol"
+	"github.com/micro-editor/micro/v2/internal/widget"
 )
 
 // requestPosition builds the textDocument/position pair for h's cursor,
@@ -188,6 +189,82 @@ func (h *BufPane) LspGotoDefinition() bool {
 		}
 
 		gotoLoc(target, target.Buf.Line(int(loc.Range.Start.Line)), loc.Range.Start, encoding)
+	})
+	return true
+}
+
+// completionItems converts a decoded candidate list into the
+// widget-local item type CompletionBox displays, keeping
+// internal/widget ignorant of internal/lsp's protocol types.
+func completionItems(candidates []lsp.CompletionCandidate) []widget.CompletionItem {
+	items := make([]widget.CompletionItem, len(candidates))
+	for i, cand := range candidates {
+		items[i] = widget.CompletionItem{Label: cand.Label, Detail: cand.Detail}
+	}
+	return items
+}
+
+// openCompletionBox shows candidates in a popup anchored at loc. The
+// select callback applies the chosen candidate's edits and relocates
+// the view, same as any other buffer-mutating action.
+func (h *BufPane) openCompletionBox(candidates []lsp.CompletionCandidate, loc buffer.Loc, encoding string) {
+	box := widget.NewCompletionBox(widget.CompletionBoxOptions{
+		Pane:  h,
+		Loc:   loc,
+		Items: completionItems(candidates),
+		OnSelect: func(index int) {
+			if index < 0 || index >= len(candidates) {
+				return
+			}
+			applyTextEdits(h.Buf, candidates[index].Edits, encoding)
+			h.Relocate()
+		},
+	})
+	widget.Open(box)
+}
+
+// LspCompletion requests textDocument/completion at the cursor and, on
+// a non-empty response, shows the candidates in an anchored popup
+// (see internal/widget.CompletionBox). This is manual-trigger only:
+// it fires when bound and invoked, never on typing, a trigger
+// character, or any other implicit event, so the request always
+// reports protocol.CompletionTriggerKindInvoked.
+//
+// The cursor position and line text at request time are captured and
+// reused once the (async) response arrives, both for decoding
+// InsertText-only candidates (which need the word range the request
+// was made from) and for anchoring the popup, rather than re-reading
+// a cursor that may have moved while the server was replying.
+func (h *BufPane) LspCompletion() bool {
+	client, _, params, encoding, ok := h.requestPosition()
+	if !ok {
+		InfoBar.Message("lsp: not attached")
+		return true
+	}
+
+	loc := h.Cursor.Loc
+	lineText := h.Buf.Line(loc.Y)
+	completionParams := protocol.CompletionParams{
+		TextDocumentPositionParams: params,
+		Context:                    &protocol.CompletionContext{TriggerKind: protocol.CompletionTriggerKindInvoked},
+	}
+
+	client.Call(context.Background(), "textDocument/completion", completionParams, func(rsp *jrpc2.Response, err error) {
+		if err != nil {
+			InfoBar.Error("lsp: completion: ", err)
+			return
+		}
+		var raw json.RawMessage
+		if err := rsp.UnmarshalResult(&raw); err != nil {
+			InfoBar.Error("lsp: completion: ", err)
+			return
+		}
+		candidates := lsp.DecodeCompletionResult(raw, lineText, loc, encoding)
+		if len(candidates) == 0 {
+			InfoBar.Message("lsp: no completions")
+			return
+		}
+		h.openCompletionBox(candidates, loc, encoding)
 	})
 	return true
 }
