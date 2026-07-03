@@ -37,6 +37,7 @@ func InitCommands() {
 		"toggle":           {(*BufPane).ToggleCmd, OptionValueComplete},
 		"togglelocal":      {(*BufPane).ToggleLocalCmd, OptionValueComplete},
 		"reset":            {(*BufPane).ResetCmd, OptionValueComplete},
+		"options":          {(*BufPane).OptionsCmd, nil},
 		"show":             {(*BufPane).ShowCmd, OptionComplete},
 		"showkey":          {(*BufPane).ShowKeyCmd, nil},
 		"run":              {(*BufPane).RunCmd, nil},

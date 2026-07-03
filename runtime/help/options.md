@@ -895,3 +895,43 @@ you make to it, including entries whose value matches the default, are
 preserved across saves. An entry is only removed from `settings.json` when
 you explicitly reset it from the editor with `set <option> <default-value>`
 or `reset <option>`.
+
+## Options picker
+
+The `options` command opens a picker overlay listing every option (including
+options registered by plugins), one per row. Each row shows the option's
+name, its effective value, which configuration layer supplied that value,
+and the option's default, for example:
+
+```
+tabsize  =  8                                        [local] default: 4
+```
+
+The layer is one of `default`, `global` (from `settings.json`), `local`
+(from `settings.local.json`), `volatile` (a session-only override that has
+not been written to disk), or `buffer-local` (a `setlocal` override on the
+current buffer). Type to fuzzy-filter the list, and use `Up`/`Down` to move
+the highlight.
+
+Pressing `Enter` on an option switches the picker to a value editor for
+that option, in place, without closing the picker:
+
+* A boolean option shows two rows, `true` and `false`.
+* An option with a fixed set of choices (including `colorscheme` and
+  `filetype`, which list the colorschemes and filetypes available at
+  runtime) shows one row per choice.
+* A number or free-form string option shows no rows. Instead, type the new
+  value directly into the query line and apply it from there.
+
+In the value editor, `Enter` applies the highlighted (or typed) value for
+this session only, the same as a volatile override: it takes effect
+immediately but is not written to `settings.json`, and survives a `reload`
+but not restarting micro. `Ctrl-Enter` applies the value permanently,
+writing it to `settings.json` just like the `set` command would. `Esc`
+returns to the option list, restoring whatever filter you had typed there,
+rather than closing the picker; press `Esc` again from the list to close
+it.
+
+Editing a per-buffer option from this picker always changes the global
+(or session-volatile) value, not just the current buffer. Use `setlocal`
+directly if you want a change scoped to one buffer.
