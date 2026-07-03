@@ -2,9 +2,9 @@ Micro has a native Language Server Protocol (LSP) client. It talks
 directly to a language server over stdio (no plugin required) and
 provides diagnostics, hover information, and go to definition.
 
-This is v1 of native LSP support: read-only features plus the server
-lifecycle commands below. Completion, formatting, and references are
-not implemented yet.
+This is v1 of native LSP support (read-only features plus the server
+lifecycle commands below) plus manual-trigger completion from v2.
+Formatting and references are not implemented yet.
 
 # Enabling LSP for a buffer
 
@@ -93,13 +93,42 @@ manage server processes, not which buffers are attached to them.
    switched to, if already open in another tab or split) and the cursor
    is moved there; if it is in the current file, the cursor just moves.
 
-Neither action has a default keybinding. Bind them the same way as any
-other action, for example:
+* `LspCompletion`: requests completion candidates at the cursor and, if
+   the server returns any, opens a popup listing them. See "Completion"
+   below for the popup's keys and current limitations.
+
+None of these actions has a default keybinding. Bind them the same way
+as any other action, for example:
 
 ```
 > bind Alt-h LspHover
 > bind Alt-d LspGotoDefinition
+> bind Alt-c LspCompletion
 ```
+
+# Completion
+
+`LspCompletion` is manual-trigger only: nothing runs automatically
+while you type. There is no trigger-character support, no debounce,
+and no incremental filtering of the popup as you keep typing. Every
+keystroke after the popup opens either moves the highlight or
+dismisses the popup; it never narrows the candidate list.
+
+Once open, the popup responds to:
+
+* `<Up>`/`<Down>` or `<Ctrl-P>`/`<Ctrl-N>`: move the highlight.
+* `<Enter>` or `<Tab>`: insert the highlighted candidate and close the
+   popup.
+* `<Esc>`: close the popup without inserting anything.
+* any other key: closes the popup and is then handled normally, so for
+   example typing a character both dismisses the popup and inserts that
+   character, the usual "keep typing past the suggestion" behavior.
+
+If a candidate is a snippet (the server marked it with
+`insertTextFormat: Snippet`), micro inserts its text verbatim,
+including any `$1`/`${1:name}`-style placeholders. Expanding snippets
+into tab stops is not implemented, so a snippet completion inserts its
+raw placeholder syntax as plain text.
 
 # Diagnostics
 
