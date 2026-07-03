@@ -38,3 +38,30 @@ func StatePath(configDir, dir string) (path string, resolvePath string) {
 func RecentPath(configDir string) string {
 	return filepath.Join(Dir(configDir), "recent.json")
 }
+
+// IdeMicroDir returns the human-edited config directory for a dir-
+// backed workspace: ${dir}/.ide/micro/ (D-50). Unlike Dir/StatePath/
+// RecentPath, which live under configDir, this tree lives inside the
+// workspace directory itself and is meant to be checked into the
+// project's own version control.
+func IdeMicroDir(dir string) string {
+	return filepath.Join(dir, ".ide", "micro")
+}
+
+// SettingsPath returns the workspace-level settings.json path for
+// dir.
+func SettingsPath(dir string) string {
+	return filepath.Join(IdeMicroDir(dir), "settings.json")
+}
+
+// LocalSettingsPath returns the workspace-level settings.local.json
+// path for dir.
+func LocalSettingsPath(dir string) string {
+	return filepath.Join(IdeMicroDir(dir), "settings.local.json")
+}
+
+// BindingsLocalPath returns the workspace-level bindings.local.json
+// path for dir.
+func BindingsLocalPath(dir string) string {
+	return filepath.Join(IdeMicroDir(dir), "bindings.local.json")
+}

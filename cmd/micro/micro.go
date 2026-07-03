@@ -490,6 +490,12 @@ func main() {
 		exit(1)
 	}
 
+	// No dir-backed workspace is active yet at this point (dirArg, if
+	// any, has not been opened). Start with the workspace settings
+	// layers explicitly empty rather than relying on their nil zero
+	// value, matching ReadSettings/ReadLocalSettings's own pattern.
+	config.ClearWorkspaceSettings()
+
 	if dirArg != "" {
 		// `micro DIR`: open DIR as a dir-backed workspace instead of
 		// the usual file/stdin/empty-buffer input handling (D-52).

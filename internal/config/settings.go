@@ -13,6 +13,7 @@ import (
 
 	"github.com/micro-editor/json5"
 	"github.com/micro-editor/micro/v2/internal/util"
+	"github.com/micro-editor/micro/v2/internal/workspace"
 	"github.com/zyedidia/glob"
 	"golang.org/x/text/encoding/htmlindex"
 )
@@ -165,6 +166,22 @@ var (
 	parsedLocalSettings     map[string]any
 	localSettingsParseError bool
 
+	// parsedWorkspaceSettings is the in-memory mirror of the active dir-
+	// backed workspace's settings.json (${dir}/.ide/micro/settings.json,
+	// D-50): > setworkspace writes directly into it, WriteWorkspaceSettings
+	// serializes it to that path. Empty when no dir-backed workspace is
+	// active. It overrides parsedLocalSettings (D-51: a workspace's own
+	// settings beat the user's machine-local file).
+	parsedWorkspaceSettings     map[string]any
+	workspaceSettingsParseError bool
+
+	// parsedWorkspaceLocalSettings is the in-memory view of the active
+	// workspace's settings.local.json. Like parsedLocalSettings, it is
+	// read-only at runtime; the editor never writes to it. It overrides
+	// parsedWorkspaceSettings.
+	parsedWorkspaceLocalSettings     map[string]any
+	workspaceLocalSettingsParseError bool
+
 	// VolatileSettings is a map of settings which should not be written to disk
 	// because they have been temporarily set for this session only
 	VolatileSettings map[string]bool
@@ -302,24 +319,102 @@ func ReadLocalSettings() error {
 	return validateParsedSettings(parsedLocalSettings)
 }
 
+// ReadWorkspaceSettings populates parsedWorkspaceSettings from
+// ${workspaceDir}/.ide/micro/settings.json. A missing file is not an
+// error, matching ReadSettings. Values run through
+// validateParsedSettings like every other settings file: workspace
+// config lives in the project tree, which validateParsedSettings
+// treats as an attack surface, not a trusted source.
+func ReadWorkspaceSettings(workspaceDir string) error {
+	parsedWorkspaceSettings = make(map[string]any)
+	filename := workspace.SettingsPath(workspaceDir)
+	if _, e := os.Stat(filename); e != nil {
+		return nil
+	}
+	input, err := os.ReadFile(filename)
+	if err != nil {
+		workspaceSettingsParseError = true
+		return errors.New("Error reading workspace settings.json file: " + err.Error())
+	}
+	if strings.HasPrefix(string(input), "null") {
+		return nil
+	}
+	err = json5.Unmarshal(input, &parsedWorkspaceSettings)
+	if err != nil {
+		workspaceSettingsParseError = true
+		return errors.New("Error reading workspace settings.json: " + err.Error())
+	}
+	return validateParsedSettings(parsedWorkspaceSettings)
+}
+
+// ReadWorkspaceLocalSettings populates parsedWorkspaceLocalSettings
+// from ${workspaceDir}/.ide/micro/settings.local.json. Same
+// semantics as ReadWorkspaceSettings (missing file is not an error;
+// validated the same way).
+func ReadWorkspaceLocalSettings(workspaceDir string) error {
+	parsedWorkspaceLocalSettings = make(map[string]any)
+	filename := workspace.LocalSettingsPath(workspaceDir)
+	if _, e := os.Stat(filename); e != nil {
+		return nil
+	}
+	input, err := os.ReadFile(filename)
+	if err != nil {
+		workspaceLocalSettingsParseError = true
+		return errors.New("Error reading workspace settings.local.json file: " + err.Error())
+	}
+	if strings.HasPrefix(string(input), "null") {
+		return nil
+	}
+	err = json5.Unmarshal(input, &parsedWorkspaceLocalSettings)
+	if err != nil {
+		workspaceLocalSettingsParseError = true
+		return errors.New("Error reading workspace settings.local.json: " + err.Error())
+	}
+	return validateParsedSettings(parsedWorkspaceLocalSettings)
+}
+
+// ClearWorkspaceSettings resets the workspace settings layers to
+// empty. It is called when no dir-backed workspace is active (plain
+// startup with no directory argument), so RebuildGlobalSettings and
+// the per-buffer locals chain stop applying a stale workspace's
+// values.
+func ClearWorkspaceSettings() {
+	parsedWorkspaceSettings = make(map[string]any)
+	parsedWorkspaceLocalSettings = make(map[string]any)
+	workspaceSettingsParseError = false
+	workspaceLocalSettingsParseError = false
+}
+
+// parsedSettingsSources returns the four settings layers in
+// precedence order (lowest first): settings.json, settings.local.json,
+// the active workspace's settings.json, and its settings.local.json
+// (D-51). Sources after the first two are empty when not applicable
+// (no active workspace).
+func parsedSettingsSources() []map[string]any {
+	return []map[string]any{
+		parsedSettings,
+		parsedLocalSettings,
+		parsedWorkspaceSettings,
+		parsedWorkspaceLocalSettings,
+	}
+}
+
 // ParsedSettings returns the effective scalar view of the user's
-// configuration: keys in parsedSettings overlaid by keys in
-// parsedLocalSettings. ft:/glob: nested maps are excluded because they
-// apply per-buffer via UpdateFileTypeLocals / UpdatePathGlobLocals.
-// Used by the :reload settings path so it picks up local overrides.
+// configuration across all four settings layers (see
+// parsedSettingsSources), each overlaying the one before it. ft:/glob:
+// nested maps are excluded because they apply per-buffer via
+// UpdateFileTypeLocals / UpdatePathGlobLocals. Used by the :reload
+// settings path and by Buffer.ReloadSettings, so both pick up the
+// full layer stack, workspace layers included.
 func ParsedSettings() map[string]any {
 	s := make(map[string]any)
-	for k, v := range parsedSettings {
-		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
-			continue
+	for _, src := range parsedSettingsSources() {
+		for k, v := range src {
+			if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
+				continue
+			}
+			s[k] = v
 		}
-		s[k] = v
-	}
-	for k, v := range parsedLocalSettings {
-		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
-			continue
-		}
-		s[k] = v
 	}
 	return s
 }
@@ -362,14 +457,17 @@ func InitGlobalSettings() error {
 }
 
 // RebuildGlobalSettings recomputes GlobalSettings from the source layers:
-// defaults are laid down first, then parsedSettings (settings.json) overlays
-// them, then parsedLocalSettings (settings.local.json) overlays again. Keys
-// flagged in VolatileSettings (typically set from command-line flags) keep
-// their current GlobalSettings value across the rebuild so transient
-// overrides survive reloads.
+// defaults are laid down first, then each of parsedSettingsSources
+// (settings.json, settings.local.json, the active workspace's
+// settings.json, its settings.local.json) overlays the previous one in
+// turn, so a workspace's own settings beat the user's machine-local file,
+// and its local override beats both (D-51). Keys flagged in
+// VolatileSettings (typically set from command-line flags) keep their
+// current GlobalSettings value across the rebuild so transient overrides,
+// including CLI flags, outrank every one of those layers.
 //
 // Only scalar (non-map) values participate in the global rebuild. The
-// ft:<filetype> and glob:<pattern> nested maps from either source apply
+// ft:<filetype> and glob:<pattern> nested maps from any source apply
 // per-buffer via UpdateFileTypeLocals / UpdatePathGlobLocals, not here.
 func RebuildGlobalSettings() {
 	// Preserve volatile values across the reset.
@@ -382,17 +480,13 @@ func RebuildGlobalSettings() {
 
 	GlobalSettings = DefaultAllSettings()
 
-	for k, v := range parsedSettings {
-		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
-			continue
+	for _, src := range parsedSettingsSources() {
+		for k, v := range src {
+			if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
+				continue
+			}
+			GlobalSettings[k] = v
 		}
-		GlobalSettings[k] = v
-	}
-	for k, v := range parsedLocalSettings {
-		if strings.HasPrefix(reflect.TypeOf(v).String(), "map") {
-			continue
-		}
-		GlobalSettings[k] = v
 	}
 
 	// Restore volatile values last so they outrank everything from disk.
@@ -436,22 +530,28 @@ func applyFileTypeLocals(src map[string]any, settings map[string]any, filetype s
 	}
 }
 
-// UpdatePathGlobLocals applies glob:<pattern> nested maps from settings.json
-// first, then from settings.local.json, so local values win on key collision
-// while non-colliding settings.json keys persist (per-key deep merge).
-// Must be called after ReadSettings and ReadLocalSettings.
+// UpdatePathGlobLocals applies glob:<pattern> nested maps from each of
+// parsedSettingsSources in turn (settings.json, settings.local.json, the
+// active workspace's settings.json, its settings.local.json), so a later
+// source's values win on key collision while non-colliding keys from
+// earlier sources persist (per-key deep merge). Must be called after
+// ReadSettings and ReadLocalSettings.
 func UpdatePathGlobLocals(settings map[string]any, path string) {
-	applyPathGlobLocals(parsedSettings, settings, path)
-	applyPathGlobLocals(parsedLocalSettings, settings, path)
+	for _, src := range parsedSettingsSources() {
+		applyPathGlobLocals(src, settings, path)
+	}
 }
 
-// UpdateFileTypeLocals applies ft:<filetype> nested maps from settings.json
-// first, then from settings.local.json, so local values win on key collision
-// while non-colliding settings.json keys persist (per-key deep merge).
-// Must be called after ReadSettings and ReadLocalSettings.
+// UpdateFileTypeLocals applies ft:<filetype> nested maps from each of
+// parsedSettingsSources in turn (settings.json, settings.local.json, the
+// active workspace's settings.json, its settings.local.json), so a later
+// source's values win on key collision while non-colliding keys from
+// earlier sources persist (per-key deep merge). Must be called after
+// ReadSettings and ReadLocalSettings.
 func UpdateFileTypeLocals(settings map[string]any, filetype string) {
-	applyFileTypeLocals(parsedSettings, settings, filetype)
-	applyFileTypeLocals(parsedLocalSettings, settings, filetype)
+	for _, src := range parsedSettingsSources() {
+		applyFileTypeLocals(src, settings, filetype)
+	}
 }
 
 // UpdateParsedSetting records a user-driven :set in parsedSettings.
@@ -504,6 +604,42 @@ func WriteSettings(filename string) error {
 		err = writeFile(filename, txt)
 	}
 	return err
+}
+
+// UpdateParsedWorkspaceSetting records a `> setworkspace` in
+// parsedWorkspaceSettings. Mirrors UpdateParsedSetting's delete-if-
+// default behavior, keeping parsedWorkspaceSettings as the
+// authoritative mirror of the workspace's settings.json so
+// WriteWorkspaceSettings can remain a plain serializer.
+func UpdateParsedWorkspaceSetting(option string, value any) {
+	defaults := DefaultAllSettings()
+	if def, ok := defaults[option]; ok && reflect.DeepEqual(value, def) {
+		delete(parsedWorkspaceSettings, option)
+	} else {
+		parsedWorkspaceSettings[option] = value
+	}
+}
+
+// WriteWorkspaceSettings writes parsedWorkspaceSettings to
+// ${workspaceDir}/.ide/micro/settings.json as JSON, creating the
+// .ide/micro/ directory if it does not already exist. Mirrors
+// WriteSettings: a plain serializer with no reconciliation against
+// GlobalSettings.
+func WriteWorkspaceSettings(workspaceDir string) error {
+	if workspaceSettingsParseError {
+		// Don't write over a workspace settings.json that failed to
+		// parse; let the user fix it by hand, same as WriteSettings.
+		return nil
+	}
+
+	dir := workspace.IdeMicroDir(workspaceDir)
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		return err
+	}
+
+	txt, _ := json.MarshalIndent(parsedWorkspaceSettings, "", "    ")
+	txt = append(txt, '\n')
+	return writeFile(workspace.SettingsPath(workspaceDir), txt)
 }
 
 // RegisterCommonOptionPlug creates a new option (called pl.name). This is meant to be called by plugins to add options.

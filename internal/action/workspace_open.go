@@ -166,6 +166,7 @@ func finishOpenDir(dir string) error {
 	screen.RestartCallback = Tabs.ResetMouse
 
 	currentWorkspaceDir = dir
+	applyWorkspaceConfig(dir)
 
 	recent, err := workspace.LoadRecent(config.ConfigDir)
 	if err != nil {
@@ -176,6 +177,37 @@ func finishOpenDir(dir string) error {
 		return err
 	}
 	return loadErr
+}
+
+// applyWorkspaceConfig loads dir's workspace-level settings layers
+// (${dir}/.ide/micro/settings.json, settings.local.json; D-50) and
+// refreshes every piece of live state derived from them:
+// GlobalSettings and every open buffer's per-buffer settings. It runs
+// the same settings refresh reloadRuntime performs for `> reload`,
+// scoped to what a workspace switch needs (no plugin or colorscheme
+// re-init).
+//
+// It must run after dir's own tabs/buffers exist (currentWorkspaceDir
+// is already dir by the time finishOpenDir calls this), because the
+// per-buffer refresh loop is what corrects settings on the buffers
+// that loadWorkspaceState/emptyTab just built with whatever config
+// was active before the switch.
+//
+// A read error is surfaced via TermMessage rather than aborting the
+// switch, matching how a broken settings.json does not stop micro
+// from starting.
+func applyWorkspaceConfig(dir string) {
+	if err := config.ReadWorkspaceSettings(dir); err != nil {
+		screen.TermMessage(err)
+	}
+	if err := config.ReadWorkspaceLocalSettings(dir); err != nil {
+		screen.TermMessage(err)
+	}
+	config.RebuildGlobalSettings()
+
+	for _, b := range buffer.OpenBuffers {
+		b.ReloadSettings(true)
+	}
 }
 
 // OpenDirWorkspace switches the editor to the dir-backed workspace
