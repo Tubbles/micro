@@ -204,3 +204,18 @@ func fileURI(path string) protocol.DocumentURI {
 	u := url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
 	return protocol.DocumentURI(u.String())
 }
+
+// PathFromURI converts a "file://" DocumentURI back into an os-native
+// filesystem path, the inverse of fileURI. Exported for the
+// goto-definition action, which receives a URI in a
+// textDocument/definition response and needs a path it can open.
+func PathFromURI(uri protocol.DocumentURI) (string, error) {
+	u, err := url.Parse(string(uri))
+	if err != nil {
+		return "", fmt.Errorf("lsp: parsing URI %q: %w", uri, err)
+	}
+	if u.Scheme != "file" {
+		return "", fmt.Errorf("lsp: unsupported URI scheme %q in %q", u.Scheme, uri)
+	}
+	return filepath.FromSlash(u.Path), nil
+}

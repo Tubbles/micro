@@ -256,3 +256,18 @@ func documentByURI(uri protocol.DocumentURI) (b *buffer.SharedBuffer, client *Cl
 	}
 	return nil, nil, 0, false
 }
+
+// ClientFor returns the Client and URI a SharedBuffer is attached
+// under, if it is fully attached (an attach reservation with no client
+// yet, see attach, reports ok=false). It is exported for the hover and
+// goto-definition actions, which need to reach a buffer's LSP
+// connection without depending on documentTracker's internal shape.
+func ClientFor(b *buffer.SharedBuffer) (*Client, protocol.DocumentURI, bool) {
+	documents.mu.Lock()
+	defer documents.mu.Unlock()
+	doc, ok := documents.docs[b]
+	if !ok || doc.client == nil {
+		return nil, "", false
+	}
+	return doc.client, doc.uri, true
+}

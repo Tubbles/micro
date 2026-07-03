@@ -103,6 +103,16 @@ type DidCloseTextDocumentParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
 }
 
+// TextDocumentPositionParams identifies a position within a text
+// document. It is the parameter shape for textDocument/hover and
+// textDocument/definition; the spec defines HoverParams and
+// DefinitionParams as this plus optional progress-token fields micro's
+// client does not send or need to distinguish.
+type TextDocumentPositionParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+}
+
 // DidSaveTextDocumentParams are the parameters of the
 // textDocument/didSave notification. Text is optional per the LSP
 // spec, but micro always includes the document's full content.
