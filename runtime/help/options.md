@@ -704,3 +704,52 @@ You can also omit the `glob:` prefix before globs:
 
 But it is generally more recommended to use the `glob:` prefix, as it avoids
 potential conflicts with option names.
+
+## Local settings overrides
+
+Alongside `settings.json`, micro reads an optional second configuration file
+at `$XDG_CONFIG_HOME/micro/settings.local.json` (typically
+`~/.config/micro/settings.local.json`). Any setting present in
+`settings.local.json` overrides the same setting in `settings.json`. The
+intent is to keep `settings.json` clean enough to check into version
+control or sync between machines, while keeping machine-specific tweaks
+(colorscheme tuned to the local monitor, paths that differ per host,
+font-dependent options) in `settings.local.json`.
+
+The editor never writes to `settings.local.json`. The `set`, `reset` and
+`toggle` commands always persist to `settings.json`. If you want to change
+an override permanently, edit `settings.local.json` by hand.
+
+The same `ft:<filetype>` and `glob:<pattern>` nested-map syntax that
+`settings.json` supports also works in `settings.local.json`. Where both
+files have an entry for the same `ft:` or `glob:` key, individual sub-keys
+deep-merge: the local file's value wins on collision, and sub-keys present
+only in `settings.json` are preserved. Example with `settings.json`:
+
+```json
+{
+    "ft:go": {
+        "tabsize": 8,
+        "ruler": true
+    }
+}
+```
+
+and `settings.local.json`:
+
+```json
+{
+    "ft:go": {
+        "tabsize": 2
+    }
+}
+```
+
+The effective per-buffer settings for a Go file are `tabsize: 2` (local
+wins) and `ruler: true` (from `settings.json`, not overridden locally).
+
+`settings.json` itself is now written verbatim by the editor. Hand-edits
+you make to it, including entries whose value matches the default, are
+preserved across saves. An entry is only removed from `settings.json` when
+you explicitly reset it from the editor with `set <option> <default-value>`
+or `reset <option>`.
