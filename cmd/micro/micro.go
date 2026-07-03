@@ -26,6 +26,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/shell"
 	"github.com/micro-editor/micro/v2/internal/util"
+	"github.com/micro-editor/micro/v2/internal/widget"
 	"github.com/Tubbles/tcell/v3"
 	lua "github.com/yuin/gopher-lua"
 )
@@ -501,6 +502,7 @@ func DoEvent() {
 	}
 	action.MainTab().Display()
 	action.InfoBar.Display()
+	widget.Display()
 	screen.Screen.Show()
 
 	// Check for new events
@@ -542,6 +544,8 @@ func DoEvent() {
 		if resize {
 			action.InfoBar.HandleEvent(event)
 			action.Tabs.HandleEvent(event)
+		} else if widget.HandleEvent(event) {
+			// consumed by an active overlay widget
 		} else if action.InfoBar.HasPrompt {
 			action.InfoBar.HandleEvent(event)
 		} else {
