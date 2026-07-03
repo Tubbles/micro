@@ -32,41 +32,43 @@ var commands map[string]Command
 
 func InitCommands() {
 	commands = map[string]Command{
-		"set":         {(*BufPane).SetCmd, OptionValueComplete},
-		"setlocal":    {(*BufPane).SetLocalCmd, OptionValueComplete},
-		"toggle":      {(*BufPane).ToggleCmd, OptionValueComplete},
-		"togglelocal": {(*BufPane).ToggleLocalCmd, OptionValueComplete},
-		"reset":       {(*BufPane).ResetCmd, OptionValueComplete},
-		"show":        {(*BufPane).ShowCmd, OptionComplete},
-		"showkey":     {(*BufPane).ShowKeyCmd, nil},
-		"run":         {(*BufPane).RunCmd, nil},
-		"bind":        {(*BufPane).BindCmd, nil},
-		"unbind":      {(*BufPane).UnbindCmd, nil},
-		"quit":        {(*BufPane).QuitCmd, nil},
-		"goto":        {(*BufPane).GotoCmd, nil},
-		"jump":        {(*BufPane).JumpCmd, nil},
-		"save":        {(*BufPane).SaveCmd, nil},
-		"replace":     {(*BufPane).ReplaceCmd, nil},
-		"replaceall":  {(*BufPane).ReplaceAllCmd, nil},
-		"vsplit":      {(*BufPane).VSplitCmd, buffer.FileComplete},
-		"hsplit":      {(*BufPane).HSplitCmd, buffer.FileComplete},
-		"tab":         {(*BufPane).NewTabCmd, buffer.FileComplete},
-		"help":        {(*BufPane).HelpCmd, HelpComplete},
-		"eval":        {(*BufPane).EvalCmd, nil},
-		"log":         {(*BufPane).ToggleLogCmd, nil},
-		"plugin":      {(*BufPane).PluginCmd, PluginComplete},
-		"reload":      {(*BufPane).ReloadCmd, nil},
-		"reopen":      {(*BufPane).ReopenCmd, nil},
-		"cd":          {(*BufPane).CdCmd, buffer.FileComplete},
-		"pwd":         {(*BufPane).PwdCmd, nil},
-		"open":        {(*BufPane).OpenCmd, buffer.FileComplete},
-		"tabmove":     {(*BufPane).TabMoveCmd, nil},
-		"tabswitch":   {(*BufPane).TabSwitchCmd, nil},
-		"term":        {(*BufPane).TermCmd, nil},
-		"memusage":    {(*BufPane).MemUsageCmd, nil},
-		"retab":       {(*BufPane).RetabCmd, nil},
-		"raw":         {(*BufPane).RawCmd, nil},
-		"textfilter":  {(*BufPane).TextFilterCmd, nil},
+		"set":            {(*BufPane).SetCmd, OptionValueComplete},
+		"setlocal":       {(*BufPane).SetLocalCmd, OptionValueComplete},
+		"toggle":         {(*BufPane).ToggleCmd, OptionValueComplete},
+		"togglelocal":    {(*BufPane).ToggleLocalCmd, OptionValueComplete},
+		"reset":          {(*BufPane).ResetCmd, OptionValueComplete},
+		"show":           {(*BufPane).ShowCmd, OptionComplete},
+		"showkey":        {(*BufPane).ShowKeyCmd, nil},
+		"run":            {(*BufPane).RunCmd, nil},
+		"bind":           {(*BufPane).BindCmd, nil},
+		"unbind":         {(*BufPane).UnbindCmd, nil},
+		"quit":           {(*BufPane).QuitCmd, nil},
+		"goto":           {(*BufPane).GotoCmd, nil},
+		"jump":           {(*BufPane).JumpCmd, nil},
+		"save":           {(*BufPane).SaveCmd, nil},
+		"replace":        {(*BufPane).ReplaceCmd, nil},
+		"replaceall":     {(*BufPane).ReplaceAllCmd, nil},
+		"vsplit":         {(*BufPane).VSplitCmd, buffer.FileComplete},
+		"hsplit":         {(*BufPane).HSplitCmd, buffer.FileComplete},
+		"tab":            {(*BufPane).NewTabCmd, buffer.FileComplete},
+		"help":           {(*BufPane).HelpCmd, HelpComplete},
+		"eval":           {(*BufPane).EvalCmd, nil},
+		"log":            {(*BufPane).ToggleLogCmd, nil},
+		"plugin":         {(*BufPane).PluginCmd, PluginComplete},
+		"reload":         {(*BufPane).ReloadCmd, nil},
+		"reopen":         {(*BufPane).ReopenCmd, nil},
+		"cd":             {(*BufPane).CdCmd, buffer.FileComplete},
+		"pwd":            {(*BufPane).PwdCmd, nil},
+		"open":           {(*BufPane).OpenCmd, buffer.FileComplete},
+		"tabmove":        {(*BufPane).TabMoveCmd, nil},
+		"tabswitch":      {(*BufPane).TabSwitchCmd, nil},
+		"term":           {(*BufPane).TermCmd, nil},
+		"memusage":       {(*BufPane).MemUsageCmd, nil},
+		"retab":          {(*BufPane).RetabCmd, nil},
+		"raw":            {(*BufPane).RawCmd, nil},
+		"runaction":      {(*BufPane).RunActionCmd, ActionComplete},
+		"textfilter":     {(*BufPane).TextFilterCmd, nil},
+		"commandpalette": {(*BufPane).CommandPaletteCmd, nil},
 	}
 }
 
@@ -872,6 +874,80 @@ func (h *BufPane) ShowKeyCmd(args []string) {
 		InfoBar.Message(action)
 	} else {
 		InfoBar.Message(args[0], " has no binding")
+	}
+}
+
+// chainHasBareCommandAtom reports whether any atom in a runaction
+// action chain is a bare "command:" invocation. "command-edit:" is
+// not flagged: it opens a distinct editable prompt, unlike
+// "command:" which just runs the command, so it does not hit the
+// same "> runaction command:foo is just > foo" redundancy (D-22).
+func chainHasBareCommandAtom(action string) bool {
+	for action != "" {
+		var a string
+		a, _, action = nextActionChainAtom(action)
+		if strings.HasPrefix(a, "command:") {
+			return true
+		}
+	}
+	return false
+}
+
+// RunActionCmd runs a buffer action, action chain (A,B / A|B / A&B),
+// or lua:plug.fn atom as if it had been triggered by a keybinding,
+// via the same parseBufActionChain used for key bindings. For
+// actions registered in MultiActions the action runs once per
+// cursor, matching BufMapEvent semantics so multi-cursor behaviour
+// is preserved when invoking via the command bar.
+//
+// A bare command: atom is rejected (D-22): "> runaction command:foo"
+// is exactly "> foo" typed directly, so allowing it would be
+// pointless. Mouse actions are rejected too, since they read the
+// triggering tcell.EventMouse, which is nil from the command bar.
+// Unknown atoms are reported by parseBufActionChain itself (the same
+// TermMessage path an unresolvable bindings.json entry takes).
+func (h *BufPane) RunActionCmd(args []string) {
+	if len(args) < 1 {
+		InfoBar.Error("Not enough arguments: provide an action name")
+		return
+	}
+	chain := args[0]
+
+	if chainHasBareCommandAtom(chain) {
+		InfoBar.Error("runaction does not accept command: atoms, run the command directly instead")
+		return
+	}
+
+	actionfns, names, types := parseBufActionChain(chain, KeyEvent{})
+
+	for i, afn := range actionfns {
+		name := names[i]
+		if _, isMouse := afn.(BufMouseAction); isMouse {
+			InfoBar.Error(name, " is a mouse action and cannot be run from the command bar")
+			return
+		}
+
+		var success bool
+		if _, ok := BufKeyActions[name]; ok {
+			// The common case: a plain action name, or a lua:/command:
+			// atom whose derived name happens to collide with one
+			// (vanishingly unlikely). runBufActionByName re-resolves it
+			// by name, which is fine since BufKeyActions is where
+			// parseBufActionChain found it in the first place.
+			success = runBufActionByName(h, name)
+		} else {
+			// command:/command-edit:/lua: atoms: afn is already
+			// resolved and never appears in MultiActions, so a single
+			// execAction call matches what runBufActionByName would do
+			// for a non-multi action anyway.
+			h.Buf.SetCurCursor(0)
+			h.Cursor = h.Buf.GetActiveCursor()
+			success = h.execAction(afn, name, nil)
+		}
+
+		if (!success && types[i] == '&') || (success && types[i] == '|') {
+			break
+		}
 	}
 }
 

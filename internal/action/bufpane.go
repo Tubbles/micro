@@ -90,28 +90,36 @@ func LuaAction(fn string, k Event) BufAction {
 	return action
 }
 
-// BufMapEvent maps an event to an action
-func BufMapEvent(k Event, action string) {
-	config.Bindings["buffer"][k.Name()] = action
+// nextActionChainAtom splits the next atom off an action chain
+// string (as used in a key binding or the runaction command). It
+// returns the atom, the separator byte that followed it ('&', '|',
+// or ',', respecting quotes per util.IndexAnyUnquoted), and the
+// unparsed remainder. When action has no more separators, atom is
+// the whole remaining string, sep is ' ', and rest is "".
+func nextActionChainAtom(action string) (atom string, sep byte, rest string) {
+	idx := util.IndexAnyUnquoted(action, "&|,")
+	if idx >= 0 {
+		return action[:idx], action[idx], action[idx+1:]
+	}
+	return action, ' ', ""
+}
 
-	var actionfns []BufAction
-	var names []string
-	var types []byte
-	for i := 0; ; i++ {
-		if action == "" {
-			break
-		}
-
-		idx := util.IndexAnyUnquoted(action, "&|,")
-		a := action
-		if idx >= 0 {
-			a = action[:idx]
-			types = append(types, action[idx])
-			action = action[idx+1:]
-		} else {
-			types = append(types, ' ')
-			action = ""
-		}
+// parseBufActionChain parses an action chain string into the
+// resolved action functions, their names (used for MultiActions and
+// plugin pre/on hook lookups), and the separator type that followed
+// each atom. k supplies the Event context that lua: atoms need to
+// decide between a BufKeyAction and BufMouseAction. Unknown atoms
+// are reported via screen.TermMessage and skipped, same as an
+// unresolvable entry in bindings.json; note this means types can end
+// up with more entries than actionfns/names when an atom fails to
+// resolve, matching the pre-existing behaviour of the loop this was
+// extracted from.
+func parseBufActionChain(action string, k Event) (actionfns []BufAction, names []string, types []byte) {
+	for action != "" {
+		var a string
+		var sep byte
+		a, sep, action = nextActionChainAtom(action)
+		types = append(types, sep)
 
 		var afn BufAction
 		if strings.HasPrefix(a, "command:") {
@@ -149,6 +157,15 @@ func BufMapEvent(k Event, action string) {
 		}
 		actionfns = append(actionfns, afn)
 	}
+	return actionfns, names, types
+}
+
+// BufMapEvent maps an event to an action
+func BufMapEvent(k Event, action string) {
+	config.Bindings["buffer"][k.Name()] = action
+
+	actionfns, names, types := parseBufActionChain(action, k)
+
 	bufAction := func(h *BufPane, te *tcell.EventMouse) bool {
 		for i, a := range actionfns {
 			var success bool
@@ -655,6 +672,34 @@ func (h *BufPane) execAction(action BufAction, name string, te *tcell.EventMouse
 		}
 	}
 
+	return success
+}
+
+// runBufActionByName looks up name in BufKeyActions and runs it,
+// once per cursor for actions registered in MultiActions or once on
+// the active cursor otherwise. Returns false, doing nothing, if name
+// is not a known key action (in particular, this never runs a mouse
+// action). Shared by RunActionCmd and the command palette's
+// paletteAction dispatch, the two sites that need to invoke a
+// resolved action name outside of BufMapEvent's own chain loop.
+func runBufActionByName(h *BufPane, name string) bool {
+	fn, ok := BufKeyActions[name]
+	if !ok {
+		return false
+	}
+
+	success := true
+	if _, multi := MultiActions[name]; multi {
+		for _, c := range h.Buf.GetCursors() {
+			h.Buf.SetCurCursor(c.Num)
+			h.Cursor = c
+			success = success && h.execAction(fn, name, nil)
+		}
+	} else {
+		h.Buf.SetCurCursor(0)
+		h.Cursor = h.Buf.GetActiveCursor()
+		success = h.execAction(fn, name, nil)
+	}
 	return success
 }
 
