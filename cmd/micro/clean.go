@@ -13,6 +13,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/config"
 	"github.com/micro-editor/micro/v2/internal/util"
+	"github.com/micro-editor/micro/v2/internal/workspace"
 )
 
 func shouldContinue() bool {
@@ -140,6 +141,53 @@ func CleanConfig() {
 					fmt.Println("Failed to remove files")
 				} else {
 					fmt.Printf("Removed %d badly formatted files\n", removed)
+				}
+				fmt.Print("\n\n")
+			}
+		}
+	}
+
+	// detect stale workspace state files (their dir no longer exists)
+	workspacesPath := filepath.Join(config.ConfigDir, "workspaces")
+	if entries, err := os.ReadDir(workspacesPath); err == nil {
+		var stale []string
+		for _, e := range entries {
+			if e.IsDir() || e.Name() == "recent.json" || filepath.Ext(e.Name()) != ".json" {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(workspacesPath, e.Name()))
+			if err != nil {
+				continue
+			}
+			state, err := workspace.Decode(data)
+			if err != nil {
+				continue
+			}
+			if _, err := os.Stat(state.Dir); err != nil {
+				stale = append(stale, filepath.Join(workspacesPath, e.Name()))
+			}
+		}
+
+		if len(stale) > 0 {
+			fmt.Printf("Detected %d workspace state file(s) whose directory no longer exists\n", len(stale))
+			fmt.Println("These files store the saved tab/split layout for a dir-backed workspace.")
+			fmt.Printf("Removing stale files in %s\n", workspacesPath)
+
+			if shouldContinue() {
+				removed := 0
+				for _, f := range stale {
+					err := os.Remove(f)
+					if err != nil {
+						fmt.Println(err)
+						continue
+					}
+					removed++
+				}
+
+				if removed == 0 {
+					fmt.Println("Failed to remove files")
+				} else {
+					fmt.Printf("Removed %d stale workspace file(s)\n", removed)
 				}
 				fmt.Print("\n\n")
 			}
