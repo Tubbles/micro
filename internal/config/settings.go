@@ -102,6 +102,7 @@ var defaultCommonSettings = map[string]any{
 	"tabmovement":     false,
 	"tabsize":         float64(4),
 	"tabstospaces":    false,
+	"treesitter":      false,
 	"truecolor":       "auto",
 	"useprimary":      true,
 	"wordwrap":        false,
