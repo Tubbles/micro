@@ -1,0 +1,8 @@
+{
+    "go": {
+        "command": "gopls",
+        "args": [],
+        "roots": ["go.mod", ".git"],
+        "filetypes": ["go"]
+    }
+}

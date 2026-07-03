@@ -74,6 +74,7 @@ var defaultCommonSettings = map[string]any{
 	"incsearch":       true,
 	"indentchar":      " ", // Deprecated
 	"keepautoindent":  false,
+	"lsp":             false,
 	"matchbrace":      true,
 	"matchbraceleft":  true,
 	"matchbracestyle": "underline",
