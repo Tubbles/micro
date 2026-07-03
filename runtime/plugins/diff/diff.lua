@@ -4,7 +4,7 @@ local os = import("os")
 local filepath = import("path/filepath")
 local shell = import("micro/shell")
 
-function onBufferOpen(buf)
+local function updateBase(buf)
 	if buf.Settings["diffgutter"] and (not buf.Type.Scratch) and (buf.Path ~= "") then
 		-- check that file exists
 		local _, err = os.Stat(buf.AbsPath)
@@ -17,4 +17,12 @@ function onBufferOpen(buf)
 			buf:SetDiffBase(diffBase)
 		end
 	end
+end
+
+function onBufferOpen(buf)
+	updateBase(buf)
+end
+
+function onSave(bp)
+	updateBase(bp.Buf)
 end

@@ -677,7 +677,11 @@ or disable them:
    Git and more).
 * `diff`: integrates the `diffgutter` option with Git. If you are in a Git
    directory, the diff gutter will show changes with respect to the most
-   recent Git commit rather than the diff since opening the file.
+   recent Git commit rather than the diff since opening the file. This diff
+   base is refreshed both when the buffer is opened and each time it is
+   saved, so it keeps tracking new commits without needing to reopen the
+   file. Outside a Git repository, the diff gutter falls back to showing
+   changes since the buffer was opened.
 
 Any option you set in the editor will be saved to the file
 `~/.config/micro/settings.json` so, in effect, your configuration file will be
