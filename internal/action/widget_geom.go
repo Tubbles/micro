@@ -8,11 +8,11 @@ import (
 
 // widgetOverlayRect returns the screen rectangle used to center a
 // full-editor overlay widget (the file picker, file explorer, command
-// palette) inside the editor area, inset by a uniform margin below the tab
-// bar and above the info bar. This is the shared geometry that the file
-// explorer and command palette each computed locally (editorAreaRect,
-// commandPaletteRect); those consumers switch to this helper in their own
-// commits. It intentionally has no callers on this branch yet.
+// palette, buffer cycler) inside the editor area, inset by a uniform margin
+// below the tab bar and above the info bar. This is the shared geometry
+// that the file explorer and command palette each computed locally
+// (editorAreaRect, commandPaletteRect); those consumers switch to this
+// helper in their own commits.
 func widgetOverlayRect() widget.ScreenRect {
 	sw, sh := screen.Screen.Size()
 	iOff := config.GetInfoBarOffset()

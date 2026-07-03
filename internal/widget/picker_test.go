@@ -246,6 +246,98 @@ func TestPickerPageStep(t *testing.T) {
 	}
 }
 
+func TestPickerMoveWrapForwardPastEndWraps(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "a"}, {Label: "b"}, {Label: "c"}}
+	h := newPickerHarness(items)
+
+	h.p.MoveWrap(1)
+	h.p.MoveWrap(1)
+	if h.p.Current() != 2 {
+		t.Fatalf("two forward steps: current=%d, want 2", h.p.Current())
+	}
+	h.p.MoveWrap(1) // past the last row: wraps to the top
+	if h.p.Current() != 0 {
+		t.Fatalf("forward past end: current=%d, want 0 (wrap)", h.p.Current())
+	}
+}
+
+func TestPickerMoveWrapBackwardPastStartWraps(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "a"}, {Label: "b"}, {Label: "c"}}
+	h := newPickerHarness(items)
+
+	h.p.MoveWrap(-1) // past the top: wraps to the last row
+	if h.p.Current() != 2 {
+		t.Fatalf("backward past start: current=%d, want 2 (wrap)", h.p.Current())
+	}
+}
+
+func TestPickerMoveWrapEmptyListNoOp(t *testing.T) {
+	mockScreenSize(t)
+	h := newPickerHarness(nil)
+	h.p.MoveWrap(1)
+	if h.p.Current() != 0 {
+		t.Fatalf("MoveWrap on empty list: current=%d, want 0", h.p.Current())
+	}
+}
+
+func TestPickerOnKeyConsumesBeforeNormalHandling(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "a"}, {Label: "b"}}
+	h := newPickerHarness(items)
+	var onKeyCalls int
+	h.p.opts.OnKey = func(e *tcell.EventKey) bool {
+		onKeyCalls++
+		return e.Key() == tcell.KeyDown
+	}
+
+	// Consumed by OnKey: the normal classic handler (which would also
+	// move on KeyDown) must not additionally run, and Enter must not
+	// have been reachable to prove OnKey ran first for a key that
+	// normal handling would treat differently is out of scope here;
+	// this asserts the hook is invoked and its true return short-
+	// circuits handleKey without erroring.
+	h.p.HandleEvent(key(tcell.KeyDown))
+	if onKeyCalls != 1 {
+		t.Fatalf("OnKey calls=%d, want 1", onKeyCalls)
+	}
+	if h.p.Current() != 0 {
+		t.Fatalf("OnKey returning true must skip normal handling: current=%d, want 0", h.p.Current())
+	}
+}
+
+func TestPickerOnKeyFallsThroughWhenNotConsumed(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "a"}, {Label: "b"}}
+	h := newPickerHarness(items)
+	var onKeyCalls int
+	h.p.opts.OnKey = func(e *tcell.EventKey) bool {
+		onKeyCalls++
+		return false
+	}
+
+	h.p.HandleEvent(key(tcell.KeyDown))
+	if onKeyCalls != 1 {
+		t.Fatalf("OnKey calls=%d, want 1", onKeyCalls)
+	}
+	if h.p.Current() != 1 {
+		t.Fatalf("OnKey returning false must fall through to normal handling: current=%d, want 1", h.p.Current())
+	}
+}
+
+func TestPickerOnKeyNilIsNoOp(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "a"}, {Label: "b"}}
+	h := newPickerHarness(items)
+	// opts.OnKey is nil by default via newPickerHarness; normal
+	// handling must run unaffected.
+	h.p.HandleEvent(key(tcell.KeyDown))
+	if h.p.Current() != 1 {
+		t.Fatalf("nil OnKey: current=%d, want 1", h.p.Current())
+	}
+}
+
 func TestPickerEnterFiresOnSelect(t *testing.T) {
 	mockScreenSize(t)
 	items := []PickerItem{{Label: "a"}, {Label: "b"}}

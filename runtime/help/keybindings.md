@@ -349,6 +349,8 @@ NextSplit
 PreviousSplit
 FirstSplit
 LastSplit
+CycleBuffersForward
+CycleBuffersBackward
 Unsplit
 VSplit
 HSplit
@@ -434,6 +436,34 @@ in place, otherwise open a new tab); typing a path that matches no
 entry and pressing `Enter` opens that path verbatim. `Esc` cancels.
 Symlinks are skipped to avoid cycles. Neither action is bound by
 default; add entries in `bindings.json` to use them.
+
+`CycleBuffersForward` and `CycleBuffersBackward` open a most-recently-used
+buffer switcher: a list of every open buffer across all panes and tabs,
+ordered most-recently-focused first, with the previous buffer preselected so
+a single press of either action followed by Enter is an alt-tab style
+toggle. While the list is open, pressing whichever key is bound to either
+action moves the selection forward or backward and wraps around at either
+end; the arrow keys, Page Up/Down, and typing to fuzzy-filter the list also
+work. Enter or clicking a row switches to that buffer and records where you
+were as a jump (so `JumpBack` returns to it); Esc cancels and leaves you on
+the buffer you started from. Neither action is bound by default. A typical
+setup binds them to `Ctrl-Tab` and `Ctrl-Shift-Tab`:
+
+```
+{
+    "Ctrl-Tab":       "CycleBuffersForward",
+    "Ctrl-Shift-Tab": "CycleBuffersBackward"
+}
+```
+
+Important: this is a press-and-commit cycler, not a release-to-commit one.
+Holding a modifier down and tapping the other key repeatedly, then
+releasing the modifier to land on a buffer, is how alt-tab works in most
+desktop window switchers, but micro cannot do that here. Inside zellij (or
+any multiplexer/terminal that does not forward key-release events), the
+release of Ctrl can never reach micro at all, so there is nothing to bind
+it to. You must press Enter (or click a row) to switch, same as any other
+picker in micro.
 
 The `CutLine` action cuts the current line and adds it to the previously cut
 lines in the clipboard since the last paste (rather than just replaces the
