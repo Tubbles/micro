@@ -2237,21 +2237,40 @@ func (h *BufPane) closePrompt(action string, callback func()) {
 	})
 }
 
+// isEmptyScratch reports whether b is a scratch buffer with no content.
+func isEmptyScratch(b *buffer.Buffer) bool {
+	return b.Type.Scratch && b.LinesNum() == 1 && b.Line(0) == ""
+}
+
+// quitOrReplaceWithScratch performs the terminal step of Quit. If the
+// quittoscratch option is enabled and Quit would otherwise exit micro
+// (last pane in last tab) on a non-empty-scratch buffer, the current
+// buffer is replaced with a fresh empty scratch buffer instead.
+func (h *BufPane) quitOrReplaceWithScratch() {
+	if config.GlobalSettings["quittoscratch"].(bool) &&
+		len(h.tab.Panes) == 1 && len(Tabs.List) == 1 &&
+		!isEmptyScratch(h.Buf) {
+		h.OpenBuffer(buffer.NewBufferFromString("", "", buffer.BTScratch))
+		return
+	}
+	h.ForceQuit()
+}
+
 // Quit this will close the current tab or view that is open
 func (h *BufPane) Quit() bool {
 	if h.Buf.Modified() && !h.Buf.Shared() {
 		if config.GlobalSettings["autosave"].(float64) > 0 && h.Buf.Path != "" {
 			// autosave on means we automatically save when quitting
 			h.SaveCB("Quit", func() {
-				h.ForceQuit()
+				h.quitOrReplaceWithScratch()
 			})
 		} else {
 			h.closePrompt("Quit", func() {
-				h.ForceQuit()
+				h.quitOrReplaceWithScratch()
 			})
 		}
 	} else {
-		h.ForceQuit()
+		h.quitOrReplaceWithScratch()
 	}
 	return true
 }
