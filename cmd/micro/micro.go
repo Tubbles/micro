@@ -412,6 +412,11 @@ func main() {
 		screen.TermMessage(err)
 		exit(1)
 	}
+	err = checkBackup("bindings.local.json")
+	if err != nil {
+		screen.TermMessage(err)
+		exit(1)
+	}
 
 	action.InitBindings()
 	action.InitCommands()
