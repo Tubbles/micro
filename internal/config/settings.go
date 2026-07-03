@@ -69,6 +69,7 @@ var defaultCommonSettings = map[string]any{
 	"filemanager.showhidden":  false,
 	"filemanager.showignored": false,
 	"filetype":                "unknown",
+	"formatonsave":            false,
 	"hlsearch":                false,
 	"hltaberrors":             false,
 	"hltrailingws":            false,

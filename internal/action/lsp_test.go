@@ -138,3 +138,94 @@ func TestCompletionItemsEmpty(t *testing.T) {
 		t.Errorf("completionItems(nil) = %+v, want empty", got)
 	}
 }
+
+func TestCapabilityEnabled(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  json.RawMessage
+		want bool
+	}{
+		{name: "absent field", raw: nil, want: false},
+		{name: "explicit null", raw: json.RawMessage("null"), want: false},
+		{name: "explicit false", raw: json.RawMessage("false"), want: false},
+		{name: "explicit true", raw: json.RawMessage("true"), want: true},
+		{name: "options object", raw: json.RawMessage(`{"prepareProvider":true}`), want: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := capabilityEnabled(c.raw); got != c.want {
+				t.Errorf("capabilityEnabled(%s) = %v, want %v", c.raw, got, c.want)
+			}
+		})
+	}
+}
+
+func TestFormattingOptionsFromSettings(t *testing.T) {
+	cases := []struct {
+		name     string
+		settings map[string]any
+		want     protocol.FormattingOptions
+	}{
+		{
+			name:     "tabs, size 4",
+			settings: map[string]any{"tabsize": float64(4), "tabstospaces": false},
+			want:     protocol.FormattingOptions{TabSize: 4, InsertSpaces: false},
+		},
+		{
+			name:     "spaces, size 2",
+			settings: map[string]any{"tabsize": float64(2), "tabstospaces": true},
+			want:     protocol.FormattingOptions{TabSize: 2, InsertSpaces: true},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := formattingOptionsFromSettings(c.settings); got != c.want {
+				t.Errorf("formattingOptionsFromSettings(%+v) = %+v, want %+v", c.settings, got, c.want)
+			}
+		})
+	}
+}
+
+func TestFormattingRangeOrdersReversedSelection(t *testing.T) {
+	buf := buffer.NewBufferFromString("line one\nline two\n", "", buffer.BTDefault)
+	// The cursor's selection can run in either direction; here end
+	// comes before start in document order.
+	selection := [2]buffer.Loc{{X: 5, Y: 1}, {X: 5, Y: 0}}
+
+	rng, ok := formattingRange(buf, selection, "utf-16")
+	if !ok {
+		t.Fatal("formattingRange ok = false, want true")
+	}
+	want := protocol.Range{Start: pos(0, 5), End: pos(1, 5)}
+	if rng != want {
+		t.Errorf("formattingRange = %+v, want %+v", rng, want)
+	}
+}
+
+func TestFormattingRangeOutOfBounds(t *testing.T) {
+	buf := buffer.NewBufferFromString("short\n", "", buffer.BTDefault)
+	selection := [2]buffer.Loc{{X: 0, Y: 0}, {X: 0, Y: 50}}
+
+	if _, ok := formattingRange(buf, selection, "utf-16"); ok {
+		t.Error("formattingRange ok = true for an out-of-bounds selection, want false")
+	}
+}
+
+func TestFormatBeforeSave(t *testing.T) {
+	cases := []struct {
+		attached, formatOnSave, providesFormatting bool
+		want                                       bool
+	}{
+		{attached: true, formatOnSave: true, providesFormatting: true, want: true},
+		{attached: false, formatOnSave: true, providesFormatting: true, want: false},
+		{attached: true, formatOnSave: false, providesFormatting: true, want: false},
+		{attached: true, formatOnSave: true, providesFormatting: false, want: false},
+		{attached: false, formatOnSave: false, providesFormatting: false, want: false},
+	}
+	for _, c := range cases {
+		got := formatBeforeSave(c.attached, c.formatOnSave, c.providesFormatting)
+		if got != c.want {
+			t.Errorf("formatBeforeSave(%v, %v, %v) = %v, want %v", c.attached, c.formatOnSave, c.providesFormatting, got, c.want)
+		}
+	}
+}

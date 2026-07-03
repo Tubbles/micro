@@ -269,6 +269,162 @@ func (h *BufPane) LspCompletion() bool {
 	return true
 }
 
+// capabilityEnabled reports whether a boolean-or-options server
+// capability field (for example ServerCapabilities.RenameProvider) is
+// enabled. Per the LSP spec these fields are typed `boolean |
+// XOptions`; an absent field or an explicit `false` means the server
+// does not support the feature, anything else (`true`, or an options
+// object) means it does.
+func capabilityEnabled(raw json.RawMessage) bool {
+	switch string(raw) {
+	case "", "null", "false":
+		return false
+	default:
+		return true
+	}
+}
+
+// formattingOptionsFromSettings builds the FormattingOptions a
+// formatting request sends from a buffer's settings, so a server-side
+// formatter indents using the same width and tabs-vs-spaces choice
+// micro itself uses for that buffer. It deliberately leaves the
+// trim/final-newline options at their zero value (false): micro
+// already applies rmtrailingws/eofnewline at save time (see
+// buffer/save.go), and asking the server to redo them risks double-
+// applying or fighting a setting the user configured on purpose.
+func formattingOptionsFromSettings(settings map[string]any) protocol.FormattingOptions {
+	return protocol.FormattingOptions{
+		TabSize:      uint32(settings["tabsize"].(float64)),
+		InsertSpaces: settings["tabstospaces"].(bool),
+	}
+}
+
+// formattingRange converts a cursor selection (its two Locs in either
+// order) into an LSP Range on buf, ordering start <= end. It reports
+// ok=false if either endpoint is out of buf's current bounds: a
+// selection is never clamped when edits shrink the buffer out from
+// under it (Relocate/ShiftLoc don't touch CurSelection), so a stale
+// selection needs the same InBounds guard Cursor.GetSelection uses
+// before turning it into a Substr call.
+func formattingRange(buf *buffer.Buffer, selection [2]buffer.Loc, encoding string) (protocol.Range, bool) {
+	start, end := selection[0], selection[1]
+	if start.GreaterThan(end) {
+		start, end = end, start
+	}
+	if !buffer.InBounds(start, buf) || !buffer.InBounds(end, buf) {
+		return protocol.Range{}, false
+	}
+	return protocol.Range{
+		Start: lsp.LocToPosition(buf.Line(start.Y), start, encoding),
+		End:   lsp.LocToPosition(buf.Line(end.Y), end, encoding),
+	}, true
+}
+
+// LspFormat requests formatting for the current buffer. A selection
+// formats just that range via textDocument/rangeFormatting when the
+// server advertises range formatting; otherwise (or with no selection)
+// the whole document formats via textDocument/formatting. See the
+// "formatonsave" option for automatic formatting on save, which hooks
+// in at BufPane.Save rather than through this action.
+func (h *BufPane) LspFormat() bool {
+	client, uri, _, encoding, ok := h.requestPosition()
+	if !ok {
+		InfoBar.Message("lsp: not attached")
+		return true
+	}
+
+	caps := client.Capabilities()
+	identifier := protocol.TextDocumentIdentifier{URI: uri}
+	options := formattingOptionsFromSettings(h.Buf.Settings)
+
+	method := "textDocument/formatting"
+	var params any = protocol.DocumentFormattingParams{TextDocument: identifier, Options: options}
+
+	if h.Cursor.HasSelection() && capabilityEnabled(caps.DocumentRangeFormattingProvider) {
+		if rng, inBounds := formattingRange(h.Buf, h.Cursor.CurSelection, encoding); inBounds {
+			method = "textDocument/rangeFormatting"
+			params = protocol.DocumentRangeFormattingParams{TextDocument: identifier, Range: rng, Options: options}
+		}
+	}
+
+	if method == "textDocument/formatting" && !capabilityEnabled(caps.DocumentFormattingProvider) {
+		InfoBar.Message("lsp: server does not support formatting")
+		return true
+	}
+
+	client.Call(context.Background(), method, params, func(rsp *jrpc2.Response, err error) {
+		if err != nil {
+			InfoBar.Error("lsp: format: ", err)
+			return
+		}
+		var edits []protocol.TextEdit
+		if err := rsp.UnmarshalResult(&edits); err != nil {
+			InfoBar.Error("lsp: format: ", err)
+			return
+		}
+		if len(edits) == 0 {
+			InfoBar.Message("lsp: no formatting changes")
+			return
+		}
+		applyTextEdits(h.Buf, edits, encoding)
+		h.Relocate()
+	})
+	return true
+}
+
+// formatBeforeSave is the pure form of the "formatonsave" gate: format
+// before saving only when all three hold. attached and
+// providesFormatting come from the buffer's current LSP attachment
+// (see lspFormatBeforeSave); formatOnSave is the per-buffer setting.
+func formatBeforeSave(attached, formatOnSave, providesFormatting bool) bool {
+	return attached && formatOnSave && providesFormatting
+}
+
+// lspFormatBeforeSave resolves the inputs formatBeforeSave needs from
+// h's current LSP attachment and settings, returning the Client and
+// document URI/encoding formatThenSave needs alongside the gate result
+// so it doesn't have to re-resolve the attachment.
+func (h *BufPane) lspFormatBeforeSave() (client *lsp.Client, uri protocol.DocumentURI, encoding string, shouldFormat bool) {
+	client, uri, ok := lsp.ClientFor(h.Buf.SharedBuffer)
+	if !ok {
+		return nil, "", "", false
+	}
+	formatOnSave, _ := h.Buf.Settings["formatonsave"].(bool)
+	providesFormatting := capabilityEnabled(client.Capabilities().DocumentFormattingProvider)
+	return client, uri, string(client.PositionEncoding()), formatBeforeSave(ok, formatOnSave, providesFormatting)
+}
+
+// formatThenSave requests textDocument/formatting for the whole
+// document and, once the (async) response arrives, applies any edits
+// and then performs the actual save via SaveCB. SaveCB is called
+// directly rather than Save, so the save that follows formatting never
+// re-enters lspFormatBeforeSave: formatting happens at most once per
+// Save, not once per underlying write (sudo retry, overwrite prompt,
+// and so on). A formatting error is reported but does not stop the
+// save: losing the user's save because the formatter errored would be
+// worse than saving unformatted.
+func (h *BufPane) formatThenSave(client *lsp.Client, uri protocol.DocumentURI, encoding string) bool {
+	params := protocol.DocumentFormattingParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+		Options:      formattingOptionsFromSettings(h.Buf.Settings),
+	}
+
+	client.Call(context.Background(), "textDocument/formatting", params, func(rsp *jrpc2.Response, err error) {
+		if err != nil {
+			InfoBar.Error("lsp: format on save: ", err)
+		} else {
+			var edits []protocol.TextEdit
+			if err := rsp.UnmarshalResult(&edits); err != nil {
+				InfoBar.Error("lsp: format on save: ", err)
+			} else {
+				applyTextEdits(h.Buf, edits, encoding)
+			}
+		}
+		h.SaveCB("Save", nil)
+	})
+	return true
+}
+
 // lspResolveServer resolves a server name and definition for the `> lsp
 // start|stop|restart` commands: an explicit name in args[0] if given,
 // otherwise the server registered for the current buffer's filetype
