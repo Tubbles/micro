@@ -208,6 +208,7 @@ type ServerCapabilities struct {
 	TextDocumentSync   json.RawMessage      `json:"textDocumentSync,omitempty"`
 	HoverProvider      json.RawMessage      `json:"hoverProvider,omitempty"`
 	DefinitionProvider json.RawMessage      `json:"definitionProvider,omitempty"`
+	CompletionProvider *CompletionOptions   `json:"completionProvider,omitempty"`
 	PositionEncoding   PositionEncodingKind `json:"positionEncoding,omitempty"`
 }
 
@@ -236,3 +237,79 @@ type InitializedParams struct{}
 
 // The shutdown request and exit notification take no parameters per the
 // LSP spec, so no Params types are defined for them.
+
+// CompletionTriggerKind describes how a completion was requested.
+// Micro only ever sends Invoked: v2 completion support is manual-
+// trigger only (bound to the LspCompletion action), so it never fires
+// off a trigger character or an incomplete-completions re-request.
+type CompletionTriggerKind int32
+
+const (
+	CompletionTriggerKindInvoked CompletionTriggerKind = 1
+)
+
+// CompletionContext carries how completion was triggered, sent inside
+// CompletionParams.
+type CompletionContext struct {
+	TriggerKind      CompletionTriggerKind `json:"triggerKind"`
+	TriggerCharacter string                `json:"triggerCharacter,omitempty"`
+}
+
+// CompletionParams are the parameters of the textDocument/completion
+// request.
+type CompletionParams struct {
+	TextDocumentPositionParams
+	Context *CompletionContext `json:"context,omitempty"`
+}
+
+// CompletionItemKind categorizes a CompletionItem (function, field,
+// keyword, and so on). Micro does not render kind-specific icons, so
+// this is a plain typed int rather than an enumerated const block; add
+// the constants a consumer needs when one appears.
+type CompletionItemKind int32
+
+// InsertTextFormat says whether a CompletionItem's InsertText (or its
+// TextEdit.NewText) is plain text or a snippet containing placeholders
+// like "${1:name}". Micro inserts either form verbatim: expanding
+// snippet placeholders is unimplemented, see
+// lsp.DecodeCompletionResult.
+type InsertTextFormat int32
+
+const (
+	InsertTextFormatPlainText InsertTextFormat = 1
+	InsertTextFormatSnippet   InsertTextFormat = 2
+)
+
+// TextEdit replaces the text within Range with NewText. This type is
+// shared across completion, formatting, and rename results.
+type TextEdit struct {
+	Range   Range  `json:"range"`
+	NewText string `json:"newText"`
+}
+
+// CompletionItem is one candidate returned by textDocument/completion.
+type CompletionItem struct {
+	Label            string             `json:"label"`
+	Kind             CompletionItemKind `json:"kind,omitempty"`
+	Detail           string             `json:"detail,omitempty"`
+	InsertText       string             `json:"insertText,omitempty"`
+	InsertTextFormat InsertTextFormat   `json:"insertTextFormat,omitempty"`
+	TextEdit         *TextEdit          `json:"textEdit,omitempty"`
+	SortText         string             `json:"sortText,omitempty"`
+	FilterText       string             `json:"filterText,omitempty"`
+}
+
+// CompletionList is the object form of a textDocument/completion
+// result. Per the LSP spec the result may also be a bare
+// CompletionItem array or null; see lsp.DecodeCompletionResult, which
+// decodes all three shapes.
+type CompletionList struct {
+	IsIncomplete bool             `json:"isIncomplete"`
+	Items        []CompletionItem `json:"items"`
+}
+
+// CompletionOptions describes a server's completion support,
+// advertised via ServerCapabilities.CompletionProvider.
+type CompletionOptions struct {
+	TriggerCharacters []string `json:"triggerCharacters,omitempty"`
+}
