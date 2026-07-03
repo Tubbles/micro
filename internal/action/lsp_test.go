@@ -2,6 +2,7 @@ package action
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
@@ -227,5 +228,171 @@ func TestFormatBeforeSave(t *testing.T) {
 		if got != c.want {
 			t.Errorf("formatBeforeSave(%v, %v, %v) = %v, want %v", c.attached, c.formatOnSave, c.providesFormatting, got, c.want)
 		}
+	}
+}
+
+func TestWorkspaceEditFilesPrefersDocumentChanges(t *testing.T) {
+	edit := protocol.WorkspaceEdit{
+		Changes: map[protocol.DocumentURI][]protocol.TextEdit{
+			"file:///only-in-changes.go": {{NewText: "ignored"}},
+		},
+		DocumentChanges: []protocol.TextDocumentEdit{
+			{
+				TextDocument: protocol.OptionalVersionedTextDocumentIdentifier{URI: "file:///a.go"},
+				Edits:        []protocol.TextEdit{{NewText: "a"}},
+			},
+			{
+				TextDocument: protocol.OptionalVersionedTextDocumentIdentifier{URI: "file:///b.go"},
+				Edits:        []protocol.TextEdit{{NewText: "b"}},
+			},
+		},
+	}
+
+	got := workspaceEditFiles(edit)
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+	if got[0].URI != "file:///a.go" || got[1].URI != "file:///b.go" {
+		t.Errorf("got = %+v, want URIs a.go then b.go, DocumentChanges order preserved", got)
+	}
+}
+
+func TestWorkspaceEditFilesFallsBackToChanges(t *testing.T) {
+	edit := protocol.WorkspaceEdit{
+		Changes: map[protocol.DocumentURI][]protocol.TextEdit{
+			"file:///only.go": {{NewText: "x"}},
+		},
+	}
+	got := workspaceEditFiles(edit)
+	if len(got) != 1 || got[0].URI != "file:///only.go" {
+		t.Errorf("got = %+v, want one file:///only.go entry", got)
+	}
+}
+
+func TestWorkspaceEditFilesEmpty(t *testing.T) {
+	got := workspaceEditFiles(protocol.WorkspaceEdit{})
+	if len(got) != 0 {
+		t.Errorf("got = %+v, want empty", got)
+	}
+}
+
+// TestApplyRenameEditMultiFile covers dispatch across two already-open
+// buffers: applyRenameEdit must route each file's edits to the right
+// buffer via the injected lookupBuffer, and never fall through to
+// openBuffer for a path lookupBuffer already resolved.
+func TestApplyRenameEditMultiFile(t *testing.T) {
+	pathA, err := lsp.PathFromURI("file:///a.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pathB, err := lsp.PathFromURI("file:///b.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bufA := buffer.NewBufferFromString("foo\n", pathA, buffer.BTDefault)
+	bufB := buffer.NewBufferFromString("bar\n", pathB, buffer.BTDefault)
+
+	open := map[string]*buffer.Buffer{pathA: bufA, pathB: bufB}
+	lookupBuffer := func(path string) *buffer.Buffer { return open[path] }
+	openBuffer := func(path string) (*buffer.Buffer, error) {
+		t.Fatalf("openBuffer called for %q, want lookupBuffer to have resolved it", path)
+		return nil, nil
+	}
+
+	edit := protocol.WorkspaceEdit{
+		Changes: map[protocol.DocumentURI][]protocol.TextEdit{
+			"file:///a.go": {{Range: protocol.Range{Start: pos(0, 0), End: pos(0, 3)}, NewText: "FOO"}},
+			"file:///b.go": {{Range: protocol.Range{Start: pos(0, 0), End: pos(0, 3)}, NewText: "BAR"}},
+		},
+	}
+
+	touched, err := applyRenameEdit(edit, "utf-16", lookupBuffer, openBuffer)
+	if err != nil {
+		t.Fatalf("applyRenameEdit error: %v", err)
+	}
+	if touched != 2 {
+		t.Errorf("touched = %d, want 2", touched)
+	}
+	if got := string(bufA.Bytes()); got != "FOO\n" {
+		t.Errorf("bufA.Bytes() = %q, want %q", got, "FOO\n")
+	}
+	if got := string(bufB.Bytes()); got != "BAR\n" {
+		t.Errorf("bufB.Bytes() = %q, want %q", got, "BAR\n")
+	}
+}
+
+// TestApplyRenameEditOpensClosedFile covers the not-open-yet path:
+// applyRenameEdit must call openBuffer and apply edits to the buffer
+// it returns.
+func TestApplyRenameEditOpensClosedFile(t *testing.T) {
+	closedBuf := buffer.NewBufferFromString("baz\n", "", buffer.BTDefault)
+	opened := false
+	lookupBuffer := func(path string) *buffer.Buffer { return nil }
+	openBuffer := func(path string) (*buffer.Buffer, error) {
+		opened = true
+		return closedBuf, nil
+	}
+
+	edit := protocol.WorkspaceEdit{
+		Changes: map[protocol.DocumentURI][]protocol.TextEdit{
+			"file:///closed.go": {{Range: protocol.Range{Start: pos(0, 0), End: pos(0, 3)}, NewText: "BAZ"}},
+		},
+	}
+
+	touched, err := applyRenameEdit(edit, "utf-16", lookupBuffer, openBuffer)
+	if err != nil {
+		t.Fatalf("applyRenameEdit error: %v", err)
+	}
+	if !opened {
+		t.Error("openBuffer was not called for a file lookupBuffer could not resolve")
+	}
+	if touched != 1 {
+		t.Errorf("touched = %d, want 1", touched)
+	}
+	if got := string(closedBuf.Bytes()); got != "BAZ\n" {
+		t.Errorf("closedBuf.Bytes() = %q, want %q", got, "BAZ\n")
+	}
+}
+
+// TestApplyRenameEditContinuesPastOpenError covers a file that fails
+// to open: the error is reported but the remaining files are still
+// touched, rather than the whole rename aborting on the first failure.
+func TestApplyRenameEditContinuesPastOpenError(t *testing.T) {
+	pathB, err := lsp.PathFromURI("file:///b.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bufB := buffer.NewBufferFromString("bar\n", pathB, buffer.BTDefault)
+	open := map[string]*buffer.Buffer{pathB: bufB}
+	lookupBuffer := func(path string) *buffer.Buffer { return open[path] }
+
+	wantErr := errors.New("permission denied")
+	openBuffer := func(path string) (*buffer.Buffer, error) {
+		return nil, wantErr
+	}
+
+	edit := protocol.WorkspaceEdit{
+		DocumentChanges: []protocol.TextDocumentEdit{
+			{
+				TextDocument: protocol.OptionalVersionedTextDocumentIdentifier{URI: "file:///unreadable.go"},
+				Edits:        []protocol.TextEdit{{NewText: "x"}},
+			},
+			{
+				TextDocument: protocol.OptionalVersionedTextDocumentIdentifier{URI: "file:///b.go"},
+				Edits:        []protocol.TextEdit{{Range: protocol.Range{Start: pos(0, 0), End: pos(0, 3)}, NewText: "BAR"}},
+			},
+		},
+	}
+
+	touched, gotErr := applyRenameEdit(edit, "utf-16", lookupBuffer, openBuffer)
+	if !errors.Is(gotErr, wantErr) {
+		t.Errorf("applyRenameEdit error = %v, want %v", gotErr, wantErr)
+	}
+	if touched != 1 {
+		t.Errorf("touched = %d, want 1 (the file that did open)", touched)
+	}
+	if got := string(bufB.Bytes()); got != "BAR\n" {
+		t.Errorf("bufB.Bytes() = %q, want %q", got, "BAR\n")
 	}
 }

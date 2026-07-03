@@ -425,6 +425,150 @@ func (h *BufPane) formatThenSave(client *lsp.Client, uri protocol.DocumentURI, e
 	return true
 }
 
+// workspaceEditFile is one file's worth of edits out of a
+// WorkspaceEdit, with the two possible source shapes (Changes,
+// DocumentChanges) normalized to a common form.
+type workspaceEditFile struct {
+	URI   protocol.DocumentURI
+	Edits []protocol.TextEdit
+}
+
+// workspaceEditFiles normalizes a WorkspaceEdit into an ordered list
+// of per-file edits, preferring DocumentChanges (the newer form, and
+// the one current servers such as gopls send) over Changes when both
+// are present: the LSP spec lets a server populate either, and
+// DocumentChanges additionally pins the document version each edit
+// applies to, so it is the more precise of the two when both appear.
+func workspaceEditFiles(edit protocol.WorkspaceEdit) []workspaceEditFile {
+	if len(edit.DocumentChanges) > 0 {
+		files := make([]workspaceEditFile, len(edit.DocumentChanges))
+		for i, change := range edit.DocumentChanges {
+			files[i] = workspaceEditFile{URI: change.TextDocument.URI, Edits: change.Edits}
+		}
+		return files
+	}
+
+	files := make([]workspaceEditFile, 0, len(edit.Changes))
+	for uri, edits := range edit.Changes {
+		files = append(files, workspaceEditFile{URI: uri, Edits: edits})
+	}
+	return files
+}
+
+// bufferForPath returns the open buffer at path, if any, searching
+// buffer.OpenBuffers directly rather than the panes currently
+// displaying them (unlike switchOrOpenFile's search): a rename may
+// touch a file that is open and modified (for example from an earlier
+// rename) but not shown in any tab or split.
+func bufferForPath(path string) *buffer.Buffer {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	for _, b := range buffer.OpenBuffers {
+		if b.AbsPath == abs {
+			return b
+		}
+	}
+	return nil
+}
+
+// applyRenameEdit applies edit across every file it touches.
+// lookupBuffer resolves an already-open buffer for a path (nil if
+// none), and openBuffer loads one that is not open; both are injected
+// so this is testable without populating the real buffer.OpenBuffers.
+// A file that is not open is left open and modified once loaded:
+// renamed identifiers must never be silently dropped just because
+// their file was not already on screen, so the caller is responsible
+// for telling the user to review and save it (see LspRename).
+// Processing continues past a per-file error so one unreadable file
+// doesn't drop edits to the rest; the first such error is returned
+// alongside the count of files actually touched.
+func applyRenameEdit(edit protocol.WorkspaceEdit, encoding string, lookupBuffer func(path string) *buffer.Buffer, openBuffer func(path string) (*buffer.Buffer, error)) (touched int, firstErr error) {
+	for _, file := range workspaceEditFiles(edit) {
+		path, err := lsp.PathFromURI(file.URI)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+
+		buf := lookupBuffer(path)
+		if buf == nil {
+			buf, err = openBuffer(path)
+			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+		}
+
+		applyTextEdits(buf, file.Edits, encoding)
+		touched++
+	}
+	return touched, firstErr
+}
+
+// LspRename requests a project-wide rename of the identifier at the
+// cursor. The new name is read from an InfoBar prompt prefilled with
+// the current word under the cursor. Files the rename touches that are
+// already open (in any tab, split, or left open from an earlier
+// rename) are edited in place; files that are not open are loaded,
+// edited, and left open and modified for the user to review and save,
+// see applyRenameEdit.
+func (h *BufPane) LspRename() bool {
+	client, _, params, encoding, ok := h.requestPosition()
+	if !ok {
+		InfoBar.Message("lsp: not attached")
+		return true
+	}
+	if !capabilityEnabled(client.Capabilities().RenameProvider) {
+		InfoBar.Message("lsp: server does not support rename")
+		return true
+	}
+
+	current := string(h.Buf.WordAt(h.Cursor.Loc))
+	InfoBar.Prompt("Rename to: ", current, "Rename", nil, func(resp string, canceled bool) {
+		if canceled || resp == "" {
+			return
+		}
+
+		renameParams := protocol.RenameParams{
+			TextDocument: params.TextDocument,
+			Position:     params.Position,
+			NewName:      resp,
+		}
+		client.Call(context.Background(), "textDocument/rename", renameParams, func(rsp *jrpc2.Response, err error) {
+			if err != nil {
+				InfoBar.Error("lsp: rename: ", err)
+				return
+			}
+			var edit protocol.WorkspaceEdit
+			if err := rsp.UnmarshalResult(&edit); err != nil {
+				InfoBar.Error("lsp: rename: ", err)
+				return
+			}
+			if len(workspaceEditFiles(edit)) == 0 {
+				InfoBar.Message("lsp: rename produced no changes")
+				return
+			}
+
+			touched, err := applyRenameEdit(edit, encoding, bufferForPath, func(path string) (*buffer.Buffer, error) {
+				return buffer.NewBufferFromFile(path, buffer.BTDefault)
+			})
+			if err != nil {
+				InfoBar.Error(fmt.Sprintf("lsp: rename: %v (%d file(s) renamed)", err, touched))
+			} else {
+				InfoBar.Message(fmt.Sprintf("lsp: renamed in %d file(s); review and save", touched))
+			}
+			h.Relocate()
+		})
+	})
+	return true
+}
+
 // lspResolveServer resolves a server name and definition for the `> lsp
 // start|stop|restart` commands: an explicit name in args[0] if given,
 // otherwise the server registered for the current buffer's filetype
