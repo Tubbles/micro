@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"crypto/md5"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -796,4 +797,21 @@ func SafeWrite(path string, bytes []byte, rename bool) error {
 		os.Remove(tmp)
 	}
 	return nil
+}
+
+// MarshalIndentNoEscape is a drop-in replacement for
+// json.MarshalIndent(v, "", "    ") that disables HTML escaping, so that
+// characters like '<', '>' and '&' are written verbatim instead of being
+// escaped to "<", ">" and "&".
+func MarshalIndentNoEscape(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "    ")
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	b := buf.Bytes()
+	b = bytes.TrimSuffix(b, []byte("\n"))
+	return b, nil
 }

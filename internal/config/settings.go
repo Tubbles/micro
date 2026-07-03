@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -552,7 +551,7 @@ func WriteSettings(filename string) error {
 
 	var err error
 	if _, e := os.Stat(ConfigDir); e == nil {
-		txt, _ := json.MarshalIndent(parsedSettings, "", "    ")
+		txt, _ := util.MarshalIndentNoEscape(parsedSettings)
 		txt = append(txt, '\n')
 		err = writeFile(filename, txt)
 	}
