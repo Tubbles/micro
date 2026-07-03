@@ -432,3 +432,96 @@ func TestMultiCursor(t *testing.T) {
 func TestSettingsPersistence(t *testing.T) {
 	// TODO
 }
+
+// TestReopenLastClosedInNewTab checks the core reopen-closed-buffer cycle:
+// closing a real file via quit records it, and reopenclosed brings it back
+// in a new tab with the cursor restored.
+func TestReopenLastClosedInNewTab(t *testing.T) {
+	file := createTestFile(t, "line0\nline1\nline2\nline3\n")
+
+	tabsBefore := len(action.Tabs.List)
+
+	// Open the file in its own tab, not the pane other tests share, so
+	// closing it below doesn't disturb anything else.
+	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectString(fmt.Sprintf("tab %s", file))
+	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
+	assert.Equal(t, tabsBefore+1, len(action.Tabs.List))
+
+	// Move the cursor to a distinctive, non-default position so the
+	// restored position after reopen can't be mistaken for the buffer's
+	// natural starting point.
+	injectKey(tcell.KeyDown, 0, tcell.ModNone)
+	injectKey(tcell.KeyDown, 0, tcell.ModNone)
+	injectKey(tcell.KeyRight, 0, tcell.ModNone)
+	injectKey(tcell.KeyRight, 0, tcell.ModNone)
+	wantCursor := action.MainTab().CurPane().Cursor.Loc
+	assert.Equal(t, buffer.Loc{X: 2, Y: 2}, wantCursor)
+
+	// The buffer isn't modified, so quit closes it immediately; ForceQuit
+	// records it in the closed-buffer history before the close happens.
+	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectString("quit")
+	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
+	assert.Equal(t, tabsBefore, len(action.Tabs.List))
+	assert.Nil(t, findBuffer(file))
+
+	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectString("reopenclosed")
+	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
+
+	assert.Equal(t, tabsBefore+1, len(action.Tabs.List))
+	reopened := action.MainTab().CurPane()
+	assert.Equal(t, util.ResolvePath(file), reopened.Buf.AbsPath)
+	assert.Equal(t, wantCursor, reopened.Cursor.Loc)
+
+	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectString("quit")
+	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
+	assert.Equal(t, tabsBefore, len(action.Tabs.List))
+}
+
+// TestReopenLastClosedSwitchesToOpenPane checks that reopenclosed focuses
+// an already-open pane instead of duplicating it, when the closed file was
+// reopened elsewhere before reopenclosed runs.
+func TestReopenLastClosedSwitchesToOpenPane(t *testing.T) {
+	file := createTestFile(t, "alpha\nbeta\n")
+
+	tabsBefore := len(action.Tabs.List)
+
+	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectString(fmt.Sprintf("tab %s", file))
+	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
+	assert.Equal(t, tabsBefore+1, len(action.Tabs.List))
+
+	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectString("quit")
+	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
+	assert.Equal(t, tabsBefore, len(action.Tabs.List))
+
+	// Reopen the same file by hand, simulating it having been reopened
+	// elsewhere before reopenclosed runs.
+	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectString(fmt.Sprintf("tab %s", file))
+	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
+	assert.Equal(t, tabsBefore+1, len(action.Tabs.List))
+	reopenedTabIndex := action.Tabs.Active()
+
+	// Move focus away, so reopenclosed has to switch it back rather than
+	// finding it already active.
+	action.Tabs.SetActive(0)
+
+	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectString("reopenclosed")
+	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
+
+	// No new tab was created: focus switched to the already-open pane.
+	assert.Equal(t, tabsBefore+1, len(action.Tabs.List))
+	assert.Equal(t, reopenedTabIndex, action.Tabs.Active())
+	assert.Equal(t, util.ResolvePath(file), action.MainTab().CurPane().Buf.AbsPath)
+
+	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectString("quit")
+	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
+	assert.Equal(t, tabsBefore, len(action.Tabs.List))
+}
