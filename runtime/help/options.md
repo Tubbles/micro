@@ -162,6 +162,28 @@ Here are the available options:
 
     default value: `unix` on Unix systems, `dos` on Windows
 
+* `filemanager.showhidden`: when `true`, the file-explorer picker
+   (opened via the `FileExplorerAtCwd` and `FileExplorerAtFile` actions)
+   includes dotfiles and dot-directories in the listing. When `false`,
+   entries whose name begins with `.` are filtered out. The setting is
+   read each time the picker opens; pressing `Ctrl-h` while the picker
+   is open toggles visibility for that session without changing the
+   stored option.
+
+    default value: `false`
+
+* `filemanager.showignored`: when `true`, the file-explorer picker
+   includes the `.git` directory and entries matched by `.gitignore`
+   in the listing. When `false`, those entries are filtered out. The
+   gitignore matcher is anchored at the nearest enclosing git root,
+   so ancestor `.gitignore` files apply when navigating into a subtree
+   of a project; outside a git repo only the literal `.git` skip
+   applies. The setting is read each time the picker opens; pressing
+   `Ctrl-i` while the picker is open toggles visibility for that
+   session without changing the stored option.
+
+    default value: `false`
+
 * `filetype`: sets the filetype for the current buffer. Set this option to
    `off` to completely disable filetype detection.
 
