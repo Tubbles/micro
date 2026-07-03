@@ -179,11 +179,12 @@ func finishOpenDir(dir string) error {
 	return loadErr
 }
 
-// applyWorkspaceConfig loads dir's workspace-level settings layers
-// (${dir}/.ide/micro/settings.json, settings.local.json; D-50) and
-// refreshes every piece of live state derived from them:
-// GlobalSettings and every open buffer's per-buffer settings. It runs
-// the same settings refresh reloadRuntime performs for `> reload`,
+// applyWorkspaceConfig loads dir's workspace-level config layers
+// (${dir}/.ide/micro/settings.json, settings.local.json,
+// bindings.local.json; D-50) and refreshes every piece of live state
+// derived from them: GlobalSettings, the key-binding tree, and every
+// open buffer's per-buffer settings. It runs the same
+// settings/bindings refresh reloadRuntime performs for `> reload`,
 // scoped to what a workspace switch needs (no plugin or colorscheme
 // re-init).
 //
@@ -204,6 +205,8 @@ func applyWorkspaceConfig(dir string) {
 		screen.TermMessage(err)
 	}
 	config.RebuildGlobalSettings()
+
+	InitBindings()
 
 	for _, b := range buffer.OpenBuffers {
 		b.ReloadSettings(true)
