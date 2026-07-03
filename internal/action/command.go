@@ -60,6 +60,7 @@ func InitCommands() {
 		"cd":          {(*BufPane).CdCmd, buffer.FileComplete},
 		"pwd":         {(*BufPane).PwdCmd, nil},
 		"open":        {(*BufPane).OpenCmd, buffer.FileComplete},
+		"opendir":     {(*BufPane).OpenDirCmd, buffer.FileComplete},
 		"tabmove":     {(*BufPane).TabMoveCmd, nil},
 		"tabswitch":   {(*BufPane).TabSwitchCmd, nil},
 		"term":        {(*BufPane).TermCmd, nil},
@@ -254,7 +255,11 @@ func (h *BufPane) TabSwitchCmd(args []string) {
 	}
 }
 
-// CdCmd changes the current working directory
+// CdCmd changes the current working directory. This is the plain
+// chdir tool: it does not touch open buffers beyond keeping their
+// displayed path in sync with the new cwd. Switching to a dir-backed
+// workspace (saving, prompting, closing buffers, replaying saved
+// layout) is `> opendir`.
 func (h *BufPane) CdCmd(args []string) {
 	if len(args) > 0 {
 		path, err := util.ReplaceHome(args[0])
@@ -267,15 +272,7 @@ func (h *BufPane) CdCmd(args []string) {
 			InfoBar.Error(err)
 			return
 		}
-		wd, _ := os.Getwd()
-		for _, b := range buffer.OpenBuffers {
-			if len(b.Path) > 0 {
-				b.Path, _ = util.MakeRelative(b.AbsPath, wd)
-				if p, _ := filepath.Abs(b.Path); !strings.Contains(p, wd) {
-					b.Path = b.AbsPath
-				}
-			}
-		}
+		relativizeOpenBufferPaths()
 	}
 }
 

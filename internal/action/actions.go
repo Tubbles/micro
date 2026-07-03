@@ -1904,6 +1904,7 @@ func (h *BufPane) ForceQuit() bool {
 	} else if len(Tabs.List) > 1 {
 		Tabs.RemoveTab(h.splitID)
 	} else {
+		SaveActiveWorkspace()
 		screen.Screen.Fini()
 		InfoBar.Close()
 		runtime.Goexit()
@@ -1953,6 +1954,7 @@ func (h *BufPane) QuitAll() bool {
 	}
 
 	quit := func() {
+		SaveActiveWorkspace()
 		buffer.CloseOpenBuffers()
 		screen.Screen.Fini()
 		InfoBar.Close()

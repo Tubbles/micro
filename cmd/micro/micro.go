@@ -14,6 +14,7 @@ import (
 	"runtime/pprof"
 	"sort"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -45,6 +46,13 @@ var (
 	sighup chan os.Signal
 
 	timerChan chan func()
+
+	// posFlagr and searchFlagr recognize the +LINE[:COL] and +/REGEX
+	// CLI arguments. Shared by LoadInput and workspaceDirArg, which
+	// both need to skip these when looking for the file/dir
+	// arguments.
+	posFlagr    = regexp.MustCompile(`^\+(\d+)(?::(\d+))?$`)
+	searchFlagr = regexp.MustCompile(`^\+\/(.+)$`)
 )
 
 func InitFlags() {
@@ -52,6 +60,9 @@ func InitFlags() {
 	flag.Usage = func() {
 		fmt.Println("Usage: micro [OPTION]... [FILE]... [+LINE[:COL]] [+/REGEX]")
 		fmt.Println("       micro [OPTION]... [FILE[:LINE[:COL]]]...  (only if the `parsecursor` option is enabled)")
+		fmt.Println("       micro [OPTION]... DIR")
+		fmt.Println("    \tOpen DIR as a dir-backed workspace (see `> help workspaces`).")
+		fmt.Println("    \tDIR must be the only positional argument.")
 		fmt.Println("-clean")
 		fmt.Println("    \tClean the configuration directory and exit")
 		fmt.Println("-config-dir dir")
@@ -165,11 +176,9 @@ func LoadInput(args []string) []*buffer.Buffer {
 	files := make([]string, 0, len(args))
 
 	flagStartPos := buffer.Loc{-1, -1}
-	posFlagr := regexp.MustCompile(`^\+(\d+)(?::(\d+))?$`)
 	posIndex := -1
 
 	searchText := ""
-	searchFlagr := regexp.MustCompile(`^\+\/(.+)$`)
 	searchIndex := -1
 
 	for i, a := range args {
@@ -249,6 +258,40 @@ func LoadInput(args []string) []*buffer.Buffer {
 	return buffers
 }
 
+// workspaceDirArg inspects args the same way LoadInput does (skipping
+// +LINE[:COL] and +/REGEX flags) to decide whether this invocation
+// is `micro DIR`, opening a dir-backed workspace (D-52). A single
+// directory argument returns that path with a nil error; no
+// directory at all returns "" with a nil error, so LoadInput handles
+// it exactly as before. Mixing a directory with file arguments (or
+// passing more than one directory) is a usage error, returned rather
+// than reported directly so the caller can decide how to surface it
+// before the screen is up.
+func workspaceDirArg(args []string) (dir string, err error) {
+	var files []string
+	for _, a := range args {
+		if posFlagr.MatchString(a) || searchFlagr.MatchString(a) {
+			continue
+		}
+		files = append(files, a)
+	}
+
+	var dirs []string
+	for _, f := range files {
+		if info, statErr := os.Stat(f); statErr == nil && info.IsDir() {
+			dirs = append(dirs, f)
+		}
+	}
+
+	if len(dirs) == 0 {
+		return "", nil
+	}
+	if len(dirs) == 1 && len(files) == 1 {
+		return dirs[0], nil
+	}
+	return "", fmt.Errorf("micro: a directory argument must be the only argument: %s", strings.Join(files, " "))
+}
+
 func checkBackup(name string) error {
 	target := filepath.Join(config.ConfigDir, name)
 	backup := target + util.BackupSuffix
@@ -279,6 +322,13 @@ func checkBackup(name string) error {
 }
 
 func exit(rc int) {
+	// Covers the sighup/Sigterm/EOF paths below, which exit directly
+	// without going through QuitAll/ForceQuit, plus panics: without
+	// this, a crash-adjacent exit would silently lose the active
+	// dir-backed workspace's layout (D-53). QuitAll and ForceQuit's
+	// exit branch call this too, for the normal quit path.
+	action.SaveActiveWorkspace()
+
 	for _, b := range buffer.OpenBuffers {
 		if !b.Modified() {
 			b.Fini()
@@ -432,15 +482,31 @@ func main() {
 	action.InitGlobals()
 	buffer.SetMessager(action.InfoBar)
 	args := flag.Args()
-	b := LoadInput(args)
 
-	if len(b) == 0 {
-		// No buffers to open
+	dirArg, dirErr := workspaceDirArg(args)
+	if dirErr != nil {
 		screen.Screen.Fini()
-		runtime.Goexit()
+		fmt.Println(dirErr)
+		exit(1)
 	}
 
-	action.InitTabs(b)
+	if dirArg != "" {
+		// `micro DIR`: open DIR as a dir-backed workspace instead of
+		// the usual file/stdin/empty-buffer input handling (D-52).
+		if err := action.OpenDirWorkspaceAtStartup(dirArg); err != nil {
+			screen.TermMessage(err)
+		}
+	} else {
+		b := LoadInput(args)
+
+		if len(b) == 0 {
+			// No buffers to open
+			screen.Screen.Fini()
+			runtime.Goexit()
+		}
+
+		action.InitTabs(b)
+	}
 
 	err = config.RunPluginFn("init")
 	if err != nil {
