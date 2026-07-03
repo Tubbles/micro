@@ -205,11 +205,14 @@ type ClientCapabilities struct {
 // hoverProvider is `boolean | HoverOptions`); the chunk that consumes a
 // given field decodes it into whichever of those shapes it needs.
 type ServerCapabilities struct {
-	TextDocumentSync   json.RawMessage      `json:"textDocumentSync,omitempty"`
-	HoverProvider      json.RawMessage      `json:"hoverProvider,omitempty"`
-	DefinitionProvider json.RawMessage      `json:"definitionProvider,omitempty"`
-	CompletionProvider *CompletionOptions   `json:"completionProvider,omitempty"`
-	PositionEncoding   PositionEncodingKind `json:"positionEncoding,omitempty"`
+	TextDocumentSync                json.RawMessage      `json:"textDocumentSync,omitempty"`
+	HoverProvider                   json.RawMessage      `json:"hoverProvider,omitempty"`
+	DefinitionProvider              json.RawMessage      `json:"definitionProvider,omitempty"`
+	CompletionProvider              *CompletionOptions   `json:"completionProvider,omitempty"`
+	DocumentFormattingProvider      json.RawMessage      `json:"documentFormattingProvider,omitempty"`
+	DocumentRangeFormattingProvider json.RawMessage      `json:"documentRangeFormattingProvider,omitempty"`
+	RenameProvider                  json.RawMessage      `json:"renameProvider,omitempty"`
+	PositionEncoding                PositionEncodingKind `json:"positionEncoding,omitempty"`
 }
 
 // InitializeParams are the parameters of the initialize request, the
@@ -312,4 +315,75 @@ type CompletionList struct {
 // advertised via ServerCapabilities.CompletionProvider.
 type CompletionOptions struct {
 	TriggerCharacters []string `json:"triggerCharacters,omitempty"`
+}
+
+// FormattingOptions carries the client's formatting preferences for
+// textDocument/formatting and textDocument/rangeFormatting requests.
+// The LSP spec allows servers to define additional boolean/number/
+// string properties beyond these; micro never sends any.
+//
+// TrimTrailingWhitespace, InsertFinalNewline, and TrimFinalNewlines
+// are modeled but micro always leaves them false: micro already
+// applies its own rmtrailingws and eofnewline settings at save time
+// (see buffer/save.go), so asking the server to redo them risks
+// double-applying or fighting a setting the user configured on
+// purpose.
+type FormattingOptions struct {
+	TabSize                uint32 `json:"tabSize"`
+	InsertSpaces           bool   `json:"insertSpaces"`
+	TrimTrailingWhitespace bool   `json:"trimTrailingWhitespace,omitempty"`
+	InsertFinalNewline     bool   `json:"insertFinalNewline,omitempty"`
+	TrimFinalNewlines      bool   `json:"trimFinalNewlines,omitempty"`
+}
+
+// DocumentFormattingParams are the parameters of the
+// textDocument/formatting request, which formats an entire document.
+type DocumentFormattingParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Options      FormattingOptions      `json:"options"`
+}
+
+// DocumentRangeFormattingParams are the parameters of the
+// textDocument/rangeFormatting request, which formats only Range
+// within the document.
+type DocumentRangeFormattingParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Range        Range                  `json:"range"`
+	Options      FormattingOptions      `json:"options"`
+}
+
+// RenameParams are the parameters of the textDocument/rename request.
+type RenameParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+	NewName      string                 `json:"newName"`
+}
+
+// OptionalVersionedTextDocumentIdentifier identifies a text document
+// and, optionally, the version it was read at. It appears in
+// TextDocumentEdit (rather than the plain
+// VersionedTextDocumentIdentifier used elsewhere) because a rename
+// response may touch files micro never opened and so never assigned a
+// version to; Version is a pointer so the server's `null` (meaning
+// "version unknown") round-trips distinctly from a real version 0.
+type OptionalVersionedTextDocumentIdentifier struct {
+	URI     DocumentURI `json:"uri"`
+	Version *int32      `json:"version"`
+}
+
+// TextDocumentEdit describes edits to be applied to one specific
+// text document, the documentChanges form of a WorkspaceEdit.
+type TextDocumentEdit struct {
+	TextDocument OptionalVersionedTextDocumentIdentifier `json:"textDocument"`
+	Edits        []TextEdit                              `json:"edits"`
+}
+
+// WorkspaceEdit is the result of a textDocument/rename request: a set
+// of edits across possibly many files. A server may populate either
+// Changes or DocumentChanges; when both are present DocumentChanges
+// (the newer form) takes precedence, see workspaceEditFiles in
+// internal/action/lsp.go.
+type WorkspaceEdit struct {
+	Changes         map[DocumentURI][]TextEdit `json:"changes,omitempty"`
+	DocumentChanges []TextDocumentEdit         `json:"documentChanges,omitempty"`
 }
