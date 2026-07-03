@@ -493,6 +493,26 @@ Here are the available options:
 
     default value: `false`
 
+* `treesitter`: use tree-sitter for syntax highlighting instead of micro's
+   regex-based engine, for filetypes that have a bundled tree-sitter grammar.
+   This is a per-buffer option, so it can be turned on for specific filetypes
+   only using the `ft:` scoping in `settings.json` (see "Global and local
+   settings" below), for example:
+
+    ```json
+    {
+        "ft:go": {
+            "treesitter": true
+        }
+    }
+    ```
+
+   Filetypes without a bundled grammar keep using the regex engine regardless
+   of this setting, and the regex engine remains the default and fallback in
+   all cases.
+
+    default value: `false`
+
 * `truecolor`: controls whether micro will use true colors (24-bit colors) when
    using a colorscheme with true colors, such as `solarized-tc` or `atom-dark`.
    * `auto`: enable usage of true color if micro detects that it is supported by
