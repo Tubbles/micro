@@ -176,6 +176,8 @@ func attach(b *buffer.SharedBuffer) {
 		doc.version = 1
 		c.DidOpen(uri, filetype, 1, string(b.Bytes()))
 		documents.mu.Unlock()
+
+		fireLspAttach(b.AbsPath, name)
 	})
 }
 
@@ -239,6 +241,7 @@ func detach(b *buffer.SharedBuffer) {
 
 	if client != nil {
 		client.DidClose(uri)
+		fireLspDetach(b.AbsPath, client.Name)
 	}
 }
 

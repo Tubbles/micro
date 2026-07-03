@@ -33,8 +33,10 @@ func diagnosticsOwner(c *Client) string {
 
 // applyPublishDiagnostics finds the buffer params.URI names, drops the
 // batch if it is stale or unrecognized, and otherwise replaces that
-// server's gutter messages on the buffer with the new set. It runs on
-// the main goroutine (via post in handleNotify).
+// server's gutter messages on the buffer with the new set, then runs
+// the onDiagnostics plugin hook. It runs on the main goroutine (via
+// post in handleNotify), which is also why the hook needs no extra
+// dispatch to reach the Lua VM safely.
 func applyPublishDiagnostics(c *Client, params protocol.PublishDiagnosticsParams) {
 	sb, client, version, ok := documentByURI(params.URI)
 	if !ok || client != c {
@@ -64,6 +66,8 @@ func applyPublishDiagnostics(c *Client, params protocol.PublishDiagnosticsParams
 		end := PositionToLoc(buf.Line(int(diag.Range.End.Line)), diag.Range.End, encoding)
 		buf.AddMessage(buffer.NewMessage(owner, diag.Message, start, end, severityToMsgType(diag.Severity)))
 	}
+
+	fireOnDiagnostics(sb.AbsPath, len(params.Diagnostics))
 }
 
 // severityToMsgType maps an LSP DiagnosticSeverity onto micro's gutter
