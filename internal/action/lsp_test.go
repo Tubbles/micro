@@ -3,6 +3,9 @@ package action
 import (
 	"encoding/json"
 	"errors"
+	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
@@ -111,6 +114,90 @@ func TestGotoLoc(t *testing.T) {
 	want := buffer.Loc{X: 3, Y: 3}
 	if pane.got != want {
 		t.Errorf("gotoLoc delegated Loc = %v, want %v", pane.got, want)
+	}
+}
+
+func TestDecodeReferencesResult(t *testing.T) {
+	locations := []protocol.Location{
+		{URI: "file:///a.go", Range: protocol.Range{Start: pos(1, 2), End: pos(1, 5)}},
+		{URI: "file:///b.go", Range: protocol.Range{Start: pos(9, 0), End: pos(9, 1)}},
+	}
+	locationsJSON, err := json.Marshal(locations)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name string
+		raw  json.RawMessage
+		want int
+	}{
+		{name: "null result", raw: json.RawMessage("null"), want: 0},
+		{name: "empty result", raw: nil, want: 0},
+		{name: "empty array", raw: json.RawMessage("[]"), want: 0},
+		{name: "two locations", raw: locationsJSON, want: 2},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := decodeReferencesResult(c.raw)
+			if len(got) != c.want {
+				t.Fatalf("len(decodeReferencesResult(%s)) = %d, want %d", c.raw, len(got), c.want)
+			}
+		})
+	}
+
+	got := decodeReferencesResult(locationsJSON)
+	if len(got) != 2 || got[0] != locations[0] || got[1] != locations[1] {
+		t.Errorf("decodeReferencesResult(%s) = %+v, want %+v", locationsJSON, got, locations)
+	}
+}
+
+// TestReferenceLabelUsesRelativePath proves referenceLabel relativizes
+// a file:// URI against the current working directory rather than
+// showing an absolute path, and formats the location as 1-based
+// line:col.
+func TestReferenceLabelUsesRelativePath(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	abs := filepath.Join(cwd, "sub", "file.go")
+	uri, err := url.Parse("file://" + filepath.ToSlash(abs))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loc := protocol.Location{
+		URI:   protocol.DocumentURI(uri.String()),
+		Range: protocol.Range{Start: pos(4, 6), End: pos(4, 9)},
+	}
+
+	want := filepath.Join("sub", "file.go") + ":5:7"
+	if got := referenceLabel(loc); got != want {
+		t.Errorf("referenceLabel(%+v) = %q, want %q", loc, got, want)
+	}
+}
+
+// TestReferencePickerItemsIndexMapsBackToLocations proves the
+// items slice referencePickerItems returns is index-aligned with its
+// input, since openReferencesPicker's OnSelect relies on that to jump
+// to the right location.
+func TestReferencePickerItemsIndexMapsBackToLocations(t *testing.T) {
+	locations := []protocol.Location{
+		{URI: "file:///a.go", Range: protocol.Range{Start: pos(0, 0), End: pos(0, 1)}},
+		{URI: "file:///b.go", Range: protocol.Range{Start: pos(2, 3), End: pos(2, 4)}},
+		{URI: "file:///c.go", Range: protocol.Range{Start: pos(9, 9), End: pos(9, 10)}},
+	}
+
+	items := referencePickerItems(locations)
+	if len(items) != len(locations) {
+		t.Fatalf("len(items) = %d, want %d", len(items), len(locations))
+	}
+	for i, loc := range locations {
+		want := referenceLabel(loc)
+		if items[i].Label != want {
+			t.Errorf("items[%d].Label = %q, want %q (mapping to locations[%d])", i, items[i].Label, want, i)
+		}
 	}
 }
 

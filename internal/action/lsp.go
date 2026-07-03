@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -147,6 +148,30 @@ func switchOrOpenFile(h *BufPane, path string) *BufPane {
 	return h
 }
 
+// jumpToLocation switches to (or opens) loc's file if it differs from
+// currentURI, then moves h (or the switched-to pane) to loc's start
+// position, converting it from encoding. LspGotoDefinition and
+// LspReferences share this so their jump behavior cannot drift apart.
+// Errors (an unresolvable URI, or a not-yet-open file that fails to
+// open) are reported to the InfoBar; the caller has nothing further to
+// do either way, so this returns nothing.
+func jumpToLocation(h *BufPane, loc protocol.Location, currentURI protocol.DocumentURI, encoding string) {
+	target := h
+	if loc.URI != currentURI {
+		path, err := lsp.PathFromURI(loc.URI)
+		if err != nil {
+			InfoBar.Error("lsp: ", err)
+			return
+		}
+		target = switchOrOpenFile(h, path)
+		if target == nil {
+			return
+		}
+	}
+
+	gotoLoc(target, target.Buf.Line(int(loc.Range.Start.Line)), loc.Range.Start, encoding)
+}
+
 // LspGotoDefinition requests textDocument/definition at the cursor and
 // jumps to the result, opening or switching to the target file first if
 // it is not the current buffer. It does not add jump-list bookkeeping
@@ -175,20 +200,110 @@ func (h *BufPane) LspGotoDefinition() bool {
 			return
 		}
 
-		target := h
-		if loc.URI != uri {
-			path, err := lsp.PathFromURI(loc.URI)
-			if err != nil {
-				InfoBar.Error("lsp: goto definition: ", err)
-				return
-			}
-			target = switchOrOpenFile(h, path)
-			if target == nil {
-				return
-			}
-		}
+		jumpToLocation(h, loc, uri, encoding)
+	})
+	return true
+}
 
-		gotoLoc(target, target.Buf.Line(int(loc.Range.Start.Line)), loc.Range.Start, encoding)
+// decodeReferencesResult decodes a textDocument/references result,
+// which per the LSP spec is either a Location array or null (no
+// references found); an empty or malformed result decodes to nil.
+func decodeReferencesResult(raw json.RawMessage) []protocol.Location {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var locations []protocol.Location
+	if err := json.Unmarshal(raw, &locations); err != nil {
+		return nil
+	}
+	return locations
+}
+
+// referenceLabel formats loc as a picker row label: its path relative
+// to the current working directory when that is cheap to compute
+// (falling back to the raw path from the URI otherwise), followed by
+// its 1-based start line and column, e.g. "internal/action/lsp.go:42:7".
+func referenceLabel(loc protocol.Location) string {
+	path, err := lsp.PathFromURI(loc.URI)
+	if err != nil {
+		path = string(loc.URI)
+	} else if cwd, cwdErr := os.Getwd(); cwdErr == nil {
+		if rel, relErr := filepath.Rel(cwd, path); relErr == nil {
+			path = rel
+		}
+	}
+	return fmt.Sprintf("%s:%d:%d", path, loc.Range.Start.Line+1, loc.Range.Start.Character+1)
+}
+
+// referencePickerItems converts locations into picker rows, one per
+// location and in the same order, so a row's index into items also
+// indexes locations (see openReferencesPicker's OnSelect).
+func referencePickerItems(locations []protocol.Location) []widget.PickerItem {
+	items := make([]widget.PickerItem, len(locations))
+	for i, loc := range locations {
+		items[i] = widget.PickerItem{Label: referenceLabel(loc)}
+	}
+	return items
+}
+
+// openReferencesPicker shows locations in a centered, query-filterable
+// picker (matching the file pickers' style). currentURI is the buffer
+// the references request was sent from, needed by jumpToLocation to
+// tell whether a selected location is already the open buffer.
+func (h *BufPane) openReferencesPicker(locations []protocol.Location, currentURI protocol.DocumentURI, encoding string) {
+	picker := widget.NewPicker(widget.PickerOptions{
+		Title:    "References",
+		Items:    referencePickerItems(locations),
+		Query:    true,
+		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: widgetOverlayRect()},
+		OnSelect: func(index int) {
+			widget.CloseActive()
+			if index < 0 || index >= len(locations) {
+				return
+			}
+			jumpToLocation(h, locations[index], currentURI, encoding)
+		},
+		OnClose: func() {},
+	})
+	widget.Open(picker)
+}
+
+// LspReferences requests textDocument/references at the cursor
+// (including the declaration itself, per IncludeDeclaration) and opens
+// a picker listing every location the server reports. See
+// openReferencesPicker and jumpToLocation for how a selection jumps.
+func (h *BufPane) LspReferences() bool {
+	client, uri, params, encoding, ok := h.requestPosition()
+	if !ok {
+		InfoBar.Message("lsp: not attached")
+		return true
+	}
+	if !capabilityEnabled(client.Capabilities().ReferencesProvider) {
+		InfoBar.Message("lsp: server does not support references")
+		return true
+	}
+
+	referenceParams := protocol.ReferenceParams{
+		TextDocumentPositionParams: params,
+		Context:                    protocol.ReferenceContext{IncludeDeclaration: true},
+	}
+
+	client.Call(context.Background(), "textDocument/references", referenceParams, func(rsp *jrpc2.Response, err error) {
+		if err != nil {
+			InfoBar.Error("lsp: references: ", err)
+			return
+		}
+		var raw json.RawMessage
+		if err := rsp.UnmarshalResult(&raw); err != nil {
+			InfoBar.Error("lsp: references: ", err)
+			return
+		}
+		locations := decodeReferencesResult(raw)
+		if len(locations) == 0 {
+			InfoBar.Message("lsp: no references")
+			return
+		}
+		h.openReferencesPicker(locations, uri, encoding)
 	})
 	return true
 }
