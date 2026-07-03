@@ -4,7 +4,7 @@ provides diagnostics, hover information, and go to definition.
 
 This is v1 of native LSP support (read-only features plus the server
 lifecycle commands below) plus manual-trigger completion, formatting,
-and rename from v2. References are not implemented yet.
+rename, and references from v2.
 
 # Enabling LSP for a buffer
 
@@ -106,6 +106,9 @@ manage server processes, not which buffers are attached to them.
    the cursor everywhere the server finds a reference, which can span
    multiple files. See "Rename" below.
 
+* `LspReferences`: requests every reference to the symbol under the
+   cursor and opens a picker listing them. See "References" below.
+
 None of these actions has a default keybinding. Bind them the same way
 as any other action, for example:
 
@@ -115,6 +118,7 @@ as any other action, for example:
 > bind Alt-c LspCompletion
 > bind Alt-f LspFormat
 > bind Alt-r LspRename
+> bind Alt-u LspReferences
 ```
 
 # Completion
@@ -188,6 +192,20 @@ a rename completes, the InfoBar reports how many files were touched.
 Switch to each one (for example with `> open path/to/file`) to review
 and save it.
 
+# References
+
+`LspReferences` sends `textDocument/references` for the symbol under
+the cursor, with the declaration itself included alongside every other
+reference. If the server returns any, they open in a fuzzy-filterable
+picker (type to narrow the list, `<Up>`/`<Down>` to move the
+highlight, `<Esc>` to cancel). Each row shows the reference's file
+(relative to the current working directory when that is cheap to
+compute) and its 1-based line and column.
+
+Pressing `<Enter>` on a row jumps to that location, opening or
+switching to the file first if it is not the current buffer, the same
+jump behavior `LspGotoDefinition` uses.
+
 # Diagnostics
 
 Diagnostics published by the server (`textDocument/publishDiagnostics`)
@@ -201,6 +219,30 @@ A running error/warning count is available for the statusline via
 `$(lsp)`, for example by adding it to `statusformatr` in
 `settings.json`. It is empty when there are no LSP diagnostics on the
 buffer.
+
+# Plugin hooks
+
+Three Lua hooks fire from the native LSP client, in addition to the
+usual editor-wide hooks (`onBufferOpen` and so on) that already run
+around it. Define any of them in a plugin the same way as any other
+hook function:
+
+* `onLspAttach(path, server)`: called once a buffer's document is
+   actually open on a language server, that is, after its
+   `textDocument/didOpen` has gone out, not merely when the buffer
+   becomes eligible for attachment. `path` is the buffer's file path;
+   `server` is the server definition's registered name (for example
+   `"go"`).
+
+* `onLspDetach(path, server)`: called once a buffer's document has been
+   closed on the server (after `textDocument/didClose`), with the same
+   `path`/`server` arguments as `onLspAttach`.
+
+* `onDiagnostics(path, count)`: called after a batch of diagnostics
+   from `textDocument/publishDiagnostics` has been applied to a
+   buffer's gutter messages. `path` is the buffer's file path; `count`
+   is how many diagnostics were in that batch (the new total, not a
+   delta from the previous batch).
 
 # Migrating from the Lua `lsp` plugin
 
