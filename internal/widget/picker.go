@@ -81,6 +81,16 @@ type PickerOptions struct {
 	// collision is harmless. A future Tab feature must arbitrate
 	// before adding to handleKeyQuery.
 	OnCtrlI func()
+	// Preview, when non-nil, splits the picker body horizontally: the
+	// upper half lists the rows, the lower half previews the
+	// highlighted row. The callback receives the highlighted row's
+	// index into Items plus the preview area's width and height in
+	// cells, and returns the lines to show and which of them (an index
+	// into lines) is the focus line to highlight; return a negative
+	// focus for no highlight. It is called on every draw while a row
+	// is highlighted, so it should be cheap (cache file reads in the
+	// closure).
+	Preview func(index, width, height int) (lines []string, focus int)
 }
 
 // Picker is a generic list-of-rows overlay widget.
@@ -641,8 +651,22 @@ func (p *Picker) activate() {
 }
 
 // bodyHeight is the row count the visible item list can span. It
-// excludes both border rows and the input row when Query is true.
+// excludes both border rows, the input row when Query is true, and
+// the separator plus preview area when Preview is set.
 func (p *Picker) bodyHeight() int {
+	h := p.totalBodyHeight()
+	if p.opts.Preview != nil {
+		h = h / 2
+		if h < 1 {
+			h = 1
+		}
+	}
+	return h
+}
+
+// totalBodyHeight is the row count between the chrome rows (borders,
+// input row): the space the list alone would get without a preview.
+func (p *Picker) totalBodyHeight() int {
 	sw, sh := screenSize()
 	rect := Resolve(p.opts.Geometry, sw, sh)
 	overhead := 2 // top border + bottom border
@@ -652,6 +676,20 @@ func (p *Picker) bodyHeight() int {
 	h := rect.H - overhead
 	if h < 1 {
 		h = 1
+	}
+	return h
+}
+
+// previewHeight is the row count of the preview area: what remains of
+// the total body after the list and the separator row. Zero when no
+// Preview is configured or the widget is too small.
+func (p *Picker) previewHeight() int {
+	if p.opts.Preview == nil {
+		return 0
+	}
+	h := p.totalBodyHeight() - p.bodyHeight() - 1
+	if h < 0 {
+		h = 0
 	}
 	return h
 }

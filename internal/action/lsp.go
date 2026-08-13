@@ -287,15 +287,18 @@ func referencePickerItems(locations []protocol.Location) []widget.PickerItem {
 }
 
 // openReferencesPicker shows locations in a centered, query-filterable
-// picker (matching the file pickers' style). currentURI is the buffer
-// the references request was sent from, needed by jumpToLocation to
-// tell whether a selected location is already the open buffer.
+// picker (matching the file pickers' style), with a preview of the
+// highlighted hit in the lower half of the widget. currentURI is the
+// buffer the references request was sent from, needed by
+// jumpToLocation to tell whether a selected location is already the
+// open buffer.
 func (h *BufPane) openReferencesPicker(locations []protocol.Location, currentURI protocol.DocumentURI, encoding string) {
 	picker := widget.NewPicker(widget.PickerOptions{
 		Title:    "References",
 		Items:    referencePickerItems(locations),
 		Query:    true,
 		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: widgetOverlayRect()},
+		Preview:  locationPreview(locations),
 		OnSelect: func(index int) {
 			widget.CloseActive()
 			if index < 0 || index >= len(locations) {
@@ -306,6 +309,25 @@ func (h *BufPane) openReferencesPicker(locations []protocol.Location, currentURI
 		OnClose: func() {},
 	})
 	widget.Open(picker)
+}
+
+// locationPreview builds a widget Preview callback over locations: a
+// window of the highlighted hit's file with the hit line centered and
+// highlighted. The file-line cache is scoped to the returned closure,
+// so each picker opening re-reads current content.
+func locationPreview(locations []protocol.Location) func(index, width, height int) ([]string, int) {
+	cache := newPreviewCache()
+	return func(index, width, height int) ([]string, int) {
+		if index < 0 || index >= len(locations) {
+			return nil, -1
+		}
+		loc := locations[index]
+		path, err := lsp.PathFromURI(loc.URI)
+		if err != nil {
+			return nil, -1
+		}
+		return previewWindow(cache.fileLines(path), int(loc.Range.Start.Line), height)
+	}
 }
 
 // LspReferences requests textDocument/references at the cursor

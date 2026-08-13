@@ -205,6 +205,11 @@ highlight, `<Esc>` to cancel). Each row shows the reference's file
 (relative to the current working directory when that is cheap to
 compute) and its 1-based line and column.
 
+The lower half of the picker previews the highlighted reference: a
+window of its file with the hit line centered and highlighted, so a
+row can be judged without jumping to it. The preview follows the
+highlight as you move through the (possibly filtered) rows.
+
 Pressing `<Enter>` on a row jumps to that location, opening or
 switching to the file first if it is not the current buffer, the same
 jump behavior `LspGotoDefinition` uses.

@@ -1429,3 +1429,42 @@ func containsInt(s []int, v int) bool {
 	}
 	return false
 }
+
+func TestPickerPreviewSplitsBody(t *testing.T) {
+	mockScreenSize(t)
+	rect := ScreenRect{X: 0, Y: 0, W: 60, H: 23} // total body: 23-2-1(input) = 20
+	preview := func(index, width, height int) ([]string, int) { return nil, -1 }
+	p := NewPicker(PickerOptions{
+		Items:    []PickerItem{{Label: "a"}},
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: rect},
+		Query:    true,
+		Preview:  preview,
+	})
+
+	if got := p.totalBodyHeight(); got != 20 {
+		t.Fatalf("totalBodyHeight = %d, want 20", got)
+	}
+	if got := p.bodyHeight(); got != 10 {
+		t.Errorf("bodyHeight with preview = %d, want 10 (half of 20)", got)
+	}
+	if got := p.previewHeight(); got != 9 {
+		t.Errorf("previewHeight = %d, want 9 (20 - 10 list - 1 separator)", got)
+	}
+}
+
+func TestPickerNoPreviewKeepsFullBody(t *testing.T) {
+	mockScreenSize(t)
+	rect := ScreenRect{X: 0, Y: 0, W: 60, H: 23}
+	p := NewPicker(PickerOptions{
+		Items:    []PickerItem{{Label: "a"}},
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: rect},
+		Query:    true,
+	})
+
+	if got := p.bodyHeight(); got != 20 {
+		t.Errorf("bodyHeight without preview = %d, want 20", got)
+	}
+	if got := p.previewHeight(); got != 0 {
+		t.Errorf("previewHeight without preview = %d, want 0", got)
+	}
+}

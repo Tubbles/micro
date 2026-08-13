@@ -43,6 +43,9 @@ func (p *Picker) Display() {
 		p.drawInputRow(rect, row, frame)
 	}
 	p.drawBody(rect, row, rowCur)
+	if p.opts.Preview != nil {
+		p.drawPreview(rect, row, rowCur, frame)
+	}
 	p.drawHint(rect, frame)
 }
 
@@ -182,6 +185,50 @@ func (p *Picker) drawBody(r ScreenRect, row, rowCur tcell.Style) {
 				screen.SetContent(ax, y, ch, nil, st)
 				ax += runewidth.RuneWidth(ch)
 			}
+		}
+	}
+}
+
+// drawPreview paints the separator row and the preview of the
+// highlighted row below the list. The focus line reported by the
+// Preview callback is painted with the current-row highlight style so
+// the hit stands out inside its context.
+func (p *Picker) drawPreview(r ScreenRect, row, rowCur, frame tcell.Style) {
+	previewH := p.previewHeight()
+	if previewH < 1 {
+		return
+	}
+	sepY := p.bodyY0(r) + p.bodyHeight()
+	previewY0 := sepY + 1
+	bodyX0 := r.X + 1
+	bodyW := r.W - 2
+
+	screen.SetContent(r.X, sepY, '├', nil, frame)
+	screen.SetContent(r.X+r.W-1, sepY, '┤', nil, frame)
+	for x := bodyX0; x < bodyX0+bodyW; x++ {
+		screen.SetContent(x, sepY, pickerHoriz, nil, frame)
+	}
+
+	idx := p.itemIndexAt(p.current)
+	if idx < 0 {
+		return
+	}
+	lines, focus := p.opts.Preview(idx, bodyW-1, previewH)
+
+	for j := 0; j < previewH && j < len(lines); j++ {
+		y := previewY0 + j
+		st := row
+		if j == focus {
+			st = rowCur
+			for x := bodyX0; x < bodyX0+bodyW; x++ {
+				screen.SetContent(x, y, ' ', nil, st)
+			}
+		}
+		line := truncateToWidth(lines[j], bodyW-1)
+		x := bodyX0 + 1
+		for _, ch := range line {
+			screen.SetContent(x, y, ch, nil, st)
+			x += runewidth.RuneWidth(ch)
 		}
 	}
 }
