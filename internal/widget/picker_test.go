@@ -1468,3 +1468,33 @@ func TestPickerNoPreviewKeepsFullBody(t *testing.T) {
 		t.Errorf("previewHeight without preview = %d, want 0", got)
 	}
 }
+
+func TestPickerLiveQueryModeFiresCallbackNotFilter(t *testing.T) {
+	mockScreenSize(t)
+	var queries []string
+	var p *Picker
+	p = NewPicker(PickerOptions{
+		Query:    true,
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: ScreenRect{X: 0, Y: 0, W: 60, H: 20}},
+		OnQueryChange: func(q string) {
+			queries = append(queries, q)
+			// The consumer's normal reaction: replace the row set.
+			// Must not re-fire the callback (recursion guard).
+			p.RefreshItems([]PickerItem{{Label: "result for " + q}})
+		},
+	})
+
+	p.HandleEvent(runeKey('a'))
+	p.HandleEvent(runeKey('b'))
+
+	if len(queries) != 2 || queries[0] != "a" || queries[1] != "ab" {
+		t.Fatalf("callback fired with %q, want [a ab]", queries)
+	}
+	// Live mode never fuzzy-filters: the refreshed items display as-is.
+	if p.matches != nil {
+		t.Error("matches is non-nil in live-query mode; the picker must not filter")
+	}
+	if got := p.displayedLen(); got != 1 {
+		t.Errorf("displayedLen = %d, want 1 (the refreshed row)", got)
+	}
+}

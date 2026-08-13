@@ -91,6 +91,14 @@ type PickerOptions struct {
 	// is highlighted, so it should be cheap (cache file reads in the
 	// closure).
 	Preview func(index, width, height int) (lines []string, focus int)
+	// OnQueryChange, when non-nil (Query must be true), turns the
+	// query line into a live input instead of a fuzzy filter: the
+	// picker never filters Items itself; every query edit fires the
+	// callback, and the consumer computes a new row set and calls
+	// RefreshItems with it. Used by searches where the query drives
+	// result generation rather than narrowing a fixed list. OnSubmit
+	// never fires in this mode.
+	OnQueryChange func(query string)
 }
 
 // Picker is a generic list-of-rows overlay widget.
@@ -119,6 +127,11 @@ type Picker struct {
 	// the caret and the filter recomputes once.
 	pasting  bool
 	pasteBuf strings.Builder
+
+	// inQueryChange guards against recursion when an OnQueryChange
+	// callback calls RefreshItems (whose recomputeFilter would
+	// otherwise fire the callback again).
+	inQueryChange bool
 
 	lastClickTime time.Time
 	lastClickRow  int
@@ -496,6 +509,20 @@ func wordBoundaryRight(runes []rune, cur int) int {
 //     Enter fires OnSelect on the highlighted row of the filtered
 //     list.
 func (p *Picker) recomputeFilter() {
+	if p.opts.OnQueryChange != nil {
+		// Live-query mode: the consumer regenerates Items instead of
+		// the picker filtering them. The guard stops the callback's
+		// own RefreshItems from re-firing it.
+		if !p.inQueryChange {
+			p.inQueryChange = true
+			p.opts.OnQueryChange(p.query)
+			p.inQueryChange = false
+		}
+		p.matches = nil
+		p.current = 0
+		p.top = 0
+		return
+	}
 	if p.query == "" {
 		p.matches = nil
 	} else {

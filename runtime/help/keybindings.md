@@ -288,6 +288,7 @@ FileExplorerAtCwd
 FileExplorerAtFile
 OpenFilePickerAtCwd
 OpenFilePickerAtFile
+WorkspaceSearch
 Start
 End
 PageUp
@@ -390,6 +391,19 @@ in place, otherwise open a new tab); typing a path that matches no
 entry and pressing `Enter` opens that path verbatim. `Esc` cancels.
 Symlinks are skipped to avoid cycles. Neither action is bound by
 default; add entries in `bindings.json` to use them.
+
+The `WorkspaceSearch` action opens a live text search over every
+non-ignored file under the working directory (the opened workspace
+directory when one is active). The typed query is the search needle
+itself, not a filter: every edit re-runs the search. Matching is a
+literal smart-case substring (an all-lowercase query matches
+case-insensitively, any uppercase makes it exact), one hit per
+matching line, capped at 500 rows. The lower half of the widget
+previews the highlighted hit with its line centered; `Enter` jumps
+to the hit, switching to a pane already displaying the file or
+opening it in a new tab. File content is indexed once when the
+picker opens, using the live buffer for open files; very large and
+binary files are skipped. Not bound by default.
 
 
 The `CutLine` action cuts the current line and adds it to the previously cut
