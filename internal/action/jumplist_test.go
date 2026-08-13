@@ -1,6 +1,8 @@
 package action
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -506,6 +508,119 @@ func TestApplyJump_clearsExtraCursorsOnDestination(t *testing.T) {
 	}
 	if got := bp.Cursor.Loc; got.X != 0 || got.Y != 2 {
 		t.Errorf("after jump: cursor at %+v, want X:0 Y:2", got)
+	}
+}
+
+// makeExtraTestTab appends a second Tab containing one BufPane backed by
+// buf to the global (test) Tabs list, mirroring makeTestPane's bare
+// wiring. The caller must have installed a test Tabs via makeTestPane
+// first; makeTestPane's restore function cleans this tab up too.
+func makeExtraTestTab(buf *buffer.Buffer) *BufPane {
+	tab := &Tab{
+		Node:     views.NewRoot(0, 0, 80, 24),
+		UIWindow: display.NewUIWindow(views.NewRoot(0, 0, 80, 24)),
+	}
+	tab.release = true
+	bp := NewBufPaneFromBuf(buf, tab)
+	bp.SetID(tab.ID())
+	tab.Panes = append(tab.Panes, bp)
+	Tabs.List = append(Tabs.List, tab)
+	return bp
+}
+
+// writeTestFile creates a file for jump-restore tests and returns its path.
+func writeTestFile(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "target.txt")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestRebindBuffer_rewritesMatchingEntries(t *testing.T) {
+	jl := newTestList(10)
+	oldBuf := &buffer.SharedBuffer{}
+	otherBuf := &buffer.SharedBuffer{}
+	newBuf := &buffer.SharedBuffer{}
+	jl.pushLocked(JumpEntry{PaneID: 1, Buf: oldBuf, Loc: buffer.Loc{Y: 1}})
+	jl.pushLocked(JumpEntry{PaneID: 2, Buf: otherBuf, Loc: buffer.Loc{Y: 2}})
+	jl.pushLocked(JumpEntry{PaneID: 3, Buf: oldBuf, Loc: buffer.Loc{Y: 3}})
+
+	jl.RebindBuffer(oldBuf, newBuf)
+
+	if jl.entries[0].Buf != newBuf {
+		t.Errorf("entry 0 not rebound")
+	}
+	if jl.entries[1].Buf != otherBuf {
+		t.Errorf("entry 1 (different buffer) was rebound; want untouched")
+	}
+	if jl.entries[2].Buf != newBuf {
+		t.Errorf("entry 2 not rebound")
+	}
+}
+
+func TestApplyJump_reopensSwappedOutBufferInPlace(t *testing.T) {
+	// A jump entry whose pane had its buffer replaced (e.g. by the
+	// `open` command) must land in the recorded file again, not in the
+	// buffer now occupying the pane.
+	path := writeTestFile(t, "alpha\nbeta\ngamma\ndelta\n")
+	b, err := buffer.NewBufferFromFile(path, buffer.BTDefault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordedPath := b.AbsPath
+	bp, restore := makeTestPane(b)
+	defer restore()
+	entry := JumpEntry{PaneID: bp.ID(), Buf: b.SharedBuffer, Loc: buffer.Loc{X: 0, Y: 2}}
+
+	bp.OpenBuffer(buffer.NewBufferFromString("intruder\n", "", buffer.BTDefault))
+
+	if !applyJump(entry) {
+		t.Fatal("applyJump returned false; expected the recorded file to be restored")
+	}
+	if got := bp.Buf.AbsPath; got != recordedPath {
+		t.Errorf("pane shows %q, want the recorded file %q", got, recordedPath)
+	}
+	if got := string(bp.Buf.Line(2)); got != "gamma" {
+		t.Errorf("restored buffer line 2 = %q, want %q", got, "gamma")
+	}
+	if got := bp.Cursor.Loc; got.X != 0 || got.Y != 2 {
+		t.Errorf("cursor at %+v, want X:0 Y:2", got)
+	}
+}
+
+func TestApplyJump_prefersPaneAlreadyShowingRecordedFile(t *testing.T) {
+	// When the recorded file is displayed in some other pane, the jump
+	// should land there instead of touching the recorded pane's current
+	// buffer.
+	path := writeTestFile(t, "alpha\nbeta\ngamma\ndelta\n")
+	b, err := buffer.NewBufferFromFile(path, buffer.BTDefault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bp, restore := makeTestPane(b)
+	defer restore()
+	entry := JumpEntry{PaneID: bp.ID(), Buf: b.SharedBuffer, Loc: buffer.Loc{X: 0, Y: 1}}
+
+	b2, err := buffer.NewBufferFromFile(path, buffer.BTDefault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bp2 := makeExtraTestTab(b2)
+	bp.OpenBuffer(buffer.NewBufferFromString("intruder\n", "", buffer.BTDefault))
+
+	if !applyJump(entry) {
+		t.Fatal("applyJump returned false; expected jump to the displaying pane")
+	}
+	if got := Tabs.Active(); got != 1 {
+		t.Errorf("active tab = %d, want 1 (the tab displaying the file)", got)
+	}
+	if got := bp2.Cursor.Loc.Y; got != 1 {
+		t.Errorf("displaying pane cursor Y = %d, want 1", got)
+	}
+	if got := bp.Buf.AbsPath; got != "" {
+		t.Errorf("recorded pane's buffer was swapped to %q; want untouched", got)
 	}
 }
 

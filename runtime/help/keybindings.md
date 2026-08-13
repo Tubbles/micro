@@ -356,8 +356,13 @@ CursorEnd, JumpLine, JumpToMatchingBrace, Find/FindLiteral/FindNext/FindPrevious
 CursorPageUp/CursorPageDown, HalfPageUp/HalfPageDown, MousePress) and whenever
 the active pane or tab changes. The first `JumpBack` after a series of edits
 also records your current cursor so `JumpForward` can return to it. Entries
-whose pane has been closed are skipped silently. `PushJump` records the
-current cursor as a manual breadcrumb for the same list. None of these are
+whose pane has been closed are skipped silently. If a pane still exists but
+no longer displays the recorded file (something replaced its buffer, e.g.
+the `> open` command), the jump restores that file: it switches to another
+pane already displaying it if one exists, reopens it in place if the pane's
+current buffer has no unsaved changes, or opens it in a new tab otherwise.
+`PushJump` records the current cursor as a manual breadcrumb for the same
+list. None of these are
 bound by default; add entries in `bindings.json` to use them.
 
 The `CutLine` action cuts the current line and adds it to the previously cut

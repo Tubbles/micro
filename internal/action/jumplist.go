@@ -4,6 +4,8 @@ import (
 	"sync"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
+	"github.com/micro-editor/micro/v2/internal/config"
+	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/util"
 )
 
@@ -238,6 +240,21 @@ func (jl *JumpList) OnCursorMove(buf *buffer.SharedBuffer, old, new buffer.Loc) 
 	}
 }
 
+// RebindBuffer rewrites every entry recorded against oldBuf to point at
+// newBuf. applyJump calls it after re-resolving a jump target's file to a
+// different live buffer, so OnTextEdit's loc shifting and the
+// buffer-match check keep working against the live SharedBuffer instead
+// of a dead pointer.
+func (jl *JumpList) RebindBuffer(oldBuf, newBuf *buffer.SharedBuffer) {
+	jl.mu.Lock()
+	defer jl.mu.Unlock()
+	for i := range jl.entries {
+		if jl.entries[i].Buf == oldBuf {
+			jl.entries[i].Buf = newBuf
+		}
+	}
+}
+
 // withSuppression runs fn with automatic pushes disabled. Used by JumpBack /
 // JumpForward to prevent the focus changes and cursor moves they perform
 // from feeding back into the list.
@@ -280,7 +297,8 @@ func paneAlive(id uint64) bool {
 // applyJump moves focus to the pane referenced by e and seeks its cursor.
 // Returns false if the pane has gone away in the meantime (caller should
 // retry with the next entry, but in practice Back/Forward have already
-// validated via the alive callback).
+// validated via the alive callback), or if the recorded buffer stopped
+// being displayed and could not be restored (see restoreJumpTarget).
 //
 // Multi-cursor selections on the destination pane are cleared so the user
 // always lands with a single cursor at the jump target. The recorded Loc
@@ -292,6 +310,18 @@ func applyJump(e JumpEntry) bool {
 	if bp == nil {
 		return false
 	}
+
+	if bp.Buf.SharedBuffer != e.Buf {
+		// The recorded pane no longer displays the recorded buffer
+		// (something swapped it, e.g. the `open` command). Land the
+		// jump in the recorded file, not in whatever the pane shows
+		// now.
+		ti, pi, bp = restoreJumpTarget(ti, pi, bp, e)
+		if bp == nil {
+			return false
+		}
+	}
+
 	if Tabs.Active() != ti {
 		Tabs.SetActive(ti)
 	}
@@ -306,4 +336,49 @@ func applyJump(e JumpEntry) bool {
 	bp.Cursor.GotoLoc(loc)
 	bp.Relocate()
 	return true
+}
+
+// restoreJumpTarget re-points a jump at entry e's recorded file after the
+// recorded pane (ti, pi, bp) stopped displaying it. Preference order: a
+// pane anywhere that already displays the file (jump there); otherwise
+// reopen the file (NewBufferFromFile dedups against OpenBuffers, so a
+// buffer still open elsewhere keeps its state and a closed one is re-read
+// from disk), replacing the recorded pane's buffer in place when it has
+// no unsaved changes, or opening a new tab when it does, since OpenBuffer
+// discards the buffer it evicts and a jump must never cost the user
+// unsaved work. Entries recording the old SharedBuffer are rebound to the
+// restored one so text-edit shifting and future buffer-match checks track
+// the live buffer. Returns (-1, -1, nil) if the entry records no file
+// path (a scratch buffer cannot be reopened) or reopening fails.
+func restoreJumpTarget(ti, pi int, bp *BufPane, e JumpEntry) (int, int, *BufPane) {
+	if e.Buf == nil || e.Buf.AbsPath == "" {
+		return -1, -1, nil
+	}
+
+	for scanTab, tab := range Tabs.List {
+		for scanPane, pane := range tab.Panes {
+			if other, ok := pane.(*BufPane); ok && other.Buf.AbsPath == e.Buf.AbsPath {
+				Jumps.RebindBuffer(e.Buf, other.Buf.SharedBuffer)
+				return scanTab, scanPane, other
+			}
+		}
+	}
+
+	b, err := buffer.NewBufferFromFile(e.Buf.AbsPath, buffer.BTDefault)
+	if err != nil {
+		InfoBar.Error("jumplist: reopening ", e.Buf.AbsPath, ": ", err)
+		return -1, -1, nil
+	}
+	Jumps.RebindBuffer(e.Buf, b.SharedBuffer)
+
+	if !bp.Buf.Modified() {
+		bp.OpenBuffer(b)
+		return ti, pi, bp
+	}
+
+	width, height := screen.Screen.Size()
+	iOffset := config.GetInfoBarOffset()
+	tp := NewTabFromBuffer(0, 0, width, height-1-iOffset, b)
+	Tabs.AddTab(tp)
+	return len(Tabs.List) - 1, 0, tp.Panes[0].(*BufPane)
 }
