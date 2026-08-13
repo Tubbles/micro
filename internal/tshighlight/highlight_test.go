@@ -64,6 +64,40 @@ func TestGoHighlightRuneColumns(t *testing.T) {
 	}
 }
 
+// TestOdinHighlightBasicCaptures checks that the "odin" filetype
+// resolves to a grammar and that two everyday captures come out mapped
+// to micro's group vocabulary: the "package" keyword (captured
+// @include, mapped to preproc, matching what runtime/syntax/odin.yaml's
+// regex rules use) and a line comment (captured "@comment @spell",
+// which relies on stripSpellCaptures to survive as a comment).
+func TestOdinHighlightBasicCaptures(t *testing.T) {
+	const src = "package main\n\n// note\nmain :: proc() {\n}\n"
+
+	buf, ok := NewBuffer("odin")
+	if !ok {
+		t.Fatal(`NewBuffer("odin") = false, want a grammar for "odin"`)
+	}
+	buf.Reparse([]byte(src))
+
+	packageLine := buf.LineMatch(0)
+	group, ok := packageLine[0]
+	if !ok {
+		t.Fatalf(`line 0 ("package main") has no LineMatch breakpoint at column 0; got %v`, packageLine)
+	}
+	if want := "preproc"; group.String() != want {
+		t.Errorf(`"package" keyword group = %q, want %q`, group.String(), want)
+	}
+
+	commentLine := buf.LineMatch(2)
+	group, ok = commentLine[0]
+	if !ok {
+		t.Fatalf(`line 2 ("// note") has no LineMatch breakpoint at column 0; got %v`, commentLine)
+	}
+	if want := "comment"; group.String() != want {
+		t.Errorf("line comment group = %q, want %q", group.String(), want)
+	}
+}
+
 // TestMarkdownGoFenceInjectionRuneColumns checks that a Go code fence
 // inside a Markdown document is highlighted using the injected Go
 // grammar (not left as plain Markdown text), and that the injected

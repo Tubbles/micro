@@ -27,6 +27,7 @@ var filetypeLanguage = map[string]string{
 	"html":       "html",
 	"css":        "css",
 	"markdown":   "markdown",
+	"odin":       "odin",
 }
 
 // languageEntry returns the gotreesitter grammar entry for a micro

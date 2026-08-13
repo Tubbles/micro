@@ -14,7 +14,8 @@ import (
 // markdown_inline), not guessed: for each of those names,
 // grammars.DetectLanguageByName(name).HighlightQuery was scanned for its
 // unique "@capture" tokens against the odvcencio/gotreesitter version
-// pinned in go.mod.
+// pinned in go.mod. Languages added later (odin) contribute their
+// queries' captures under the same rule.
 //
 // Where a capture matches an existing regex-engine group 1:1 (e.g.
 // "comment"), the table reuses that name so colorschemes need no
@@ -36,8 +37,10 @@ var captureGroups = map[string]string{
 
 	// literals
 	"boolean":            "constant.bool",
+	"character":          "constant.string",
 	"constant":           "constant",
 	"constant.builtin":   "constant.builtin",
+	"float":              "constant.number",
 	"number":             "constant.number",
 	"string":             "constant.string",
 	"string.escape":      "constant.specialChar",
@@ -48,19 +51,22 @@ var captureGroups = map[string]string{
 	"text.literal":       "constant.string",
 
 	// keywords / control flow
-	"keyword":          "statement",
-	"keyword.function": "statement.declaration",
-	"keyword.operator": "statement",
-	"keyword.return":   "statement",
-	"conditional":      "statement.control",
-	"repeat":           "statement.control",
-	"label":            "statement.control",
-	"preproc":          "preproc",
-	"charset":          "preproc",
-	"import":           "preproc",
-	"keyframes":        "preproc",
-	"media":            "preproc",
-	"supports":         "preproc",
+	"keyword":             "statement",
+	"keyword.function":    "statement.declaration",
+	"keyword.operator":    "statement",
+	"keyword.return":      "statement",
+	"storageclass":        "statement",
+	"conditional":         "statement.control",
+	"conditional.ternary": "statement.control",
+	"repeat":              "statement.control",
+	"label":               "statement.control",
+	"preproc":             "preproc",
+	"charset":             "preproc",
+	"import":              "preproc",
+	"include":             "preproc",
+	"keyframes":           "preproc",
+	"media":               "preproc",
+	"supports":            "preproc",
 
 	// identifiers
 	"function":           "identifier",
