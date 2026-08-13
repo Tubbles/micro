@@ -13,7 +13,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/lsp/protocol"
 )
 
-func TestFormatHoverMessage(t *testing.T) {
+func TestFormatHoverText(t *testing.T) {
 	cases := []struct {
 		name  string
 		hover protocol.Hover
@@ -25,9 +25,14 @@ func TestFormatHoverMessage(t *testing.T) {
 			want:  "func Foo() int",
 		},
 		{
-			name:  "collapses newlines and repeated whitespace",
+			name:  "preserves internal line structure",
 			hover: protocol.Hover{Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: "func Foo() int\n\n  returns 42\n"}},
-			want:  "func Foo() int returns 42",
+			want:  "func Foo() int\n\n  returns 42",
+		},
+		{
+			name:  "normalizes dos line endings",
+			hover: protocol.Hover{Contents: protocol.MarkupContent{Value: "a\r\nb"}},
+			want:  "a\nb",
 		},
 		{
 			name:  "zero value (null LSP result)",
@@ -42,8 +47,8 @@ func TestFormatHoverMessage(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := formatHoverMessage(c.hover); got != c.want {
-				t.Errorf("formatHoverMessage(%+v) = %q, want %q", c.hover, got, c.want)
+			if got := formatHoverText(c.hover); got != c.want {
+				t.Errorf("formatHoverText(%+v) = %q, want %q", c.hover, got, c.want)
 			}
 		})
 	}

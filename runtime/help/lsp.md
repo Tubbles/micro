@@ -85,8 +85,10 @@ manage server processes, not which buffers are attached to them.
 # Actions
 
 * `LspHover`: requests hover information at the cursor and shows it in
-   the InfoBar. If the server has nothing to say about that position,
-   micro shows a quiet "no hover info" message instead.
+   a centered modal popup. `Esc` (or `Enter`) dismisses the popup, and
+   `Up`/`Down`/`PageUp`/`PageDown` scroll long content. If the server
+   has nothing to say about that position, micro shows a quiet "no
+   hover info" message in the InfoBar instead.
 
 * `LspGotoDefinition`: requests the definition of the symbol at the
    cursor. If it is in a different file, micro switches to the tab or

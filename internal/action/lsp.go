@@ -35,25 +35,58 @@ func (h *BufPane) requestPosition() (client *lsp.Client, uri protocol.DocumentUR
 	return client, uri, params, encoding, true
 }
 
-// formatHoverMessage turns a textDocument/hover result into a single
-// line for the InfoBar (v1 renders hover in the InfoBar rather than an
-// anchored popup, see D-44). It returns "" for a hover with no content,
-// which covers both a `null` LSP result and an explicit empty string,
-// so the caller can show one quiet "no hover info" message for either.
-func formatHoverMessage(hover protocol.Hover) string {
-	text := strings.TrimSpace(hover.Contents.Value)
-	if text == "" {
-		return ""
+// formatHoverText normalizes a textDocument/hover result for the hover
+// popup: line endings become plain \n and outer whitespace is trimmed,
+// but internal line structure is preserved (the popup is multi-line,
+// superseding v1's single-line InfoBar rendering from D-44). It returns
+// "" for a hover with no content, which covers both a `null` LSP result
+// and an explicit empty string, so the caller can show one quiet "no
+// hover info" message for either.
+func formatHoverText(hover protocol.Hover) string {
+	text := strings.ReplaceAll(hover.Contents.Value, "\r\n", "\n")
+	return strings.TrimSpace(text)
+}
+
+// hoverPopupRect centers a content-sized rect inside the widget overlay
+// area: wide enough for the longest wrapped line and tall enough for
+// every wrapped line, both capped to the overlay bounds (the popup
+// scrolls when capped).
+func hoverPopupRect(text string) widget.ScreenRect {
+	area := widgetOverlayRect()
+	if area.W < 4 || area.H < 4 {
+		return area
 	}
-	// The InfoBar is a single display line; collapse markdown/plaintext
-	// line breaks and repeated whitespace rather than truncating.
-	return strings.Join(strings.Fields(text), " ")
+	innerW, innerH := widget.PopupContentSize(text, area.W-2)
+	w := innerW + 2
+	h := innerH + 2
+	if w > area.W {
+		w = area.W
+	}
+	if h > area.H {
+		h = area.H
+	}
+	return widget.ScreenRect{
+		X: area.X + (area.W-w)/2,
+		Y: area.Y + (area.H-h)/2,
+		W: w,
+		H: h,
+	}
+}
+
+// openHoverPopup shows text in a centered modal popup (Esc dismisses).
+func openHoverPopup(text string) {
+	widget.Open(widget.NewPopup(widget.PopupOptions{
+		Title:    "Hover",
+		Text:     text,
+		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: hoverPopupRect(text)},
+		OnClose:  func() {},
+	}))
 }
 
 // LspHover requests textDocument/hover at the cursor and shows the
-// result in the InfoBar. The request is async: this only sends it, and
-// the response callback (which runs on the main goroutine, like every
-// lsp.Client callback) updates the InfoBar once the server replies.
+// result in a modal popup. The request is async: this only sends it,
+// and the response callback (which runs on the main goroutine, like
+// every lsp.Client callback) opens the popup once the server replies.
 func (h *BufPane) LspHover() bool {
 	client, _, params, _, ok := h.requestPosition()
 	if !ok {
@@ -71,12 +104,12 @@ func (h *BufPane) LspHover() bool {
 			InfoBar.Error("lsp: hover: ", err)
 			return
 		}
-		msg := formatHoverMessage(hover)
-		if msg == "" {
+		text := formatHoverText(hover)
+		if text == "" {
 			InfoBar.Message("lsp: no hover info")
 			return
 		}
-		InfoBar.Message(msg)
+		openHoverPopup(text)
 	})
 	return true
 }

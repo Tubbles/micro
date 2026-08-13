@@ -103,6 +103,21 @@ func (p *Popup) scroll(delta int) {
 	}
 }
 
+// PopupContentSize reports the inner width and height a Popup needs
+// to show text without scrolling: the widest line's display width
+// after wrapping to at most maxW cells, and the resulting line count.
+// Callers use it to size a content-fitted Geometry before opening the
+// popup.
+func PopupContentSize(text string, maxW int) (w, h int) {
+	lines := wrapToWidth(text, maxW)
+	for _, line := range lines {
+		if lw := stringWidth(line); lw > w {
+			w = lw
+		}
+	}
+	return w, len(lines)
+}
+
 // wrapToWidth splits text on newlines and soft-wraps each line to at
 // most width display cells (rune-width aware, no word-boundary
 // preference: a hover payload is arbitrary text, and mid-word wrap is
