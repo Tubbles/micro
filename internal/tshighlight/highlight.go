@@ -10,12 +10,30 @@
 package tshighlight
 
 import (
+	"regexp"
 	"sort"
 	"unicode/utf8"
 
 	"github.com/micro-editor/micro/v2/pkg/highlight"
 	gotreesitter "github.com/odvcencio/gotreesitter"
 )
+
+// spellCapturePattern matches @spell / @nospell capture tokens in a
+// highlight query. These are nvim-treesitter's spellcheck metadata
+// channel, not highlight groups: a node captured "@comment @spell"
+// yields two identical-span ranges, and gotreesitter's overlap
+// resolution keeps only one of them (the @spell one in practice), so
+// the node would render under an unknown "spell" group, i.e. unstyled,
+// instead of as a comment. stripSpellCaptures removes the tokens before
+// query compilation. The initial 14-language set's queries contain no
+// @spell at all (verified against the gotreesitter version pinned in
+// go.mod), so this only affects languages whose queries use it (odin is
+// the first bundled one).
+var spellCapturePattern = regexp.MustCompile(`@(no)?spell\b`)
+
+func stripSpellCaptures(query string) string {
+	return spellCapturePattern.ReplaceAllString(query, "")
+}
 
 // Buffer holds the tree-sitter parsing and highlighting state for one
 // micro buffer. It is created (via NewBuffer) once a grammar is known to
@@ -67,7 +85,7 @@ func NewBuffer(filetype string) (*Buffer, bool) {
 		}))
 	}
 
-	highlighter, err := gotreesitter.NewHighlighter(lang, entry.HighlightQuery, opts...)
+	highlighter, err := gotreesitter.NewHighlighter(lang, stripSpellCaptures(entry.HighlightQuery), opts...)
 	if err != nil {
 		return nil, false
 	}

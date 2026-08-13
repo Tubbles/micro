@@ -2,6 +2,23 @@ package tshighlight
 
 import "testing"
 
+// TestStripSpellCaptures checks that @spell / @nospell capture tokens
+// are removed from query text while other captures (including ones that
+// merely contain the substring) are left alone.
+func TestStripSpellCaptures(t *testing.T) {
+	cases := map[string]string{
+		"[(comment) (block_comment)] @comment @spell": "[(comment) (block_comment)] @comment ",
+		"(text) @nospell":    "(text) ",
+		"(word) @spellbound": "(word) @spellbound",
+		"(comment) @comment": "(comment) @comment",
+	}
+	for in, want := range cases {
+		if got := stripSpellCaptures(in); got != want {
+			t.Errorf("stripSpellCaptures(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 // TestNewBufferNoGrammar checks that a filetype with no entry in
 // filetypeLanguage (and so no gotreesitter grammar attempted) reports
 // (nil, false), which is the signal internal/buffer uses to fall back
