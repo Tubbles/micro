@@ -89,9 +89,10 @@ manage server processes, not which buffers are attached to them.
    micro shows a quiet "no hover info" message instead.
 
 * `LspGotoDefinition`: requests the definition of the symbol at the
-   cursor. If it is in a different file, that file is opened (or
-   switched to, if already open in another tab or split) and the cursor
-   is moved there; if it is in the current file, the cursor just moves.
+   cursor. If it is in a different file, micro switches to the tab or
+   split already displaying that file, or opens it in a new tab if it
+   is not displayed anywhere, and the cursor is moved there; if it is
+   in the current file, the cursor just moves.
 
 * `LspCompletion`: requests completion candidates at the cursor and, if
    the server returns any, opens a popup listing them. See "Completion"

@@ -11,8 +11,10 @@ import (
 	"github.com/creachadair/jrpc2"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
+	"github.com/micro-editor/micro/v2/internal/config"
 	"github.com/micro-editor/micro/v2/internal/lsp"
 	"github.com/micro-editor/micro/v2/internal/lsp/protocol"
+	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/widget"
 )
 
@@ -118,10 +120,11 @@ func gotoLoc(pane gotoLocator, lineText string, pos protocol.Position, encoding 
 }
 
 // switchOrOpenFile focuses the pane already displaying path if one is
-// open in any tab, or opens it by replacing the current pane's buffer
-// otherwise (the same behavior as the `open` command). It returns the
-// BufPane now displaying path, or nil (after reporting the error to the
-// InfoBar) if opening a not-yet-open file failed.
+// open in any tab, or opens it in a new tab otherwise (mirroring the
+// `tab` command rather than `open`, so the jump never evicts the buffer
+// the user jumped from). It returns the BufPane now displaying path, or
+// nil (after reporting the error to the InfoBar) if opening a
+// not-yet-open file failed.
 func switchOrOpenFile(h *BufPane, path string) *BufPane {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -144,8 +147,12 @@ func switchOrOpenFile(h *BufPane, path string) *BufPane {
 		InfoBar.Error("lsp: opening ", path, ": ", err)
 		return nil
 	}
-	h.OpenBuffer(b)
-	return h
+	width, height := screen.Screen.Size()
+	iOffset := config.GetInfoBarOffset()
+	tp := NewTabFromBuffer(0, 0, width, height-1-iOffset, b)
+	Tabs.AddTab(tp)
+	Tabs.SetActive(len(Tabs.List) - 1)
+	return tp.Panes[0].(*BufPane)
 }
 
 // jumpToLocation switches to (or opens) loc's file if it differs from
