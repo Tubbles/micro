@@ -4,5 +4,11 @@
         "args": [],
         "roots": ["go.mod", ".git"],
         "filetypes": ["go"]
+    },
+    "odin": {
+        "command": "ols",
+        "args": [],
+        "roots": ["ols.json", ".git"],
+        "filetypes": ["odin"]
     }
 }
