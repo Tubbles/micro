@@ -27,6 +27,24 @@ func (g Group) String() string {
 	return ""
 }
 
+// RegisterGroup registers a new syntax highlighting group by name, if one
+// does not already exist, and returns its Group id. It is idempotent:
+// calling it again with the same name returns the same id.
+//
+// This is the same registration this file does inline while parsing a
+// regex syntax def (see the Groups[...] writes below), exposed for
+// other highlighting backends (e.g. internal/tshighlight) that mint
+// groups for captures with no 1:1 equivalent among the regex engine's
+// existing group names.
+func RegisterGroup(name string) Group {
+	if g, ok := Groups[name]; ok {
+		return g
+	}
+	numGroups++
+	Groups[name] = numGroups
+	return numGroups
+}
+
 // A Def is a full syntax definition for a language
 // It has a filetype, information about how to detect the filetype based
 // on filename or header (the first line of the file)

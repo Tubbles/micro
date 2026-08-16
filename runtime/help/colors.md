@@ -266,6 +266,16 @@ Here's a list of subgroups used in micro's built-in syntax files.
 * symbol.tag (For html tags, among other things)
 * type.keyword (If you want a special highlight for keywords like `private`)
 
+When the `treesitter` option is on for a buffer, its lines are colored by
+micro's tree-sitter backend instead of the regex engine above, but through
+the same colorscheme groups and the same longest-dot-prefix matching. Most
+tree-sitter captures reuse an existing group from the lists above. A few have
+no close existing equivalent and get a new subgroup instead, so a colorscheme
+that wants to color them differently can, while colorschemes that don't know
+about them still fall back correctly: `identifier.builtin`,
+`identifier.method`, `identifier.special`, `constant.string.special`,
+`type.builtin`, `markup.heading`, and `markup.bold`.
+
 In the future, plugins may also be able to use color groups for styling.
 
 ---
