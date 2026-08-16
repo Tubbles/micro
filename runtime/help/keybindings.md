@@ -314,6 +314,7 @@ FileExplorerAtFile
 OpenFilePickerAtCwd
 OpenFilePickerAtFile
 WorkspaceSearch
+WorkspacePicker
 Start
 End
 PageUp
@@ -484,6 +485,15 @@ to the hit, switching to a pane already displaying the file or
 opening it in a new tab. File content is indexed once when the
 picker opens, using the live buffer for open files; very large and
 binary files are skipped. Not bound by default.
+
+The `WorkspacePicker` action opens a centred picker listing recently
+opened dir-backed workspaces, most recent first, filterable by the
+typed query. `Enter` switches to the highlighted workspace, the same
+full switch `> opendir` performs (saving the current workspace,
+prompting to save modified buffers, then replaying the target's saved
+layout). `Esc` cancels. See `> help workspaces`. Not bound by
+default; add an entry in `bindings.json` to use it, or run
+`> workspaces`.
 
 The `CutLine` action cuts the current line and adds it to the previously cut
 lines in the clipboard since the last paste (rather than just replaces the

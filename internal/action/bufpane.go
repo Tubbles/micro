@@ -1054,6 +1054,7 @@ var BufKeyActions = map[string]BufKeyAction{
 	"OpenFilePickerAtCwd":       (*BufPane).OpenFilePickerAtCwd,
 	"OpenFilePickerAtFile":      (*BufPane).OpenFilePickerAtFile,
 	"WorkspaceSearch":           (*BufPane).WorkspaceSearch,
+	"WorkspacePicker":           (*BufPane).WorkspacePicker,
 	"Start":                     (*BufPane).Start,
 	"End":                       (*BufPane).End,
 	"PageUp":                    (*BufPane).PageUp,

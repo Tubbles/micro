@@ -10,17 +10,31 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/Tubbles/tcell/v3"
 	"github.com/micro-editor/json5"
 	"github.com/micro-editor/micro/v2/internal/config"
 	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/util"
-	"github.com/Tubbles/tcell/v3"
+	"github.com/micro-editor/micro/v2/internal/workspace"
 )
 
-var Binder = map[string]func(e Event, action string){
-	"command":  InfoMapEvent,
-	"buffer":   BufMapEvent,
-	"terminal": TermMapEvent,
+// Binder is populated in init(), rather than in its own var
+// initializer, to keep Go's package-initialization dependency
+// analysis from walking into InfoMapEvent/BufMapEvent/TermMapEvent's
+// bodies. A var initializer that names those functions directly would
+// make Binder initialization-depend on the whole bound-action call
+// graph, which now reaches back into InitBindings (workspace-switch
+// support re-runs it), which reads Binder: an initialization cycle.
+// Ordinary function bodies, including init(), are not subject to that
+// dependency analysis.
+var Binder map[string]func(e Event, action string)
+
+func init() {
+	Binder = map[string]func(e Event, action string){
+		"command":  InfoMapEvent,
+		"buffer":   BufMapEvent,
+		"terminal": TermMapEvent,
+	}
 }
 
 func writeFile(name string, txt []byte) error {
@@ -33,15 +47,14 @@ func createBindingsIfNotExist(fname string) {
 	}
 }
 
-// loadBindingsFile reads and parses one bindings JSON file in the
-// config dir. A missing file yields nil; read and parse errors
-// surface via TermMessage, and a parse error still returns whatever
-// json5 decoded before failing (matching the historical bindings.json
-// behaviour of binding what it can).
-func loadBindingsFile(name string) map[string]any {
+// loadBindingsFile reads and parses one bindings JSON file at
+// filename. A missing file yields nil; read and parse errors surface
+// via TermMessage (labelled with name), and a parse error still
+// returns whatever json5 decoded before failing (matching the
+// historical bindings.json behaviour of binding what it can).
+func loadBindingsFile(filename, name string) map[string]any {
 	var parsed map[string]any
 
-	filename := filepath.Join(config.ConfigDir, name)
 	if _, e := os.Stat(filename); e != nil {
 		return nil
 	}
@@ -89,16 +102,20 @@ func applyBindings(parsed map[string]any, name string) {
 }
 
 // InitBindings initializes the bindings map: defaults first, then
-// bindings.json, then bindings.local.json, so the local per-machine
-// layer wins over both. bindings.local.json is user-edited only and
-// is never created or written by micro (mirroring
-// settings.local.json): the bind/unbind commands persist to
-// bindings.json, so a binding saved there stays shadowed by a
-// conflicting local override on the next start or reload.
+// bindings.json, then bindings.local.json, then (when a dir-backed
+// workspace is active) that workspace's own bindings.local.json
+// (${dir}/.ide/micro/bindings.local.json, D-50), so each layer wins
+// over the ones before it and the workspace has the final say.
+// bindings.local.json, at either the user or the workspace level, is
+// user-edited only and is never created or written by micro
+// (mirroring settings.local.json): the bind/unbind commands persist
+// to bindings.json, so a binding saved there stays shadowed by a
+// conflicting local override on the next start, reload, or workspace
+// switch.
 func InitBindings() {
 	createBindingsIfNotExist(filepath.Join(config.ConfigDir, "bindings.json"))
-	parsed := loadBindingsFile("bindings.json")
-	parsedLocal := loadBindingsFile("bindings.local.json")
+	parsed := loadBindingsFile(filepath.Join(config.ConfigDir, "bindings.json"), "bindings.json")
+	parsedLocal := loadBindingsFile(filepath.Join(config.ConfigDir, "bindings.local.json"), "bindings.local.json")
 
 	for p, bind := range Binder {
 		defaults := DefaultBindings(p)
@@ -110,6 +127,11 @@ func InitBindings() {
 
 	applyBindings(parsed, "bindings.json")
 	applyBindings(parsedLocal, "bindings.local.json")
+
+	if currentWorkspaceDir != "" {
+		parsedWorkspaceLocal := loadBindingsFile(workspace.BindingsLocalPath(currentWorkspaceDir), "workspace bindings.local.json")
+		applyBindings(parsedWorkspaceLocal, "workspace bindings.local.json")
+	}
 }
 
 func BindKey(k, v string, bind func(e Event, a string)) {
@@ -450,129 +472,129 @@ var mouseEvents = map[string]tcell.ButtonMask{
 }
 
 var keyEvents = map[string]tcell.Key{
-	"Up":             tcell.KeyUp,
-	"Down":           tcell.KeyDown,
-	"Right":          tcell.KeyRight,
-	"Left":           tcell.KeyLeft,
-	"UpLeft":         tcell.KeyUpLeft,
-	"UpRight":        tcell.KeyUpRight,
-	"DownLeft":       tcell.KeyDownLeft,
-	"DownRight":      tcell.KeyDownRight,
-	"Center":         tcell.KeyCenter,
-	"PageUp":         tcell.KeyPgUp,
-	"PageDown":       tcell.KeyPgDn,
-	"Home":           tcell.KeyHome,
-	"End":            tcell.KeyEnd,
-	"Insert":         tcell.KeyInsert,
-	"Delete":         tcell.KeyDelete,
-	"Help":           tcell.KeyHelp,
-	"Exit":           tcell.KeyExit,
-	"Clear":          tcell.KeyClear,
-	"Cancel":         tcell.KeyCancel,
-	"Print":          tcell.KeyPrint,
-	"Pause":          tcell.KeyPause,
-	"Backtab":        tcell.KeyBacktab,
-	"F1":             tcell.KeyF1,
-	"F2":             tcell.KeyF2,
-	"F3":             tcell.KeyF3,
-	"F4":             tcell.KeyF4,
-	"F5":             tcell.KeyF5,
-	"F6":             tcell.KeyF6,
-	"F7":             tcell.KeyF7,
-	"F8":             tcell.KeyF8,
-	"F9":             tcell.KeyF9,
-	"F10":            tcell.KeyF10,
-	"F11":            tcell.KeyF11,
-	"F12":            tcell.KeyF12,
-	"F13":            tcell.KeyF13,
-	"F14":            tcell.KeyF14,
-	"F15":            tcell.KeyF15,
-	"F16":            tcell.KeyF16,
-	"F17":            tcell.KeyF17,
-	"F18":            tcell.KeyF18,
-	"F19":            tcell.KeyF19,
-	"F20":            tcell.KeyF20,
-	"F21":            tcell.KeyF21,
-	"F22":            tcell.KeyF22,
-	"F23":            tcell.KeyF23,
-	"F24":            tcell.KeyF24,
-	"F25":            tcell.KeyF25,
-	"F26":            tcell.KeyF26,
-	"F27":            tcell.KeyF27,
-	"F28":            tcell.KeyF28,
-	"F29":            tcell.KeyF29,
-	"F30":            tcell.KeyF30,
-	"F31":            tcell.KeyF31,
-	"F32":            tcell.KeyF32,
-	"F33":            tcell.KeyF33,
-	"F34":            tcell.KeyF34,
-	"F35":            tcell.KeyF35,
-	"F36":            tcell.KeyF36,
-	"F37":            tcell.KeyF37,
-	"F38":            tcell.KeyF38,
-	"F39":            tcell.KeyF39,
-	"F40":            tcell.KeyF40,
-	"F41":            tcell.KeyF41,
-	"F42":            tcell.KeyF42,
-	"F43":            tcell.KeyF43,
-	"F44":            tcell.KeyF44,
-	"F45":            tcell.KeyF45,
-	"F46":            tcell.KeyF46,
-	"F47":            tcell.KeyF47,
-	"F48":            tcell.KeyF48,
-	"F49":            tcell.KeyF49,
-	"F50":            tcell.KeyF50,
-	"F51":            tcell.KeyF51,
-	"F52":            tcell.KeyF52,
-	"F53":            tcell.KeyF53,
-	"F54":            tcell.KeyF54,
-	"F55":            tcell.KeyF55,
-	"F56":            tcell.KeyF56,
-	"F57":            tcell.KeyF57,
-	"F58":            tcell.KeyF58,
-	"F59":            tcell.KeyF59,
-	"F60":            tcell.KeyF60,
-	"F61":            tcell.KeyF61,
-	"F62":            tcell.KeyF62,
-	"F63":            tcell.KeyF63,
-	"F64":            tcell.KeyF64,
+	"Up":        tcell.KeyUp,
+	"Down":      tcell.KeyDown,
+	"Right":     tcell.KeyRight,
+	"Left":      tcell.KeyLeft,
+	"UpLeft":    tcell.KeyUpLeft,
+	"UpRight":   tcell.KeyUpRight,
+	"DownLeft":  tcell.KeyDownLeft,
+	"DownRight": tcell.KeyDownRight,
+	"Center":    tcell.KeyCenter,
+	"PageUp":    tcell.KeyPgUp,
+	"PageDown":  tcell.KeyPgDn,
+	"Home":      tcell.KeyHome,
+	"End":       tcell.KeyEnd,
+	"Insert":    tcell.KeyInsert,
+	"Delete":    tcell.KeyDelete,
+	"Help":      tcell.KeyHelp,
+	"Exit":      tcell.KeyExit,
+	"Clear":     tcell.KeyClear,
+	"Cancel":    tcell.KeyCancel,
+	"Print":     tcell.KeyPrint,
+	"Pause":     tcell.KeyPause,
+	"Backtab":   tcell.KeyBacktab,
+	"F1":        tcell.KeyF1,
+	"F2":        tcell.KeyF2,
+	"F3":        tcell.KeyF3,
+	"F4":        tcell.KeyF4,
+	"F5":        tcell.KeyF5,
+	"F6":        tcell.KeyF6,
+	"F7":        tcell.KeyF7,
+	"F8":        tcell.KeyF8,
+	"F9":        tcell.KeyF9,
+	"F10":       tcell.KeyF10,
+	"F11":       tcell.KeyF11,
+	"F12":       tcell.KeyF12,
+	"F13":       tcell.KeyF13,
+	"F14":       tcell.KeyF14,
+	"F15":       tcell.KeyF15,
+	"F16":       tcell.KeyF16,
+	"F17":       tcell.KeyF17,
+	"F18":       tcell.KeyF18,
+	"F19":       tcell.KeyF19,
+	"F20":       tcell.KeyF20,
+	"F21":       tcell.KeyF21,
+	"F22":       tcell.KeyF22,
+	"F23":       tcell.KeyF23,
+	"F24":       tcell.KeyF24,
+	"F25":       tcell.KeyF25,
+	"F26":       tcell.KeyF26,
+	"F27":       tcell.KeyF27,
+	"F28":       tcell.KeyF28,
+	"F29":       tcell.KeyF29,
+	"F30":       tcell.KeyF30,
+	"F31":       tcell.KeyF31,
+	"F32":       tcell.KeyF32,
+	"F33":       tcell.KeyF33,
+	"F34":       tcell.KeyF34,
+	"F35":       tcell.KeyF35,
+	"F36":       tcell.KeyF36,
+	"F37":       tcell.KeyF37,
+	"F38":       tcell.KeyF38,
+	"F39":       tcell.KeyF39,
+	"F40":       tcell.KeyF40,
+	"F41":       tcell.KeyF41,
+	"F42":       tcell.KeyF42,
+	"F43":       tcell.KeyF43,
+	"F44":       tcell.KeyF44,
+	"F45":       tcell.KeyF45,
+	"F46":       tcell.KeyF46,
+	"F47":       tcell.KeyF47,
+	"F48":       tcell.KeyF48,
+	"F49":       tcell.KeyF49,
+	"F50":       tcell.KeyF50,
+	"F51":       tcell.KeyF51,
+	"F52":       tcell.KeyF52,
+	"F53":       tcell.KeyF53,
+	"F54":       tcell.KeyF54,
+	"F55":       tcell.KeyF55,
+	"F56":       tcell.KeyF56,
+	"F57":       tcell.KeyF57,
+	"F58":       tcell.KeyF58,
+	"F59":       tcell.KeyF59,
+	"F60":       tcell.KeyF60,
+	"F61":       tcell.KeyF61,
+	"F62":       tcell.KeyF62,
+	"F63":       tcell.KeyF63,
+	"F64":       tcell.KeyF64,
 	// CtrlSpace / CtrlLeftSq / CtrlBackslash / CtrlRightSq / CtrlCarat /
 	// CtrlUnderscore are intentionally absent: tcell v3 dropped the
 	// matching Key constants. findSingleEvent translates those names
 	// via ctrlNameAliases (above) and emits {KeyRune, char, ModCtrl}
 	// instead, which is the form tcell actually delivers under v3.
-	"CtrlA":          tcell.KeyCtrlA,
-	"CtrlB":          tcell.KeyCtrlB,
-	"CtrlC":          tcell.KeyCtrlC,
-	"CtrlD":          tcell.KeyCtrlD,
-	"CtrlE":          tcell.KeyCtrlE,
-	"CtrlF":          tcell.KeyCtrlF,
-	"CtrlG":          tcell.KeyCtrlG,
-	"CtrlH":          tcell.KeyCtrlH,
-	"CtrlI":          tcell.KeyCtrlI,
-	"CtrlJ":          tcell.KeyCtrlJ,
-	"CtrlK":          tcell.KeyCtrlK,
-	"CtrlL":          tcell.KeyCtrlL,
-	"CtrlM":          tcell.KeyCtrlM,
-	"CtrlN":          tcell.KeyCtrlN,
-	"CtrlO":          tcell.KeyCtrlO,
-	"CtrlP":          tcell.KeyCtrlP,
-	"CtrlQ":          tcell.KeyCtrlQ,
-	"CtrlR":          tcell.KeyCtrlR,
-	"CtrlS":          tcell.KeyCtrlS,
-	"CtrlT":          tcell.KeyCtrlT,
-	"CtrlU":          tcell.KeyCtrlU,
-	"CtrlV":          tcell.KeyCtrlV,
-	"CtrlW":          tcell.KeyCtrlW,
-	"CtrlX":          tcell.KeyCtrlX,
-	"CtrlY":          tcell.KeyCtrlY,
-	"CtrlZ":          tcell.KeyCtrlZ,
-	"Tab":            tcell.KeyTab,
-	"Esc":            tcell.KeyEsc,
-	"Escape":         tcell.KeyEscape,
-	"Enter":          tcell.KeyEnter,
-	"Backspace":      tcell.KeyBackspace2,
-	"OldBackspace":   tcell.KeyBackspace,
+	"CtrlA":        tcell.KeyCtrlA,
+	"CtrlB":        tcell.KeyCtrlB,
+	"CtrlC":        tcell.KeyCtrlC,
+	"CtrlD":        tcell.KeyCtrlD,
+	"CtrlE":        tcell.KeyCtrlE,
+	"CtrlF":        tcell.KeyCtrlF,
+	"CtrlG":        tcell.KeyCtrlG,
+	"CtrlH":        tcell.KeyCtrlH,
+	"CtrlI":        tcell.KeyCtrlI,
+	"CtrlJ":        tcell.KeyCtrlJ,
+	"CtrlK":        tcell.KeyCtrlK,
+	"CtrlL":        tcell.KeyCtrlL,
+	"CtrlM":        tcell.KeyCtrlM,
+	"CtrlN":        tcell.KeyCtrlN,
+	"CtrlO":        tcell.KeyCtrlO,
+	"CtrlP":        tcell.KeyCtrlP,
+	"CtrlQ":        tcell.KeyCtrlQ,
+	"CtrlR":        tcell.KeyCtrlR,
+	"CtrlS":        tcell.KeyCtrlS,
+	"CtrlT":        tcell.KeyCtrlT,
+	"CtrlU":        tcell.KeyCtrlU,
+	"CtrlV":        tcell.KeyCtrlV,
+	"CtrlW":        tcell.KeyCtrlW,
+	"CtrlX":        tcell.KeyCtrlX,
+	"CtrlY":        tcell.KeyCtrlY,
+	"CtrlZ":        tcell.KeyCtrlZ,
+	"Tab":          tcell.KeyTab,
+	"Esc":          tcell.KeyEsc,
+	"Escape":       tcell.KeyEscape,
+	"Enter":        tcell.KeyEnter,
+	"Backspace":    tcell.KeyBackspace2,
+	"OldBackspace": tcell.KeyBackspace,
 
 	// I renamed these keys to PageUp and PageDown but I don't want to break someone's keybindings
 	"PgUp":   tcell.KeyPgUp,

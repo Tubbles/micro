@@ -983,3 +983,43 @@ it.
 Editing a per-buffer option from this picker always changes the global
 (or session-volatile) value, not just the current buffer. Use `setlocal`
 directly if you want a change scoped to one buffer.
+
+## Workspace settings
+
+When a dir-backed workspace is open (see `> help workspaces`), two more
+settings files are read from inside the workspace directory itself:
+`${dir}/.ide/micro/settings.json` and `${dir}/.ide/micro/settings.local.json`.
+They use the exact same format as `settings.json` and `settings.local.json`,
+including the `ft:<filetype>` and `glob:<pattern>` nested-map syntax.
+
+These two files sit above your own `settings.json` and `settings.local.json`
+in precedence, and below each other the same way the user-level pair does.
+The full order, lowest to highest, is:
+
+1. built-in defaults
+2. `settings.json`
+3. `settings.local.json`
+4. the workspace's `settings.json`
+5. the workspace's `settings.local.json`
+6. command-line flags
+7. per-buffer `ft:`/`glob:`/editorconfig matches
+8. `setlocal`
+
+A workspace's settings win over your machine-local overrides, the same way
+VS Code's workspace settings win over its user settings. This lets a project
+pin an option (a required `tabsize`, a linter setting) that applies no
+matter which machine or user settings you bring to it, while `setlocal`
+still always has the final say for the buffer you are in.
+
+`${dir}/.ide/micro/settings.json` is meant to be checked into the project's
+own version control, the same way `settings.json` is meant to be checked
+into your dotfiles. `${dir}/.ide/micro/settings.local.json` is the
+project-scoped equivalent of your own `settings.local.json`: a place for a
+contributor's personal tweaks to a shared project that should not be
+committed.
+
+Use `> setworkspace <option> <value>` to set an option in the workspace's
+own `settings.json`, the same way `> set` targets your own `settings.json`.
+It is only valid while a dir-backed workspace is open. Like `settings.json`
+itself, the workspace's settings files are validated on load; an invalid
+value is reported and replaced with the default rather than applied.

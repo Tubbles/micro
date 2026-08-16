@@ -14,9 +14,11 @@ import (
 	"runtime/pprof"
 	"sort"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/Tubbles/tcell/v3"
 	"github.com/go-errors/errors"
 	isatty "github.com/mattn/go-isatty"
 	"github.com/micro-editor/micro/v2/internal/action"
@@ -28,7 +30,6 @@ import (
 	"github.com/micro-editor/micro/v2/internal/shell"
 	"github.com/micro-editor/micro/v2/internal/util"
 	"github.com/micro-editor/micro/v2/internal/widget"
-	"github.com/Tubbles/tcell/v3"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -52,6 +53,13 @@ var (
 	// Buffered length 1 so the poller can drop stale samples instead of
 	// blocking when the main loop is busy.
 	themePollChan = make(chan config.SystemTheme, 1)
+
+	// posFlagr and searchFlagr recognize the +LINE[:COL] and +/REGEX
+	// CLI arguments. Shared by LoadInput and workspaceDirArg, which
+	// both need to skip these when looking for the file/dir
+	// arguments.
+	posFlagr    = regexp.MustCompile(`^\+(\d+)(?::(\d+))?$`)
+	searchFlagr = regexp.MustCompile(`^\+\/(.+)$`)
 )
 
 func InitFlags() {
@@ -59,6 +67,9 @@ func InitFlags() {
 	flag.Usage = func() {
 		fmt.Println("Usage: micro [OPTION]... [FILE]... [+LINE[:COL]] [+/REGEX]")
 		fmt.Println("       micro [OPTION]... [FILE[:LINE[:COL]]]...  (only if the `parsecursor` option is enabled)")
+		fmt.Println("       micro [OPTION]... DIR")
+		fmt.Println("    \tOpen DIR as a dir-backed workspace (see `> help workspaces`).")
+		fmt.Println("    \tDIR must be the only positional argument.")
 		fmt.Println("-clean")
 		fmt.Println("    \tClean the configuration directory and exit")
 		fmt.Println("-config-dir dir")
@@ -172,11 +183,9 @@ func LoadInput(args []string) []*buffer.Buffer {
 	files := make([]string, 0, len(args))
 
 	flagStartPos := buffer.Loc{-1, -1}
-	posFlagr := regexp.MustCompile(`^\+(\d+)(?::(\d+))?$`)
 	posIndex := -1
 
 	searchText := ""
-	searchFlagr := regexp.MustCompile(`^\+\/(.+)$`)
 	searchIndex := -1
 
 	for i, a := range args {
@@ -256,6 +265,52 @@ func LoadInput(args []string) []*buffer.Buffer {
 	return buffers
 }
 
+// nonFlagArgs strips the +LINE[:COL] and +/REGEX flags LoadInput
+// recognizes (posFlagr, searchFlagr) from args, leaving only the
+// positional file/dir arguments. Shared by workspaceDirArg (which
+// dir-filters the result) and main's scratch-workspace restore check
+// (D-55): restoring the persistent scratch session only makes sense
+// when nothing remains, matching LoadInput's own "no input file"
+// branch.
+func nonFlagArgs(args []string) []string {
+	var files []string
+	for _, a := range args {
+		if posFlagr.MatchString(a) || searchFlagr.MatchString(a) {
+			continue
+		}
+		files = append(files, a)
+	}
+	return files
+}
+
+// workspaceDirArg inspects args the same way LoadInput does (skipping
+// +LINE[:COL] and +/REGEX flags) to decide whether this invocation
+// is `micro DIR`, opening a dir-backed workspace (D-52). A single
+// directory argument returns that path with a nil error; no
+// directory at all returns "" with a nil error, so LoadInput handles
+// it exactly as before. Mixing a directory with file arguments (or
+// passing more than one directory) is a usage error, returned rather
+// than reported directly so the caller can decide how to surface it
+// before the screen is up.
+func workspaceDirArg(args []string) (dir string, err error) {
+	files := nonFlagArgs(args)
+
+	var dirs []string
+	for _, f := range files {
+		if info, statErr := os.Stat(f); statErr == nil && info.IsDir() {
+			dirs = append(dirs, f)
+		}
+	}
+
+	if len(dirs) == 0 {
+		return "", nil
+	}
+	if len(dirs) == 1 && len(files) == 1 {
+		return dirs[0], nil
+	}
+	return "", fmt.Errorf("micro: a directory argument must be the only argument: %s", strings.Join(files, " "))
+}
+
 func checkBackup(name string) error {
 	target := filepath.Join(config.ConfigDir, name)
 	backup := target + util.BackupSuffix
@@ -286,6 +341,19 @@ func checkBackup(name string) error {
 }
 
 func exit(rc int) {
+	// Covers the sighup/Sigterm/EOF paths below, which exit directly
+	// without going through QuitAll/ForceQuit, plus panics: without
+	// this, a crash-adjacent exit would silently lose the active
+	// dir-backed workspace's layout (D-53). QuitAll and ForceQuit's
+	// exit branch call this too, for the normal quit path.
+	action.SaveActiveWorkspace()
+
+	// Release the persistent scratch workspace's lock, if this
+	// instance holds it, so a later instance can claim it outright
+	// instead of having to wait for the dead-pid steal path (D-55).
+	// A no-op for an ephemeral instance, which never claimed it.
+	action.ReleaseScratchLockIfPersisting()
+
 	for _, b := range buffer.OpenBuffers {
 		if !b.Modified() {
 			b.Fini()
@@ -439,15 +507,62 @@ func main() {
 	action.InitGlobals()
 	buffer.SetMessager(action.InfoBar)
 	args := flag.Args()
-	b := LoadInput(args)
 
-	if len(b) == 0 {
-		// No buffers to open
+	dirArg, dirErr := workspaceDirArg(args)
+	if dirErr != nil {
 		screen.Screen.Fini()
-		runtime.Goexit()
+		fmt.Println(dirErr)
+		exit(1)
 	}
 
-	action.InitTabs(b)
+	// No dir-backed workspace is active yet at this point (dirArg, if
+	// any, has not been opened). Start with the workspace settings
+	// layers explicitly empty rather than relying on their nil zero
+	// value, matching ReadSettings/ReadLocalSettings's own pattern.
+	config.ClearWorkspaceSettings()
+
+	if dirArg != "" {
+		// `micro DIR`: open DIR as a dir-backed workspace instead of
+		// the usual file/stdin/empty-buffer input handling (D-52).
+		if err := action.OpenDirWorkspaceAtStartup(dirArg); err != nil {
+			screen.TermMessage(err)
+		}
+	} else {
+		// No dir-backed workspace: this session is the scratch
+		// workspace (D-52). Claim its single-instance persistence
+		// lock before anything might try to save it (D-55).
+		if _, err := action.ClaimScratchLockAtStartup(); err != nil {
+			screen.TermMessage(err)
+		}
+
+		restored := false
+		if action.ScratchIsPersisting() && len(nonFlagArgs(args)) == 0 && isatty.IsTerminal(os.Stdin.Fd()) {
+			// Bare `micro`, no file/stdin argument, AND this instance
+			// owns the scratch lock: the only shape of invocation that
+			// restores the persistent scratch workspace's previous
+			// session instead of LoadInput's usual empty buffer. An
+			// ephemeral instance (another micro already holds the lock)
+			// starts blank so it never shows or clobbers the owner's
+			// session (D-55).
+			var restoreErr error
+			restored, restoreErr = action.RestoreScratchWorkspaceAtStartup()
+			if restoreErr != nil {
+				screen.TermMessage(restoreErr)
+			}
+		}
+
+		if !restored {
+			b := LoadInput(args)
+
+			if len(b) == 0 {
+				// No buffers to open
+				screen.Screen.Fini()
+				runtime.Goexit()
+			}
+
+			action.InitTabs(b)
+		}
+	}
 
 	err = config.RunPluginFn("init")
 	if err != nil {

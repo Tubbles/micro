@@ -56,6 +56,8 @@ Here are the available help topics:
    setups.
 * `lsp`: Explains micro's native Language Server Protocol client: diagnostics,
    hover, go to definition, and the `> lsp` commands.
+* `workspaces`: Explains dir-backed workspaces: opening a directory, jumping
+   between recent workspaces, and what gets saved.
 
 For example, to open the help page on plugins you would run `> help plugins`.
 

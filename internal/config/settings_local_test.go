@@ -16,9 +16,13 @@ import (
 func resetSettings() {
 	parsedSettings = nil
 	parsedLocalSettings = nil
+	parsedWorkspaceSettings = nil
+	parsedWorkspaceLocalSettings = nil
 	GlobalSettings = nil
 	settingsParseError = false
 	localSettingsParseError = false
+	workspaceSettingsParseError = false
+	workspaceLocalSettingsParseError = false
 	VolatileSettings = make(map[string]bool)
 }
 

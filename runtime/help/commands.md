@@ -196,7 +196,10 @@ quotes here but these are not necessary when entering the command in micro.
    `deinit()` function (if it exists), and then loaded again by calling the
    `preinit()`, `init()` and `postinit()` functions (if they exist).
 
-* `cd 'path'`: Change the working directory to the given `path`.
+* `cd 'path'`: Change the working directory to the given `path`. This is the
+   plain chdir tool; it does not touch what is open beyond re-displaying
+   buffer paths relative to the new directory. See `> help workspaces` for
+   `opendir`, which is the full workspace switch.
 
 * `pwd`: Print the current working directory.
 
@@ -210,6 +213,14 @@ quotes here but these are not necessary when entering the command in micro.
    the system clipboard.
 
 * `open 'filename'`: Open a file in the current buffer.
+
+* `opendir 'path'`: Switch to the dir-backed workspace rooted at `path`,
+   saving the current workspace (if any), prompting to save modified
+   buffers, and replaying `path`'s previously saved layout if one exists.
+   See `> help workspaces`.
+
+* `workspaces`: Open a picker listing recently opened dir-backed workspaces,
+   most recent first. Selecting one switches to it. See `> help workspaces`.
 
 * `reopen`: Reopens the current file from disk.
 
