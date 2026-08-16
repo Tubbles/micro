@@ -152,6 +152,7 @@ func (h *BufPane) WorkspaceSearch() bool {
 		return true
 	}
 	files := loadWorkspaceSearchIndex(root)
+	previews := newPreviewCache()
 
 	var hits []workspaceSearchHit
 	var picker *widget.Picker
@@ -167,12 +168,12 @@ func (h *BufPane) WorkspaceSearch() bool {
 			hits = searchWorkspace(files, query)
 			picker.RefreshItems(workspaceSearchItems(files, hits))
 		},
-		Preview: func(index, width, height int) ([]string, int) {
+		Preview: func(index, width, height int) ([]widget.StyledLine, int) {
 			if index < 0 || index >= len(hits) {
 				return nil, -1
 			}
 			hit := hits[index]
-			return previewWindow(files[hit.fileIndex].lines, hit.line, height)
+			return previews.window(files[hit.fileIndex].abs, hit.line, height)
 		},
 		OnSelect: func(index int) {
 			widget.CloseActive()

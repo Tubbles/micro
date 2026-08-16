@@ -7,7 +7,19 @@ import (
 	"github.com/Tubbles/tcell/v3"
 )
 
-func TestWrapToWidth(t *testing.T) {
+// joinWrapped flattens wrapped styled lines back to plain strings for
+// assertion.
+func joinWrapped(lines []StyledLine) []string {
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		for _, span := range line {
+			out[i] += span.Text
+		}
+	}
+	return out
+}
+
+func TestWrapStyledText(t *testing.T) {
 	cases := []struct {
 		text  string
 		width int
@@ -22,18 +34,38 @@ func TestWrapToWidth(t *testing.T) {
 		{"unwrapped when width zero", 0, []string{"unwrapped when width zero"}},
 	}
 	for _, c := range cases {
-		if got := wrapToWidth(c.text, c.width); !reflect.DeepEqual(got, c.want) {
-			t.Errorf("wrapToWidth(%q, %d) = %q, want %q", c.text, c.width, got, c.want)
+		got := joinWrapped(wrapStyledLines(TextToLines(c.text), c.width))
+		if !reflect.DeepEqual(got, c.want) {
+			t.Errorf("wrap(%q, %d) = %q, want %q", c.text, c.width, got, c.want)
 		}
 	}
 }
 
-func TestWrapToWidthWideRunes(t *testing.T) {
-	// é is 1 cell; 漢 is 2 cells. Width 4 fits 漢漢 but not 漢漢漢.
-	got := wrapToWidth("漢漢漢", 4)
+func TestWrapStyledTextWideRunes(t *testing.T) {
+	// 漢 is 2 cells wide. Width 4 fits 漢漢 but not 漢漢漢.
+	got := joinWrapped(wrapStyledLines(TextToLines("漢漢漢"), 4))
 	want := []string{"漢漢", "漢"}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("wrapToWidth wide runes = %q, want %q", got, want)
+		t.Errorf("wrap wide runes = %q, want %q", got, want)
+	}
+}
+
+func TestWrapStyledLinePreservesGroupsAcrossWrap(t *testing.T) {
+	line := StyledLine{
+		{Text: "aaaa", Group: "g1"},
+		{Text: "bbbb", Group: "g2"},
+	}
+	wrapped := wrapStyledLine(line, 6)
+	if len(wrapped) != 2 {
+		t.Fatalf("wrapped into %d lines, want 2: %+v", len(wrapped), wrapped)
+	}
+	want0 := StyledLine{{Text: "aaaa", Group: "g1"}, {Text: "bb", Group: "g2"}}
+	want1 := StyledLine{{Text: "bb", Group: "g2"}}
+	if !reflect.DeepEqual(wrapped[0], want0) {
+		t.Errorf("line 0 = %+v, want %+v", wrapped[0], want0)
+	}
+	if !reflect.DeepEqual(wrapped[1], want1) {
+		t.Errorf("line 1 = %+v, want %+v", wrapped[1], want1)
 	}
 }
 

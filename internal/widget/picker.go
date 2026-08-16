@@ -87,10 +87,11 @@ type PickerOptions struct {
 	// index into Items plus the preview area's width and height in
 	// cells, and returns the lines to show and which of them (an index
 	// into lines) is the focus line to highlight; return a negative
-	// focus for no highlight. It is called on every draw while a row
-	// is highlighted, so it should be cheap (cache file reads in the
-	// closure).
-	Preview func(index, width, height int) (lines []string, focus int)
+	// focus for no highlight. Lines carry styled spans so previews can
+	// be syntax highlighted; PlainLine wraps unstyled text. It is
+	// called on every draw while a row is highlighted, so it should be
+	// cheap (cache file reads and highlighting in the closure).
+	Preview func(index, width, height int) (lines []StyledLine, focus int)
 	// OnQueryChange, when non-nil (Query must be true), turns the
 	// query line into a live input instead of a fuzzy filter: the
 	// picker never filters Items itself; every query edit fires the

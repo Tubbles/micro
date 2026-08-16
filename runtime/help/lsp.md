@@ -86,7 +86,11 @@ manage server processes, not which buffers are attached to them.
 
 * `LspHover`: requests hover information at the cursor and shows it in
    a centered modal popup. `Esc` (or `Enter`) dismisses the popup, and
-   `Up`/`Down`/`PageUp`/`PageDown` scroll long content. If the server
+   `Up`/`Down`/`PageUp`/`PageDown` scroll long content. Markdown code
+   fences in the hover text are syntax highlighted (the fence's
+   language tag picks the syntax definition, falling back to the
+   buffer's filetype) and the fence delimiter lines themselves are
+   hidden; other markdown syntax is shown as plain text. If the server
    has nothing to say about that position, micro shows a quiet "no
    hover info" message in the InfoBar instead.
 
@@ -206,9 +210,10 @@ highlight, `<Esc>` to cancel). Each row shows the reference's file
 compute) and its 1-based line and column.
 
 The lower half of the picker previews the highlighted reference: a
-window of its file with the hit line centered and highlighted, so a
-row can be judged without jumping to it. The preview follows the
-highlight as you move through the (possibly filtered) rows.
+syntax-highlighted window of its file with the hit line centered and
+highlighted, so a row can be judged without jumping to it. The
+preview follows the highlight as you move through the (possibly
+filtered) rows.
 
 Pressing `<Enter>` on a row jumps to that location, opening or
 switching to the file first if it is not the current buffer, the same

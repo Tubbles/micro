@@ -22,7 +22,7 @@ func (p *Popup) Display() {
 	frame := config.GetColor("widget-frame")
 	row := config.GetColor("widget-row")
 
-	lines := wrapToWidth(p.opts.Text, rect.W-2)
+	lines := wrapStyledLines(p.content(), rect.W-2)
 	bodyH := rect.H - 2
 	p.lastBodyH = bodyH
 	p.lastLineCount = len(lines)
@@ -77,7 +77,7 @@ func (p *Popup) drawTitle(r ScreenRect, st tcell.Style) {
 	}
 }
 
-func (p *Popup) drawBody(r ScreenRect, lines []string, st tcell.Style) {
+func (p *Popup) drawBody(r ScreenRect, lines []StyledLine, st tcell.Style) {
 	bodyY0 := r.Y + 1
 	bodyH := r.H - 2
 	bodyX0 := r.X + 1
@@ -87,10 +87,6 @@ func (p *Popup) drawBody(r ScreenRect, lines []string, st tcell.Style) {
 		if idx < 0 || idx >= len(lines) {
 			continue
 		}
-		x := bodyX0
-		for _, ch := range lines[idx] {
-			screen.SetContent(x, bodyY0+j, ch, nil, st)
-			x += runewidth.RuneWidth(ch)
-		}
+		drawStyledLine(lines[idx], bodyX0, bodyY0+j, r.W-2, st)
 	}
 }

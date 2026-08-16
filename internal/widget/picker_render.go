@@ -224,12 +224,7 @@ func (p *Picker) drawPreview(r ScreenRect, row, rowCur, frame tcell.Style) {
 				screen.SetContent(x, y, ' ', nil, st)
 			}
 		}
-		line := truncateToWidth(lines[j], bodyW-1)
-		x := bodyX0 + 1
-		for _, ch := range line {
-			screen.SetContent(x, y, ch, nil, st)
-			x += runewidth.RuneWidth(ch)
-		}
+		drawStyledLine(lines[j], bodyX0+1, y, bodyW-1, st)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/lsp/protocol"
 	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/widget"
+	"github.com/micro-editor/micro/v2/pkg/highlight"
 )
 
 // requestPosition builds the textDocument/position pair for h's cursor,
@@ -47,16 +48,68 @@ func formatHoverText(hover protocol.Hover) string {
 	return strings.TrimSpace(text)
 }
 
+// hoverStyledLines converts a hover payload into popup lines:
+// markdown fence delimiter lines are dropped and the code between
+// them is syntax highlighted using the fence's language tag (matched
+// against syntax-definition filetypes), falling back to the
+// requesting buffer's filetype for untagged fences. Prose lines stay
+// plain; inline markdown syntax is not rendered.
+func hoverStyledLines(text, bufferFiletype string) []widget.StyledLine {
+	var out []widget.StyledLine
+	var codeLines []string
+	inFence := false
+	fenceFiletype := ""
+
+	flushCode := func() {
+		matches := highlightLines(codeLines, syntaxDefForFiletype(fenceFiletype))
+		for i, code := range codeLines {
+			var match highlight.LineMatch
+			if i < len(matches) {
+				match = matches[i]
+			}
+			out = append(out, styledSpansForLine(code, match))
+		}
+		codeLines = nil
+	}
+
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			if inFence {
+				flushCode()
+				inFence = false
+				continue
+			}
+			inFence = true
+			fenceFiletype = strings.TrimSpace(strings.TrimPrefix(trimmed, "```"))
+			if fenceFiletype == "" {
+				fenceFiletype = bufferFiletype
+			}
+			continue
+		}
+		if inFence {
+			codeLines = append(codeLines, line)
+		} else {
+			out = append(out, widget.PlainLine(line))
+		}
+	}
+	if inFence {
+		// Unterminated fence: still show (and highlight) what we got.
+		flushCode()
+	}
+	return out
+}
+
 // hoverPopupRect centers a content-sized rect inside the widget overlay
 // area: wide enough for the longest wrapped line and tall enough for
 // every wrapped line, both capped to the overlay bounds (the popup
 // scrolls when capped).
-func hoverPopupRect(text string) widget.ScreenRect {
+func hoverPopupRect(lines []widget.StyledLine) widget.ScreenRect {
 	area := widgetOverlayRect()
 	if area.W < 4 || area.H < 4 {
 		return area
 	}
-	innerW, innerH := widget.PopupContentSize(text, area.W-2)
+	innerW, innerH := widget.PopupContentSize(lines, area.W-2)
 	w := innerW + 2
 	h := innerH + 2
 	if w > area.W {
@@ -73,12 +126,13 @@ func hoverPopupRect(text string) widget.ScreenRect {
 	}
 }
 
-// openHoverPopup shows text in a centered modal popup (Esc dismisses).
-func openHoverPopup(text string) {
+// openHoverPopup shows lines in a centered modal popup (Esc
+// dismisses).
+func openHoverPopup(lines []widget.StyledLine) {
 	widget.Open(widget.NewPopup(widget.PopupOptions{
 		Title:    "Hover",
-		Text:     text,
-		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: hoverPopupRect(text)},
+		Lines:    lines,
+		Geometry: widget.Geometry{Kind: widget.GeomScreenRect, Rect: hoverPopupRect(lines)},
 		OnClose:  func() {},
 	}))
 }
@@ -109,7 +163,8 @@ func (h *BufPane) LspHover() bool {
 			InfoBar.Message("lsp: no hover info")
 			return
 		}
-		openHoverPopup(text)
+		filetype, _ := h.Buf.Settings["filetype"].(string)
+		openHoverPopup(hoverStyledLines(text, filetype))
 	})
 	return true
 }
@@ -312,12 +367,12 @@ func (h *BufPane) openReferencesPicker(locations []protocol.Location, currentURI
 }
 
 // locationPreview builds a widget Preview callback over locations: a
-// window of the highlighted hit's file with the hit line centered and
-// highlighted. The file-line cache is scoped to the returned closure,
-// so each picker opening re-reads current content.
-func locationPreview(locations []protocol.Location) func(index, width, height int) ([]string, int) {
+// syntax-highlighted window of the highlighted hit's file with the
+// hit line centered. The file cache is scoped to the returned
+// closure, so each picker opening re-reads current content.
+func locationPreview(locations []protocol.Location) func(index, width, height int) ([]widget.StyledLine, int) {
 	cache := newPreviewCache()
-	return func(index, width, height int) ([]string, int) {
+	return func(index, width, height int) ([]widget.StyledLine, int) {
 		if index < 0 || index >= len(locations) {
 			return nil, -1
 		}
@@ -326,9 +381,10 @@ func locationPreview(locations []protocol.Location) func(index, width, height in
 		if err != nil {
 			return nil, -1
 		}
-		return previewWindow(cache.fileLines(path), int(loc.Range.Start.Line), height)
+		return cache.window(path, int(loc.Range.Start.Line), height)
 	}
 }
+
 
 // LspReferences requests textDocument/references at the cursor
 // (including the declaration itself, per IncludeDeclaration) and opens

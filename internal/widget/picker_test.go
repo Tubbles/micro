@@ -1433,7 +1433,7 @@ func containsInt(s []int, v int) bool {
 func TestPickerPreviewSplitsBody(t *testing.T) {
 	mockScreenSize(t)
 	rect := ScreenRect{X: 0, Y: 0, W: 60, H: 23} // total body: 23-2-1(input) = 20
-	preview := func(index, width, height int) ([]string, int) { return nil, -1 }
+	preview := func(index, width, height int) ([]StyledLine, int) { return nil, -1 }
 	p := NewPicker(PickerOptions{
 		Items:    []PickerItem{{Label: "a"}},
 		Geometry: Geometry{Kind: GeomScreenRect, Rect: rect},

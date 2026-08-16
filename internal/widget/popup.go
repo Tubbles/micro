@@ -1,8 +1,6 @@
 package widget
 
 import (
-	runewidth "github.com/mattn/go-runewidth"
-
 	"github.com/Tubbles/tcell/v3"
 )
 
@@ -10,10 +8,14 @@ import (
 type PopupOptions struct {
 	// Title is drawn centered in the top border, like Picker's title.
 	Title string
-	// Text is the popup's content. It is split on newlines and
-	// soft-wrapped to the popup's inner width at render time, so
-	// callers pass it unwrapped.
+	// Text is the popup's content as plain text: split on newlines and
+	// soft-wrapped to the popup's inner width at render time. Ignored
+	// when Lines is set.
 	Text string
+	// Lines is the popup's content as styled lines (one StyledLine per
+	// input line, wrapped at render time). Takes precedence over Text;
+	// use it for content with syntax highlighting.
+	Lines []StyledLine
 	// Geometry places the popup; both screen-rect and buffer-anchored
 	// geometries work.
 	Geometry Geometry
@@ -103,55 +105,40 @@ func (p *Popup) scroll(delta int) {
 	}
 }
 
-// PopupContentSize reports the inner width and height a Popup needs
-// to show text without scrolling: the widest line's display width
-// after wrapping to at most maxW cells, and the resulting line count.
-// Callers use it to size a content-fitted Geometry before opening the
-// popup.
-func PopupContentSize(text string, maxW int) (w, h int) {
-	lines := wrapToWidth(text, maxW)
-	for _, line := range lines {
-		if lw := stringWidth(line); lw > w {
-			w = lw
-		}
+// content normalizes the popup's input into styled lines: Lines
+// verbatim when set, otherwise Text split on newlines as plain lines.
+func (p *Popup) content() []StyledLine {
+	if p.opts.Lines != nil {
+		return p.opts.Lines
 	}
-	return w, len(lines)
+	return TextToLines(p.opts.Text)
 }
 
-// wrapToWidth splits text on newlines and soft-wraps each line to at
-// most width display cells (rune-width aware, no word-boundary
-// preference: a hover payload is arbitrary text, and mid-word wrap is
-// better than dropping content). width < 1 yields one line per input
-// line, unwrapped.
-func wrapToWidth(text string, width int) []string {
-	var out []string
+// TextToLines splits plain text on newlines into unstyled
+// StyledLines, the form Popup and PopupContentSize consume.
+func TextToLines(text string) []StyledLine {
+	var out []StyledLine
 	start := 0
 	for i := 0; i <= len(text); i++ {
 		if i == len(text) || text[i] == '\n' {
-			out = append(out, wrapLine(text[start:i], width)...)
+			out = append(out, PlainLine(text[start:i]))
 			start = i + 1
 		}
 	}
 	return out
 }
 
-func wrapLine(line string, width int) []string {
-	if width < 1 {
-		return []string{line}
-	}
-	var out []string
-	current := ""
-	currentW := 0
-	for _, ch := range line {
-		chW := runewidth.RuneWidth(ch)
-		if currentW+chW > width && current != "" {
-			out = append(out, current)
-			current = ""
-			currentW = 0
+// PopupContentSize reports the inner width and height a Popup needs
+// to show lines without scrolling: the widest line's display width
+// after wrapping to at most maxW cells, and the resulting line count.
+// Callers use it to size a content-fitted Geometry before opening the
+// popup.
+func PopupContentSize(lines []StyledLine, maxW int) (w, h int) {
+	wrapped := wrapStyledLines(lines, maxW)
+	for _, line := range wrapped {
+		if lw := line.width(); lw > w {
+			w = lw
 		}
-		current += string(ch)
-		currentW += chW
 	}
-	out = append(out, current)
-	return out
+	return w, len(wrapped)
 }
