@@ -25,6 +25,8 @@ var optionValidators = map[string]optionValidator{
 	"clipboard":                  validateChoice,
 	"colorcolumn":                validateColorcolumn,
 	"colorscheme":                validateColorscheme,
+	"colorscheme.dark":           validateColorschemeOrEmpty,
+	"colorscheme.light":          validateColorschemeOrEmpty,
 	"commandpalette.historysize": validateNonNegativeValue,
 	"detectlimit":                validateNonNegativeValue,
 	"encoding":                   validateEncoding,
@@ -120,6 +122,9 @@ var DefaultGlobalOnlySettings = map[string]any{
 	"autosave":                   float64(0),
 	"clipboard":                  "external",
 	"colorscheme":                "default",
+	"colorscheme.dark":           "",
+	"colorscheme.light":          "",
+	"colorscheme.follow-system":  false,
 	"commandpalette.actions":     true,
 	"commandpalette.commands":    true,
 	"commandpalette.historysize": float64(20),
@@ -355,7 +360,7 @@ func verifySetting(option string, value any, def any) error {
 		return fmt.Errorf("Error: setting '%s' has incorrect type (%s), using default value: %v (%s)", option, valType, def, defType)
 	}
 
-	if option == "colorscheme" {
+	if option == "colorscheme" || option == "colorscheme.dark" || option == "colorscheme.light" {
 		// Plugins are not initialized yet, so do not verify if the colorscheme
 		// exists yet, since the colorscheme may be added by a plugin later.
 		return nil
@@ -773,6 +778,24 @@ func validateColorscheme(option string, value any) error {
 		return errors.New(colorscheme + " is not a valid colorscheme")
 	}
 
+	return nil
+}
+
+// validateColorschemeOrEmpty is the validator for colorscheme.dark and
+// colorscheme.light. The empty string is a sentinel meaning "this slot
+// is not configured, fall back to colorscheme"; any non-empty value
+// must name an existing colorscheme.
+func validateColorschemeOrEmpty(option string, value any) error {
+	colorscheme, ok := value.(string)
+	if !ok {
+		return errors.New("Expected string type for " + option)
+	}
+	if colorscheme == "" {
+		return nil
+	}
+	if !ColorschemeExists(colorscheme) {
+		return errors.New(colorscheme + " is not a valid colorscheme")
+	}
 	return nil
 }
 
