@@ -83,6 +83,26 @@ func (b *Buffer) ClearAllMessages() {
 	b.Messages = make([]*Message, 0)
 }
 
+// MessagesUnderLoc returns every Message whose [Start, End] range covers
+// loc inclusively. Line-only sentinels (Start.X == -1, produced by
+// NewMessageAtLine) are treated as covering every column on Start.Y.
+// Result order matches Buf.Messages insertion order.
+func (b *Buffer) MessagesUnderLoc(loc Loc) []*Message {
+	var out []*Message
+	for _, m := range b.Messages {
+		if m.Start.X < 0 {
+			if loc.Y == m.Start.Y {
+				out = append(out, m)
+			}
+			continue
+		}
+		if loc.GreaterEqual(m.Start) && loc.LessEqual(m.End) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 type Messager interface {
 	Message(msg ...any)
 }
