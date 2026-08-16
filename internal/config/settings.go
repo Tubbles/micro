@@ -74,6 +74,7 @@ var defaultCommonSettings = map[string]any{
 	"filemanager.showhidden":  false,
 	"filemanager.showignored": false,
 	"filetype":                "unknown",
+	"formatonsave":            false,
 	"hlsearch":                false,
 	"hlselection":             false,
 	"hltaberrors":             false,
@@ -82,6 +83,7 @@ var defaultCommonSettings = map[string]any{
 	"incsearch":               true,
 	"indentchar":              " ", // Deprecated
 	"keepautoindent":          false,
+	"lsp":                     false,
 	"matchbrace":              true,
 	"matchbraceleft":          true,
 	"matchbracestyle":         "underline",

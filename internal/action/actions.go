@@ -1009,8 +1009,15 @@ func (h *BufPane) SaveCB(action string, callback func()) bool {
 	return false
 }
 
-// Save the buffer to disk
+// Save the buffer to disk. If the "formatonsave" option is on, the
+// buffer is lsp-attached, and the server supports whole-document
+// formatting, the buffer is formatted first (asynchronously) and the
+// actual save happens once that response arrives; see
+// lspFormatBeforeSave and formatThenSave.
 func (h *BufPane) Save() bool {
+	if client, uri, encoding, shouldFormat := h.lspFormatBeforeSave(); shouldFormat {
+		return h.formatThenSave(client, uri, encoding)
+	}
 	return h.SaveCB("Save", nil)
 }
 

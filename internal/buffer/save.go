@@ -340,6 +340,8 @@ func (b *Buffer) saveToFile(filename string, withSudo bool, autoSave bool) error
 		b.ReloadSettings(true)
 	}
 
+	fireBufferChange(b.SharedBuffer, BufferEventSave)
+
 	err = b.Serialize()
 	return err
 }

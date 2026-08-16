@@ -74,6 +74,7 @@ func InitCommands() {
 		"runaction":        {(*BufPane).RunActionCmd, ActionComplete},
 		"textfilter":       {(*BufPane).TextFilterCmd, nil},
 		"commandpalette":   {(*BufPane).CommandPaletteCmd, nil},
+		"lsp":              {(*BufPane).LspCmd, nil},
 	}
 }
 

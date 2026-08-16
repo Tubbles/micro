@@ -1053,6 +1053,7 @@ var BufKeyActions = map[string]BufKeyAction{
 	"FileExplorerAtFile":        (*BufPane).FileExplorerAtFile,
 	"OpenFilePickerAtCwd":       (*BufPane).OpenFilePickerAtCwd,
 	"OpenFilePickerAtFile":      (*BufPane).OpenFilePickerAtFile,
+	"WorkspaceSearch":           (*BufPane).WorkspaceSearch,
 	"Start":                     (*BufPane).Start,
 	"End":                       (*BufPane).End,
 	"PageUp":                    (*BufPane).PageUp,
@@ -1121,6 +1122,12 @@ var BufKeyActions = map[string]BufKeyAction{
 	"Deselect":                  (*BufPane).Deselect,
 	"ClearInfo":                 (*BufPane).ClearInfo,
 	"None":                      (*BufPane).None,
+	"LspHover":                  (*BufPane).LspHover,
+	"LspGotoDefinition":         (*BufPane).LspGotoDefinition,
+	"LspCompletion":             (*BufPane).LspCompletion,
+	"LspFormat":                 (*BufPane).LspFormat,
+	"LspRename":                 (*BufPane).LspRename,
+	"LspReferences":             (*BufPane).LspReferences,
 
 	// This was changed to InsertNewline but I don't want to break backwards compatibility
 	"InsertEnter": (*BufPane).InsertNewline,

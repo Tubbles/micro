@@ -1743,3 +1743,72 @@ func TestPickerTabNoCallbackIsNoOp(t *testing.T) {
 		t.Fatalf("Tab without OnTab: query mutated to %q, want \"a\"", h.p.query)
 	}
 }
+
+func TestPickerPreviewSplitsBody(t *testing.T) {
+	mockScreenSize(t)
+	rect := ScreenRect{X: 0, Y: 0, W: 60, H: 23} // total body: 23-2-1(input) = 20
+	preview := func(index, width, height int) ([]StyledLine, int) { return nil, -1 }
+	p := NewPicker(PickerOptions{
+		Items:    []PickerItem{{Label: "a"}},
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: rect},
+		Query:    true,
+		Preview:  preview,
+	})
+
+	if got := p.totalBodyHeight(); got != 20 {
+		t.Fatalf("totalBodyHeight = %d, want 20", got)
+	}
+	if got := p.bodyHeight(); got != 10 {
+		t.Errorf("bodyHeight with preview = %d, want 10 (half of 20)", got)
+	}
+	if got := p.previewHeight(); got != 9 {
+		t.Errorf("previewHeight = %d, want 9 (20 - 10 list - 1 separator)", got)
+	}
+}
+
+func TestPickerNoPreviewKeepsFullBody(t *testing.T) {
+	mockScreenSize(t)
+	rect := ScreenRect{X: 0, Y: 0, W: 60, H: 23}
+	p := NewPicker(PickerOptions{
+		Items:    []PickerItem{{Label: "a"}},
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: rect},
+		Query:    true,
+	})
+
+	if got := p.bodyHeight(); got != 20 {
+		t.Errorf("bodyHeight without preview = %d, want 20", got)
+	}
+	if got := p.previewHeight(); got != 0 {
+		t.Errorf("previewHeight without preview = %d, want 0", got)
+	}
+}
+
+func TestPickerLiveQueryModeFiresCallbackNotFilter(t *testing.T) {
+	mockScreenSize(t)
+	var queries []string
+	var p *Picker
+	p = NewPicker(PickerOptions{
+		Query:    true,
+		Geometry: Geometry{Kind: GeomScreenRect, Rect: ScreenRect{X: 0, Y: 0, W: 60, H: 20}},
+		OnQueryChange: func(q string) {
+			queries = append(queries, q)
+			// The consumer's normal reaction: replace the row set.
+			// Must not re-fire the callback (recursion guard).
+			p.RefreshItems([]PickerItem{{Label: "result for " + q}})
+		},
+	})
+
+	p.HandleEvent(runeKey('a'))
+	p.HandleEvent(runeKey('b'))
+
+	if len(queries) != 2 || queries[0] != "a" || queries[1] != "ab" {
+		t.Fatalf("callback fired with %q, want [a ab]", queries)
+	}
+	// Live mode never fuzzy-filters: the refreshed items display as-is.
+	if p.matches != nil {
+		t.Error("matches is non-nil in live-query mode; the picker must not filter")
+	}
+	if got := p.displayedLen(); got != 1 {
+		t.Errorf("displayedLen = %d, want 1 (the refreshed row)", got)
+	}
+}

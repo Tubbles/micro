@@ -313,6 +313,7 @@ FileExplorerAtCwd
 FileExplorerAtFile
 OpenFilePickerAtCwd
 OpenFilePickerAtFile
+WorkspaceSearch
 Start
 End
 PageUp
@@ -470,6 +471,19 @@ any multiplexer/terminal that does not forward key-release events), the
 release of Ctrl can never reach micro at all, so there is nothing to bind
 it to. You must press Enter (or click a row) to switch, same as any other
 picker in micro.
+
+The `WorkspaceSearch` action opens a live text search over every
+non-ignored file under the working directory (the opened workspace
+directory when one is active). The typed query is the search needle
+itself, not a filter: every edit re-runs the search. Matching is a
+literal smart-case substring (an all-lowercase query matches
+case-insensitively, any uppercase makes it exact), one hit per
+matching line, capped at 500 rows. The lower half of the widget
+previews the highlighted hit with its line centered; `Enter` jumps
+to the hit, switching to a pane already displaying the file or
+opening it in a new tab. File content is indexed once when the
+picker opens, using the live buffer for open files; very large and
+binary files are skipped. Not bound by default.
 
 The `CutLine` action cuts the current line and adds it to the previously cut
 lines in the clipboard since the last paste (rather than just replaces the

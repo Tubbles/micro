@@ -115,6 +115,25 @@ type PickerOptions struct {
 	// stream, since normal key bindings don't fire while a widget is
 	// active (see the internal/widget package doc).
 	OnKey func(e *tcell.EventKey) bool
+	// Preview, when non-nil, splits the picker body horizontally: the
+	// upper half lists the rows, the lower half previews the
+	// highlighted row. The callback receives the highlighted row's
+	// index into Items plus the preview area's width and height in
+	// cells, and returns the lines to show and which of them (an index
+	// into lines) is the focus line to highlight; return a negative
+	// focus for no highlight. Lines carry styled spans so previews can
+	// be syntax highlighted; PlainLine wraps unstyled text. It is
+	// called on every draw while a row is highlighted, so it should be
+	// cheap (cache file reads and highlighting in the closure).
+	Preview func(index, width, height int) (lines []StyledLine, focus int)
+	// OnQueryChange, when non-nil (Query must be true), turns the
+	// query line into a live input instead of a fuzzy filter: the
+	// picker never filters Items itself; every query edit fires the
+	// callback, and the consumer computes a new row set and calls
+	// RefreshItems with it. Used by searches where the query drives
+	// result generation rather than narrowing a fixed list. OnSubmit
+	// never fires in this mode.
+	OnQueryChange func(query string)
 }
 
 // Picker is a generic list-of-rows overlay widget.
@@ -143,6 +162,11 @@ type Picker struct {
 	// the caret and the filter recomputes once.
 	pasting  bool
 	pasteBuf strings.Builder
+
+	// inQueryChange guards against recursion when an OnQueryChange
+	// callback calls RefreshItems (whose recomputeFilter would
+	// otherwise fire the callback again).
+	inQueryChange bool
 
 	lastClickTime time.Time
 	lastClickRow  int
@@ -556,6 +580,20 @@ func wordBoundaryRight(runes []rune, cur int) int {
 //     Enter fires OnSelect on the highlighted row of the filtered
 //     list.
 func (p *Picker) recomputeFilter() {
+	if p.opts.OnQueryChange != nil {
+		// Live-query mode: the consumer regenerates Items instead of
+		// the picker filtering them. The guard stops the callback's
+		// own RefreshItems from re-firing it.
+		if !p.inQueryChange {
+			p.inQueryChange = true
+			p.opts.OnQueryChange(p.query)
+			p.inQueryChange = false
+		}
+		p.matches = nil
+		p.current = 0
+		p.top = 0
+		return
+	}
 	if p.query == "" {
 		p.matches = nil
 	} else {
@@ -742,8 +780,22 @@ func (p *Picker) activate(ctrl bool) {
 }
 
 // bodyHeight is the row count the visible item list can span. It
-// excludes both border rows and the input row when Query is true.
+// excludes both border rows, the input row when Query is true, and
+// the separator plus preview area when Preview is set.
 func (p *Picker) bodyHeight() int {
+	h := p.totalBodyHeight()
+	if p.opts.Preview != nil {
+		h = h / 2
+		if h < 1 {
+			h = 1
+		}
+	}
+	return h
+}
+
+// totalBodyHeight is the row count between the chrome rows (borders,
+// input row): the space the list alone would get without a preview.
+func (p *Picker) totalBodyHeight() int {
 	sw, sh := screenSize()
 	rect := Resolve(p.opts.Geometry, sw, sh)
 	overhead := 2 // top border + bottom border
@@ -753,6 +805,20 @@ func (p *Picker) bodyHeight() int {
 	h := rect.H - overhead
 	if h < 1 {
 		h = 1
+	}
+	return h
+}
+
+// previewHeight is the row count of the preview area: what remains of
+// the total body after the list and the separator row. Zero when no
+// Preview is configured or the widget is too small.
+func (p *Picker) previewHeight() int {
+	if p.opts.Preview == nil {
+		return 0
+	}
+	h := p.totalBodyHeight() - p.bodyHeight() - 1
+	if h < 0 {
+		h = 0
 	}
 	return h
 }

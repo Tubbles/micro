@@ -201,6 +201,8 @@ func (b *SharedBuffer) MarkModified(start, end int) {
 		b.LineArray.invalidateSearchMatches(i)
 		b.LineArray.invalidateHLSelection(i)
 	}
+
+	fireBufferChange(b, BufferEventChange)
 }
 
 // DisableReload disables future reloads of this sharedbuffer
@@ -530,6 +532,14 @@ func NewBuffer(r io.Reader, size int64, path string, btype BufType, cmd Command)
 
 	OpenBuffers = append(OpenBuffers, b)
 
+	// Fire BufferEventOpen once per file, not once per view: when found
+	// is true this Buffer is a second split onto an already-open
+	// SharedBuffer, which listeners saw open the first time. This
+	// mirrors how Close fires BufferEventClose only for the last view.
+	if !found {
+		fireBufferChange(b.SharedBuffer, BufferEventOpen)
+	}
+
 	return b
 }
 
@@ -549,6 +559,12 @@ func CloseOpenBuffers() {
 func (b *Buffer) Close() {
 	for i, buf := range OpenBuffers {
 		if b == buf {
+			// Only fire BufferEventClose once the last view of this
+			// shared file goes away; other split panes may still have
+			// it open.
+			if !b.Shared() {
+				fireBufferChange(b.SharedBuffer, BufferEventClose)
+			}
 			b.Fini()
 			copy(OpenBuffers[i:], OpenBuffers[i+1:])
 			OpenBuffers[len(OpenBuffers)-1] = nil

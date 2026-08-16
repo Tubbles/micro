@@ -54,6 +54,8 @@ Here are the available help topics:
 * `copypaste`: Explains micro's copy and paste usage and configuration.
    It describes how copy and paste is working on different operating systems and
    setups.
+* `lsp`: Explains micro's native Language Server Protocol client: diagnostics,
+   hover, go to definition, and the `> lsp` commands.
 
 For example, to open the help page on plugins you would run `> help plugins`.
 

@@ -23,6 +23,7 @@ import (
 	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/clipboard"
 	"github.com/micro-editor/micro/v2/internal/config"
+	"github.com/micro-editor/micro/v2/internal/lsp"
 	"github.com/micro-editor/micro/v2/internal/screen"
 	"github.com/micro-editor/micro/v2/internal/shell"
 	"github.com/micro-editor/micro/v2/internal/util"
@@ -518,6 +519,10 @@ func DoEvent() {
 	case f := <-shell.Jobs:
 		// If a new job has finished while running in the background we should execute the callback
 		f.Function(f.Output, f.Args)
+	case f := <-lsp.Events:
+		// lsp posts effects (initialize results, RPC callbacks, ...) here
+		// so they run on the main goroutine, exactly like shell.Jobs.
+		f()
 	case <-config.Autosave:
 		for _, b := range buffer.OpenBuffers {
 			b.AutoSave()
