@@ -213,6 +213,11 @@ quotes here but these are not necessary when entering the command in micro.
 
 * `reopen`: Reopens the current file from disk.
 
+* `reopenclosed`: Reopens the most recently closed buffer in a new tab,
+   restoring its cursor position. If that file is already open in a pane,
+   switches focus there instead of opening a duplicate. Repeated invocations
+   dig deeper into the history of closed buffers (up to the last 20).
+
 * `retab`: Replaces all leading tabs with spaces or leading spaces with tabs
    depending on the value of `tabstospaces`.
 

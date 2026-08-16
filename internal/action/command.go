@@ -58,6 +58,7 @@ func InitCommands() {
 		"plugin":           {(*BufPane).PluginCmd, PluginComplete},
 		"reload":           {(*BufPane).ReloadCmd, nil},
 		"reopen":           {(*BufPane).ReopenCmd, nil},
+		"reopenclosed":     {(*BufPane).ReopenClosedCmd, nil},
 		"cd":               {(*BufPane).CdCmd, buffer.FileComplete},
 		"pwd":              {(*BufPane).PwdCmd, nil},
 		"copyfilename":     {(*BufPane).CopyFileNameCmd, nil},
@@ -471,6 +472,11 @@ func (h *BufPane) ReopenCmd(args []string) {
 	} else {
 		h.ReOpen()
 	}
+}
+
+// ReopenClosedCmd reopens the most recently closed buffer
+func (h *BufPane) ReopenClosedCmd(args []string) {
+	h.ReopenLastClosed()
 }
 
 func (h *BufPane) openHelp(page string, hsplit bool, forceSplit bool) error {

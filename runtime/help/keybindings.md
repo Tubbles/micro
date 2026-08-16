@@ -345,6 +345,7 @@ PreviousTab
 NextTab
 FirstTab
 LastTab
+ReopenLastClosed
 NextSplit
 PreviousSplit
 FirstSplit
