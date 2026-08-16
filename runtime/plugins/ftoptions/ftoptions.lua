@@ -4,7 +4,8 @@ function onBufferOpen(b)
     local ft = b:FileType()
 
     if ft == "go" or
-    ft == "makefile" then
+    ft == "makefile" or
+    ft == "odin" then
         b:SetOption("tabstospaces", "off")
     elseif ft == "fish" or
            ft == "python" or
