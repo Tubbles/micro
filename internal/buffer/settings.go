@@ -57,6 +57,18 @@ func (b *Buffer) ReloadSettings(reloadFiletype bool) {
 			b.DoSetOptionNative(k, v)
 		}
 	}
+
+	// Applied after the ft: overlay above, without touching LocalSettings:
+	// a key already local here may be a real interactive `setlocal` that
+	// must keep winning until the buffer is reopened (D-35).
+	if b.Type == BTDefault && b.AbsPath != "" && b.Settings["editorconfig"].(bool) {
+		def, err := resolveEditorConfig(b.AbsPath)
+		if err != nil {
+			warnEditorConfigOnce("editorconfig: " + err.Error())
+		} else {
+			applyEditorConfig(b, def, false)
+		}
+	}
 }
 
 func (b *Buffer) DoSetOptionNative(option string, nativeValue any) {

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/editorconfig/editorconfig-core-go/v2"
 	luar "layeh.com/gopher-luar"
 
 	"github.com/micro-editor/micro/v2/internal/config"
@@ -387,6 +388,7 @@ func NewBuffer(r io.Reader, size int64, path string, btype BufType, cmd Command)
 	}
 
 	hasBackup := false
+	var editorConfigDef *editorconfig.Definition
 	if !found {
 		b.SharedBuffer = new(SharedBuffer)
 		b.Type = btype
@@ -403,6 +405,18 @@ func NewBuffer(r io.Reader, size int64, path string, btype BufType, cmd Command)
 			}
 		}
 		config.UpdatePathGlobLocals(b.Settings, absPath)
+
+		if b.Type == BTDefault && b.AbsPath != "" && b.Settings["editorconfig"].(bool) {
+			var ecErr error
+			editorConfigDef, ecErr = resolveEditorConfig(b.AbsPath)
+			if ecErr != nil {
+				warnEditorConfigOnce("editorconfig: " + ecErr.Error())
+				editorConfigDef = nil
+			}
+			// charset must be applied before the decoder below is built
+			// from the encoding setting.
+			applyEditorConfigEncoding(b, editorConfigDef)
+		}
 
 		var err error
 		b.encoding, err = htmlindex.Get(b.Settings["encoding"].(string))
@@ -507,6 +521,12 @@ func NewBuffer(r io.Reader, size int64, path string, btype BufType, cmd Command)
 	if err != nil {
 		screen.TermMessage(err)
 	}
+
+	// Applied after onBufferOpen and overriding LocalSettings so that
+	// editorconfig outranks both fileformat autodetection and an
+	// open-hook plugin like ftoptions (D-35). Encoding was already
+	// applied above, before the decoder was built.
+	applyEditorConfig(b, editorConfigDef, true)
 
 	OpenBuffers = append(OpenBuffers, b)
 
