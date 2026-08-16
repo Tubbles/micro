@@ -452,30 +452,65 @@ func completionItems(candidates []lsp.CompletionCandidate) []widget.CompletionIt
 	items := make([]widget.CompletionItem, len(candidates))
 	for i, cand := range candidates {
 		items[i] = widget.CompletionItem{
-			Label:  cand.Label,
-			Detail: cand.Detail,
-			Doc:    cand.Documentation,
+			Label:      cand.Label,
+			Detail:     cand.Detail,
+			Doc:        cand.Documentation,
+			FilterText: cand.FilterText,
 		}
 	}
 	return items
 }
 
-// openCompletionBox shows candidates in a popup anchored at loc. The
-// select callback applies the chosen candidate's edits and relocates
-// the view, same as any other buffer-mutating action.
-func (h *BufPane) openCompletionBox(candidates []lsp.CompletionCandidate, loc buffer.Loc, encoding string) {
-	box := widget.NewCompletionBox(widget.CompletionBoxOptions{
-		Pane:  h,
-		Loc:   loc,
-		Items: completionItems(candidates),
+// applyCompletionEdit applies an accepted candidate's edit, widening
+// its end by typedDelta runes so characters typed while the box was
+// open (which the server never saw, since they fell through to the
+// buffer after the request) are consumed by the replacement instead
+// of surviving as a duplicated suffix. The widening is exact because
+// the box only lets typing extend past the request point, never
+// erase before it (see widget.CompletionBox.TypedRunes), and typed
+// runes land after the edit's end position, so converting the
+// original end against the current line still yields the request-time
+// rune column.
+func applyCompletionEdit(buf *buffer.Buffer, edit protocol.TextEdit, encoding string, typedDelta int) {
+	start := lsp.PositionToLoc(buf.Line(int(edit.Range.Start.Line)), edit.Range.Start, encoding)
+	end := lsp.PositionToLoc(buf.Line(int(edit.Range.End.Line)), edit.Range.End, encoding)
+	end.X += typedDelta
+	if lineLen := len([]rune(buf.Line(end.Y))); end.X > lineLen {
+		end.X = lineLen
+	}
+	buf.Replace(start, end, edit.NewText)
+}
+
+// openCompletionBox shows candidates in a popup anchored at loc,
+// pre-filtered by the word fragment already typed at the request
+// position (filter). The select callback applies the chosen
+// candidate's edit, widened by whatever was typed through the open
+// box, and relocates the view, same as any other buffer-mutating
+// action. When the fragment filters every candidate out, no box
+// opens; the InfoBar says so instead of flashing an empty popup.
+func (h *BufPane) openCompletionBox(candidates []lsp.CompletionCandidate, loc buffer.Loc, encoding, filter string) {
+	var box *widget.CompletionBox
+	box = widget.NewCompletionBox(widget.CompletionBoxOptions{
+		Pane:   h,
+		Loc:    loc,
+		Items:  completionItems(candidates),
+		Filter: filter,
 		OnSelect: func(index int) {
 			if index < 0 || index >= len(candidates) {
 				return
 			}
-			applyTextEdits(h.Buf, candidates[index].Edits, encoding)
+			edits := candidates[index].Edits
+			if len(edits) == 0 {
+				return
+			}
+			applyCompletionEdit(h.Buf, edits[0], encoding, box.TypedRunes())
 			h.Relocate()
 		},
 	})
+	if box.VisibleCount() == 0 {
+		InfoBar.Message("lsp: no completions match ", filter)
+		return
+	}
 	widget.Open(box)
 }
 
@@ -520,7 +555,7 @@ func (h *BufPane) LspCompletion() bool {
 			InfoBar.Message("lsp: no completions")
 			return
 		}
-		h.openCompletionBox(candidates, loc, encoding)
+		h.openCompletionBox(candidates, loc, encoding, lsp.TypedPrefix(lineText, loc))
 	})
 	return true
 }

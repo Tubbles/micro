@@ -191,3 +191,37 @@ func TestDecodeCompletionResultCarriesDocumentation(t *testing.T) {
 		t.Errorf("Documentation = %q, want %q", got, "Foo does foo.")
 	}
 }
+
+func TestTypedPrefix(t *testing.T) {
+	cases := []struct {
+		name   string
+		line   string
+		cursor int
+		want   string
+	}{
+		{name: "mid word", line: `import "core:fm"`, cursor: 15, want: "fm"},
+		{name: "after non-word char", line: "x := foo.ba", cursor: 11, want: "ba"},
+		{name: "at line start", line: "fm", cursor: 2, want: "fm"},
+		{name: "nothing typed", line: "x := ", cursor: 5, want: ""},
+		{name: "cursor at word start", line: "abc", cursor: 0, want: ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := TypedPrefix(c.line, buffer.Loc{X: c.cursor, Y: 0})
+			if got != c.want {
+				t.Errorf("TypedPrefix(%q, col %d) = %q, want %q", c.line, c.cursor, got, c.want)
+			}
+		})
+	}
+}
+
+func TestDecodeCompletionResultCarriesFilterText(t *testing.T) {
+	raw := json.RawMessage(`[{"label":"core:fmt","filterText":"fmt"}]`)
+	candidates := DecodeCompletionResult(raw, "fm", buffer.Loc{X: 2, Y: 0}, "utf-16")
+	if len(candidates) != 1 {
+		t.Fatalf("got %d candidates, want 1", len(candidates))
+	}
+	if got := candidates[0].FilterText; got != "fmt" {
+		t.Errorf("FilterText = %q, want %q", got, "fmt")
+	}
+}

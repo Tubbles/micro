@@ -130,11 +130,16 @@ as any other action, for example:
 
 # Completion
 
-`LspCompletion` is manual-trigger only: nothing runs automatically
-while you type. There is no trigger-character support, no debounce,
-and no incremental filtering of the popup as you keep typing. Every
-keystroke after the popup opens either moves the highlight or
-dismisses the popup; it never narrows the candidate list.
+`LspCompletion` is manual-trigger only: the request fires when the
+action is invoked, never automatically while you type, and there is
+no trigger-character support or debounce.
+
+The candidate list is filtered against the word fragment already
+typed at the cursor when the request was made (using each item's
+`filterText`, falling back to its label, as a case-insensitive
+in-order character match). So with the cursor after `core:fm`,
+requesting completion shows `core:fmt` but not `core:io`. If nothing
+matches the fragment, no popup opens and the InfoBar says so.
 
 When the highlighted candidate carries documentation in the server's
 response, it is shown in a side panel next to the popup (plain text,
@@ -146,11 +151,20 @@ Once open, the popup responds to:
 
 * `<Up>`/`<Down>` or `<Ctrl-P>`/`<Ctrl-N>`: move the highlight.
 * `<Enter>` or `<Tab>`: insert the highlighted candidate and close the
-   popup.
+   popup. Characters typed while the popup was open are replaced along
+   with the original fragment, never duplicated.
 * `<Esc>`: close the popup without inserting anything.
-* any other key: closes the popup and is then handled normally, so for
-   example typing a character both dismisses the popup and inserts that
-   character, the usual "keep typing past the suggestion" behavior.
+* typing a character: the character is inserted into the buffer as
+   usual AND the open list narrows to the candidates still matching
+   the grown fragment; the list closes when nothing matches anymore.
+   The candidate set itself is not re-requested from the server while
+   the popup is open.
+* `<Backspace>`: deletes as usual and un-narrows the list, up to the
+   point where completion was invoked; erasing past that point closes
+   the popup.
+* any other key (including modified keys): closes the popup and is
+   then handled normally, the usual "keep typing past the suggestion"
+   behavior for keys that aren't plain text.
 
 If a candidate is a snippet (the server marked it with
 `insertTextFormat: Snippet`), micro inserts its text verbatim,

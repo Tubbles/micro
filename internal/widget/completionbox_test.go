@@ -224,3 +224,145 @@ func TestCompletionBoxAcceptOutOfRangeCloses(t *testing.T) {
 		t.Fatalf("OnClose fired %d times, want 1", h.closeCount)
 	}
 }
+
+func TestCompletionBoxInitialFilterNarrows(t *testing.T) {
+	items := []CompletionItem{{Label: "core:fmt"}, {Label: "core:io"}, {Label: "core:mem"}}
+	h := &completionHarness{}
+	h.c = NewCompletionBox(CompletionBoxOptions{
+		Items:  items,
+		Filter: "fm",
+		OnSelect: func(i int) {
+			h.selectCount++
+			h.lastSelect = i
+		},
+	})
+
+	// "fm" is a subsequence of "core:fmt" and of "core:mem"? m after f
+	// is required: core:mem has no f before m... it does not match.
+	if got := h.c.VisibleCount(); got != 1 {
+		t.Fatalf("VisibleCount = %d, want 1 (only core:fmt matches \"fm\")", got)
+	}
+	h.c.HandleEvent(key(tcell.KeyEnter))
+	if h.lastSelect != 0 {
+		t.Errorf("accepted item index = %d, want 0 (core:fmt in the original list)", h.lastSelect)
+	}
+}
+
+func TestCompletionBoxFilterTextPreferredOverLabel(t *testing.T) {
+	items := []CompletionItem{
+		{Label: "pretty name", FilterText: "fmt"},
+		{Label: "fmtish label", FilterText: "other"},
+	}
+	c := NewCompletionBox(CompletionBoxOptions{Items: items, Filter: "fmt"})
+	if got := c.VisibleCount(); got != 1 {
+		t.Fatalf("VisibleCount = %d, want 1 (FilterText must win over Label)", got)
+	}
+	if c.visible[0] != 0 {
+		t.Errorf("visible[0] = %d, want 0", c.visible[0])
+	}
+}
+
+func TestCompletionBoxTypingNarrowsAndStaysOpen(t *testing.T) {
+	items := []CompletionItem{{Label: "fmt"}, {Label: "files"}, {Label: "flag"}}
+	h := newCompletionHarness(items)
+	Open(h.c)
+	defer CloseActive()
+
+	consumed := h.c.HandleEvent(runeKey('f'))
+	if consumed {
+		t.Error("typed rune was consumed; want fallthrough to the buffer")
+	}
+	if Active() != h.c {
+		t.Fatal("box closed on typed rune; want it to stay open")
+	}
+	if got := h.c.VisibleCount(); got != 3 {
+		t.Fatalf("after 'f': VisibleCount = %d, want 3", got)
+	}
+
+	h.c.HandleEvent(runeKey('m'))
+	if got := h.c.VisibleCount(); got != 1 {
+		t.Fatalf("after 'fm': VisibleCount = %d, want 1 (fmt)", got)
+	}
+	if got := h.c.TypedRunes(); got != 2 {
+		t.Errorf("TypedRunes = %d, want 2", got)
+	}
+
+	h.c.HandleEvent(key(tcell.KeyEnter))
+	if h.lastSelect != 0 {
+		t.Errorf("accepted item index = %d, want 0 (fmt)", h.lastSelect)
+	}
+}
+
+func TestCompletionBoxTypingToZeroMatchesCloses(t *testing.T) {
+	items := []CompletionItem{{Label: "fmt"}}
+	h := newCompletionHarness(items)
+	Open(h.c)
+
+	consumed := h.c.HandleEvent(runeKey('z'))
+	if consumed {
+		t.Error("typed rune was consumed; want fallthrough")
+	}
+	if Active() != nil {
+		CloseActive()
+		t.Error("box still open with zero matches; want closed")
+	}
+}
+
+func TestCompletionBoxBackspaceUnNarrows(t *testing.T) {
+	items := []CompletionItem{{Label: "fmt"}, {Label: "flag"}}
+	h := newCompletionHarness(items)
+	Open(h.c)
+	defer CloseActive()
+
+	h.c.HandleEvent(runeKey('m'))
+	if got := h.c.VisibleCount(); got != 1 {
+		t.Fatalf("after 'm': VisibleCount = %d, want 1", got)
+	}
+
+	consumed := h.c.HandleEvent(key(tcell.KeyBackspace))
+	if consumed {
+		t.Error("Backspace was consumed; want fallthrough so the buffer deletes")
+	}
+	if Active() != h.c {
+		t.Fatal("box closed on Backspace of a typed rune; want it open")
+	}
+	if got := h.c.VisibleCount(); got != 2 {
+		t.Errorf("after backspace: VisibleCount = %d, want 2", got)
+	}
+	if got := h.c.TypedRunes(); got != 0 {
+		t.Errorf("TypedRunes = %d, want 0", got)
+	}
+}
+
+func TestCompletionBoxBackspacePastInvocationCloses(t *testing.T) {
+	items := []CompletionItem{{Label: "fmt"}}
+	h := newCompletionHarness(items)
+	Open(h.c)
+
+	consumed := h.c.HandleEvent(key(tcell.KeyBackspace))
+	if consumed {
+		t.Error("Backspace was consumed; want fallthrough")
+	}
+	if Active() != nil {
+		CloseActive()
+		t.Error("box still open after erasing past the invocation point; want closed")
+	}
+}
+
+func TestCompletionBoxHighlightSurvivesNarrowing(t *testing.T) {
+	items := []CompletionItem{{Label: "alpha"}, {Label: "ala"}, {Label: "beta"}}
+	h := newCompletionHarness(items)
+	Open(h.c)
+	defer CloseActive()
+
+	h.c.HandleEvent(key(tcell.KeyDown)) // highlight "ala" (row 1)
+	h.c.HandleEvent(runeKey('a'))
+	h.c.HandleEvent(runeKey('l'))
+	// "al" leaves alpha and ala; the highlight should still be on ala.
+	if got := h.c.VisibleCount(); got != 2 {
+		t.Fatalf("VisibleCount = %d, want 2", got)
+	}
+	if got := h.c.visible[h.c.current]; got != 1 {
+		t.Errorf("highlighted item index = %d, want 1 (ala)", got)
+	}
+}

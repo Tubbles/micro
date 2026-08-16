@@ -48,10 +48,10 @@ const (
 // completionDocsMaxHeight; the panel exists to judge a candidate at a
 // glance, not to read a full manual page.
 func (c *CompletionBox) drawDocsPanel(boxRect ScreenRect, row, frame tcell.Style, sw, sh int) {
-	if c.current < 0 || c.current >= len(c.opts.Items) {
+	if c.current < 0 || c.current >= len(c.visible) {
 		return
 	}
-	doc := c.opts.Items[c.current].Doc
+	doc := c.opts.Items[c.visible[c.current]].Doc
 	if doc == "" {
 		return
 	}
@@ -110,10 +110,10 @@ func (c *CompletionBox) drawBorder(r ScreenRect, st tcell.Style) {
 	}
 }
 
-// drawBody renders the (possibly scrolled) visible slice of Items.
-// Each row's Label is left-aligned; Detail is right-aligned in
-// frame's dimmer style when it fits alongside the label, and dropped
-// entirely rather than overlapping the label when it doesn't.
+// drawBody renders the (possibly scrolled) filtered rows. Each row's
+// Label is left-aligned; Detail is right-aligned in frame's dimmer
+// style when it fits alongside the label, and dropped entirely rather
+// than overlapping the label when it doesn't.
 func (c *CompletionBox) drawBody(r ScreenRect, row, rowCur, frame tcell.Style) {
 	bodyY0 := r.Y + 1
 	bodyH := r.H - 2
@@ -132,10 +132,10 @@ func (c *CompletionBox) drawBody(r ScreenRect, row, rowCur, frame tcell.Style) {
 				screen.SetContent(x, y, ' ', nil, st)
 			}
 		}
-		if idx < 0 || idx >= len(c.opts.Items) {
+		if idx < 0 || idx >= len(c.visible) {
 			continue
 		}
-		it := c.opts.Items[idx]
+		it := c.opts.Items[c.visible[idx]]
 
 		detailW := stringWidth(it.Detail)
 		labelMax := bodyW

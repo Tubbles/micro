@@ -31,8 +31,25 @@ type CompletionCandidate struct {
 	// which is common for servers that defer documentation to
 	// completionItem/resolve; micro does not send resolve requests.
 	Documentation string
-	Kind          protocol.CompletionItemKind
-	Edits         []protocol.TextEdit
+	// FilterText is what client-side filtering should match against
+	// instead of Label, when the server set it; empty means Label.
+	FilterText string
+	Kind       protocol.CompletionItemKind
+	Edits      []protocol.TextEdit
+}
+
+// TypedPrefix returns the partially-typed word fragment ending at
+// cursor on lineText: the text between the enclosing word's start and
+// the cursor. It is what an invoked completion's candidate list
+// should be filtered against (LSP servers return the full candidate
+// set for the position and leave prefix filtering to the client).
+func TypedPrefix(lineText string, cursor buffer.Loc) string {
+	start, _ := wordRangeAt(lineText, cursor.X)
+	runes := []rune(lineText)
+	if cursor.X < start || cursor.X > len(runes) || start < 0 {
+		return ""
+	}
+	return string(runes[start:cursor.X])
 }
 
 // DecodeCompletionResult decodes a textDocument/completion result into
@@ -107,6 +124,7 @@ func newCompletionCandidate(item protocol.CompletionItem, lineText string, curso
 		Label:         item.Label,
 		Detail:        item.Detail,
 		Documentation: documentationText(item.Documentation),
+		FilterText:    item.FilterText,
 		Kind:          item.Kind,
 		Edits:         edits,
 	}
