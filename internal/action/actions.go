@@ -211,7 +211,7 @@ func (h *BufPane) CursorToViewTop() bool {
 	if v.StartLine == bStart {
 		scrollmargin = 0
 	}
-	h.Cursor.GotoLoc(h.LocFromVLoc(display.VLoc{
+	h.Cursor.GotoLocBare(h.LocFromVLoc(display.VLoc{
 		SLoc:    h.Scroll(v.StartLine, scrollmargin),
 		VisualX: 0,
 	}))
@@ -222,7 +222,7 @@ func (h *BufPane) CursorToViewTop() bool {
 func (h *BufPane) CursorToViewCenter() bool {
 	v := h.GetView()
 	h.Buf.ClearCursors()
-	h.Cursor.GotoLoc(h.LocFromVLoc(display.VLoc{
+	h.Cursor.GotoLocBare(h.LocFromVLoc(display.VLoc{
 		SLoc:    h.Scroll(v.StartLine, h.BufView().Height/2),
 		VisualX: 0,
 	}))
@@ -240,7 +240,7 @@ func (h *BufPane) CursorToViewBottom() bool {
 	if lastLine == bEnd {
 		scrollmargin = 0
 	}
-	h.Cursor.GotoLoc(h.LocFromVLoc(display.VLoc{
+	h.Cursor.GotoLocBare(h.LocFromVLoc(display.VLoc{
 		SLoc:    h.Scroll(lastLine, -scrollmargin),
 		VisualX: 0,
 	}))
@@ -1164,9 +1164,9 @@ func (h *BufPane) find(useRegex bool) bool {
 				h.Cursor.SetSelectionEnd(match[1])
 				h.Cursor.OrigSelection[0] = h.Cursor.CurSelection[0]
 				h.Cursor.OrigSelection[1] = h.Cursor.CurSelection[1]
-				h.GotoLoc(match[1])
+				h.GotoLocBare(match[1])
 			} else {
-				h.GotoLoc(h.searchOrig)
+				h.GotoLocBare(h.searchOrig)
 				h.Cursor.ResetSelection()
 			}
 		}
@@ -1889,6 +1889,43 @@ func (h *BufPane) JumpLine() bool {
 	return true
 }
 
+// JumpBack moves the cursor to the previous entry in the global jump list,
+// crossing pane and tab boundaries as needed. The first call also records the
+// live cursor so JumpForward can return to it.
+func (h *BufPane) JumpBack() bool {
+	var ok bool
+	Jumps.withSuppression(func() {
+		e, found := Jumps.Back(h.ID(), h.Buf.SharedBuffer, h.Cursor.Loc, paneAlive)
+		if !found {
+			return
+		}
+		ok = applyJump(e)
+	})
+	return ok
+}
+
+// JumpForward moves the cursor to the next entry in the global jump list.
+func (h *BufPane) JumpForward() bool {
+	var ok bool
+	Jumps.withSuppression(func() {
+		e, found := Jumps.Forward(paneAlive)
+		if !found {
+			return
+		}
+		ok = applyJump(e)
+	})
+	return ok
+}
+
+// PushJump records the current cursor on the jump list as a manual breadcrumb.
+// Useful for marking a spot before a sequence of small motions that wouldn't
+// otherwise trigger an automatic push. Uses PushAlways so a manual breadcrumb
+// is recorded even if some caller has wrapped this in a withSuppression scope.
+func (h *BufPane) PushJump() bool {
+	Jumps.PushAlways(h.ID(), h.Buf.SharedBuffer, h.Cursor.Loc)
+	return true
+}
+
 // Start moves the viewport to the start of the buffer
 func (h *BufPane) Start() bool {
 	v := h.GetView()
@@ -2526,7 +2563,7 @@ func (h *BufPane) SpawnMultiCursorSelect() bool {
 
 	if h.Cursor.HasSelection() {
 		h.Cursor.ResetSelection()
-		h.Cursor.GotoLoc(buffer.Loc{0, startLine})
+		h.Cursor.GotoLocBare(buffer.Loc{0, startLine})
 
 		for i := startLine; i <= endLine; i++ {
 			c := buffer.NewCursor(h.Buf, buffer.Loc{0, i})
