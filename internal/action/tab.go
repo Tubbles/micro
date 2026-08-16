@@ -197,6 +197,12 @@ func (t *TabList) SetActive(a int) {
 	}
 	t.TabWindow.SetActive(a)
 
+	if a >= 0 && a < len(t.List) {
+		if bp := t.List[a].CurPane(); bp != nil {
+			MRU.Touch(bp.ID())
+		}
+	}
+
 	for i, p := range t.List {
 		if i == a {
 			if !p.isActive {
@@ -296,6 +302,7 @@ func NewTabFromBuffer(x, y, width, height int, b *buffer.Buffer) *Tab {
 
 	e := NewBufPaneFromBuf(b, t)
 	e.SetID(t.ID())
+	MRU.Touch(e.ID())
 
 	t.Panes = append(t.Panes, e)
 	return t
@@ -308,6 +315,9 @@ func NewTabFromPane(x, y, width, height int, pane Pane) *Tab {
 	t.release = true
 	pane.SetTab(t)
 	pane.SetID(t.ID())
+	if bp, ok := pane.(*BufPane); ok {
+		MRU.Touch(bp.ID())
+	}
 
 	t.Panes = append(t.Panes, pane)
 	return t
@@ -394,6 +404,11 @@ func (t *Tab) SetActive(i int) {
 		}
 	}
 	t.active = i
+	if i >= 0 && i < len(t.Panes) {
+		if bp, ok := t.Panes[i].(*BufPane); ok {
+			MRU.Touch(bp.ID())
+		}
+	}
 	for j, p := range t.Panes {
 		if j == i {
 			p.SetActive(true)

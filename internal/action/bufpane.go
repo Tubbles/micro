@@ -775,6 +775,7 @@ func (h *BufPane) DoRuneInsert(s string) {
 func (h *BufPane) VSplitIndex(buf *buffer.Buffer, right bool) *BufPane {
 	e := NewBufPaneFromBuf(buf, h.tab)
 	e.splitID = h.tab.GetNode(h.splitID).VSplit(right)
+	MRU.Touch(e.ID())
 	currentPaneIdx := h.tab.GetPane(h.splitID)
 	if right {
 		currentPaneIdx++
@@ -789,6 +790,7 @@ func (h *BufPane) VSplitIndex(buf *buffer.Buffer, right bool) *BufPane {
 func (h *BufPane) HSplitIndex(buf *buffer.Buffer, bottom bool) *BufPane {
 	e := NewBufPaneFromBuf(buf, h.tab)
 	e.splitID = h.tab.GetNode(h.splitID).HSplit(bottom)
+	MRU.Touch(e.ID())
 	currentPaneIdx := h.tab.GetPane(h.splitID)
 	if bottom {
 		currentPaneIdx++
@@ -1087,6 +1089,8 @@ var BufKeyActions = map[string]BufKeyAction{
 	"PreviousSplit":             (*BufPane).PreviousSplit,
 	"FirstSplit":                (*BufPane).FirstSplit,
 	"LastSplit":                 (*BufPane).LastSplit,
+	"CycleBuffersForward":       (*BufPane).CycleBuffersForward,
+	"CycleBuffersBackward":      (*BufPane).CycleBuffersBackward,
 	"Unsplit":                   (*BufPane).Unsplit,
 	"VSplit":                    (*BufPane).VSplitAction,
 	"HSplit":                    (*BufPane).HSplitAction,

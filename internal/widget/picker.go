@@ -105,6 +105,16 @@ type PickerOptions struct {
 	// state change makes sense (e.g. the command palette's mode
 	// toggle). Nil leaves Tab as a silent no-op.
 	OnTab func()
+	// OnKey, when non-nil, is checked first in handleKey (after the
+	// paste-accumulation gate) and can consume a key event before any
+	// other picker key handling runs. Returning true means "handled";
+	// the normal classic/query dispatch is skipped for that event.
+	// Additive: nil is a no-op default so existing Picker consumers
+	// are unaffected. Intended for callers that need to react to keys
+	// bound to their own actions while the picker owns the event
+	// stream, since normal key bindings don't fire while a widget is
+	// active (see the internal/widget package doc).
+	OnKey func(e *tcell.EventKey) bool
 }
 
 // Picker is a generic list-of-rows overlay widget.
@@ -299,6 +309,9 @@ func (p *Picker) handleKey(e *tcell.EventKey) {
 		if e.Key() == tcell.KeyRune {
 			p.pasteBuf.WriteString(e.Str())
 		}
+		return
+	}
+	if p.opts.OnKey != nil && p.opts.OnKey(e) {
 		return
 	}
 	if p.opts.Query {
@@ -671,6 +684,25 @@ func (p *Picker) move(delta int) {
 	}
 	if x >= n {
 		x = n - 1
+	}
+	p.current = x
+	p.scrollIntoView()
+}
+
+// MoveWrap moves the highlight by delta rows, wrapping past either
+// end of the displayed list instead of clamping (contrast move,
+// above, used by the arrow/PgUp/PgDn keys). Exported for callers that
+// capture their own next/prev keys via OnKey and want cycling
+// behavior, e.g. an MRU buffer switcher where stopping at the list's
+// end would defeat the point of a cycler.
+func (p *Picker) MoveWrap(delta int) {
+	n := p.displayedLen()
+	if n == 0 {
+		return
+	}
+	x := (p.current + delta) % n
+	if x < 0 {
+		x += n
 	}
 	p.current = x
 	p.scrollIntoView()
