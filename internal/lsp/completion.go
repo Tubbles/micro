@@ -3,6 +3,7 @@ package lsp
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/lsp/protocol"
@@ -24,8 +25,14 @@ import (
 type CompletionCandidate struct {
 	Label  string
 	Detail string
-	Kind   protocol.CompletionItemKind
-	Edits  []protocol.TextEdit
+	// Documentation is the item's documentation flattened to plain
+	// text (the spec allows string or MarkupContent; markdown syntax
+	// is passed through as-is). Empty when the server sent none,
+	// which is common for servers that defer documentation to
+	// completionItem/resolve; micro does not send resolve requests.
+	Documentation string
+	Kind          protocol.CompletionItemKind
+	Edits         []protocol.TextEdit
 }
 
 // DecodeCompletionResult decodes a textDocument/completion result into
@@ -97,11 +104,29 @@ func newCompletionCandidate(item protocol.CompletionItem, lineText string, curso
 	}
 
 	return CompletionCandidate{
-		Label:  item.Label,
-		Detail: item.Detail,
-		Kind:   item.Kind,
-		Edits:  edits,
+		Label:         item.Label,
+		Detail:        item.Detail,
+		Documentation: documentationText(item.Documentation),
+		Kind:          item.Kind,
+		Edits:         edits,
 	}
+}
+
+// documentationText flattens a CompletionItem.Documentation payload,
+// which the spec types as `string | MarkupContent`, into plain text.
+func documentationText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return strings.TrimSpace(text)
+	}
+	var markup protocol.MarkupContent
+	if err := json.Unmarshal(raw, &markup); err == nil {
+		return strings.TrimSpace(markup.Value)
+	}
+	return ""
 }
 
 // wordRangeAt returns the rune-column range [start, end) of the word

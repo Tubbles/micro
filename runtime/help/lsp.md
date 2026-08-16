@@ -136,6 +136,12 @@ and no incremental filtering of the popup as you keep typing. Every
 keystroke after the popup opens either moves the highlight or
 dismisses the popup; it never narrows the candidate list.
 
+When the highlighted candidate carries documentation in the server's
+response, it is shown in a side panel next to the popup (plain text,
+capped in size) so a candidate can be judged before accepting it.
+Servers that only provide documentation via `completionItem/resolve`
+show no panel: micro does not send resolve requests.
+
 Once open, the popup responds to:
 
 * `<Up>`/`<Down>` or `<Ctrl-P>`/`<Ctrl-N>`: move the highlight.

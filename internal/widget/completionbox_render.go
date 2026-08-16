@@ -31,6 +31,60 @@ func (c *CompletionBox) Display() {
 	c.fillBackground(rect, row)
 	c.drawBorder(rect, frame)
 	c.drawBody(rect, row, rowCur, frame)
+	c.drawDocsPanel(rect, row, frame, sw, sh)
+}
+
+const (
+	completionDocsMinWidth  = 20
+	completionDocsMaxWidth  = 54
+	completionDocsMaxHeight = 14
+)
+
+// drawDocsPanel paints the highlighted candidate's documentation in a
+// second bordered box beside the completion box: to its right when
+// there is room, to its left otherwise, and not at all when neither
+// side fits completionDocsMinWidth. The text is wrapped plain text
+// (markdown is not rendered) and truncated vertically at
+// completionDocsMaxHeight; the panel exists to judge a candidate at a
+// glance, not to read a full manual page.
+func (c *CompletionBox) drawDocsPanel(boxRect ScreenRect, row, frame tcell.Style, sw, sh int) {
+	if c.current < 0 || c.current >= len(c.opts.Items) {
+		return
+	}
+	doc := c.opts.Items[c.current].Doc
+	if doc == "" {
+		return
+	}
+
+	rightRoom := sw - (boxRect.X + boxRect.W)
+	leftRoom := boxRect.X
+	var x, w int
+	switch {
+	case rightRoom >= completionDocsMinWidth:
+		w = min(completionDocsMaxWidth, rightRoom)
+		x = boxRect.X + boxRect.W
+	case leftRoom >= completionDocsMinWidth:
+		w = min(completionDocsMaxWidth, leftRoom)
+		x = boxRect.X - w
+	default:
+		return
+	}
+
+	lines := wrapStyledLines(TextToLines(doc), w-2)
+	h := len(lines) + 2
+	if h > completionDocsMaxHeight {
+		h = completionDocsMaxHeight
+	}
+	rect := clipRect(ScreenRect{X: x, Y: boxRect.Y, W: w, H: h}, sw, sh)
+	if rect.W < 3 || rect.H < 3 {
+		return
+	}
+
+	c.fillBackground(rect, row)
+	c.drawBorder(rect, frame)
+	for j := 0; j < rect.H-2 && j < len(lines); j++ {
+		drawStyledLine(lines[j], rect.X+1, rect.Y+1+j, rect.W-2, row)
+	}
 }
 
 func (c *CompletionBox) fillBackground(r ScreenRect, st tcell.Style) {

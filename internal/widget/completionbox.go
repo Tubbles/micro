@@ -15,6 +15,11 @@ import (
 type CompletionItem struct {
 	Label  string
 	Detail string
+	// Doc is the candidate's documentation as plain text. When the
+	// highlighted item has a non-empty Doc, the box paints it in a
+	// side panel so the user can judge the candidate before
+	// accepting it (see drawDocsPanel).
+	Doc string
 }
 
 // CompletionBoxOptions configures a CompletionBox at construction.

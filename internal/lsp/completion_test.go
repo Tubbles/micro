@@ -160,3 +160,34 @@ func TestWordRangeAt(t *testing.T) {
 		})
 	}
 }
+
+func TestDocumentationText(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "absent", raw: "", want: ""},
+		{name: "plain string", raw: `"does a thing"`, want: "does a thing"},
+		{name: "markup content", raw: `{"kind":"markdown","value":"body text\n"}`, want: "body text"},
+		{name: "malformed", raw: `42`, want: ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := documentationText(json.RawMessage(c.raw)); got != c.want {
+				t.Errorf("documentationText(%s) = %q, want %q", c.raw, got, c.want)
+			}
+		})
+	}
+}
+
+func TestDecodeCompletionResultCarriesDocumentation(t *testing.T) {
+	raw := json.RawMessage(`[{"label":"Foo","detail":"func Foo()","documentation":{"kind":"markdown","value":"Foo does foo."}}]`)
+	candidates := DecodeCompletionResult(raw, "F", buffer.Loc{X: 1, Y: 0}, "utf-16")
+	if len(candidates) != 1 {
+		t.Fatalf("got %d candidates, want 1", len(candidates))
+	}
+	if got := candidates[0].Documentation; got != "Foo does foo." {
+		t.Errorf("Documentation = %q, want %q", got, "Foo does foo.")
+	}
+}

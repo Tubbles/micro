@@ -292,10 +292,13 @@ type TextEdit struct {
 }
 
 // CompletionItem is one candidate returned by textDocument/completion.
+// Documentation is `string | MarkupContent` per the spec, kept raw
+// here; lsp.documentationText decodes both shapes.
 type CompletionItem struct {
 	Label            string             `json:"label"`
 	Kind             CompletionItemKind `json:"kind,omitempty"`
 	Detail           string             `json:"detail,omitempty"`
+	Documentation    json.RawMessage    `json:"documentation,omitempty"`
 	InsertText       string             `json:"insertText,omitempty"`
 	InsertTextFormat InsertTextFormat   `json:"insertTextFormat,omitempty"`
 	TextEdit         *TextEdit          `json:"textEdit,omitempty"`

@@ -451,7 +451,11 @@ func (h *BufPane) LspReferences() bool {
 func completionItems(candidates []lsp.CompletionCandidate) []widget.CompletionItem {
 	items := make([]widget.CompletionItem, len(candidates))
 	for i, cand := range candidates {
-		items[i] = widget.CompletionItem{Label: cand.Label, Detail: cand.Detail}
+		items[i] = widget.CompletionItem{
+			Label:  cand.Label,
+			Detail: cand.Detail,
+			Doc:    cand.Documentation,
+		}
 	}
 	return items
 }
