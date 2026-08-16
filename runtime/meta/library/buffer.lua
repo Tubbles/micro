@@ -5,6 +5,9 @@
 -- Also flattens (Go embeds): SharedBuffer
 ---@class Buffer : EventHandler
 ---@field GetVisualX fun(loc: Loc): integer
+---@field HLSelection boolean
+---@field HLSelectionQuery string
+---@field HLSelectionWholeWord boolean
 ---@field HighlightSearch boolean
 ---@field LastSearch string
 ---@field LastSearchRegex boolean
@@ -118,6 +121,15 @@ Buffer.GetSuggestions = nil
 ---@type fun(self: Buffer): integer[], integer
 Buffer.GetWord = nil
 
+---@type fun(self: Buffer, pos: Loc): boolean
+Buffer.HLSelectionAt = nil
+
+---@type fun(self: Buffer, b: Buffer, pos: Loc): boolean
+Buffer.HLSelectionMatch = nil
+
+---@type fun(self: Buffer): boolean
+Buffer.HasName = nil
+
 ---@type fun(self: Buffer, tabsize: integer): string
 Buffer.IndentString = nil
 
@@ -142,11 +154,14 @@ Buffer.Lock = nil
 ---@type fun(self: Buffer, start: integer, end_: integer)
 Buffer.MarkModified = nil
 
----@type fun(self: Buffer, lineN: integer): any
+---@type fun(self: Buffer, y: integer): any
 Buffer.Match = nil
 
 ---@type fun(self: Buffer)
 Buffer.MergeCursors = nil
+
+---@type fun(self: Buffer, loc: Loc): Message[]
+Buffer.MessagesUnderLoc = nil
 
 ---@type fun(self: Buffer): boolean
 Buffer.Modified = nil
@@ -279,6 +294,9 @@ Buffer.UpdateCursors = nil
 
 ---@type fun(self: Buffer)
 Buffer.UpdateDiff = nil
+
+---@type fun(self: Buffer)
+Buffer.UpdateHLSelection = nil
 
 ---@type fun(self: Buffer): string?
 Buffer.UpdateModTime = nil

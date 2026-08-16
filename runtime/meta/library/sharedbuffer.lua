@@ -38,6 +38,9 @@ SharedBuffer.DisableReload = nil
 ---@type fun(self: SharedBuffer): Loc
 SharedBuffer.End = nil
 
+---@type fun(self: SharedBuffer, b: Buffer, pos: Loc): boolean
+SharedBuffer.HLSelectionMatch = nil
+
 ---@type fun(self: SharedBuffer, lineN: integer): integer[]
 SharedBuffer.LineBytes = nil
 
@@ -50,7 +53,7 @@ SharedBuffer.Lock = nil
 ---@type fun(self: SharedBuffer, start: integer, end_: integer)
 SharedBuffer.MarkModified = nil
 
----@type fun(self: SharedBuffer, lineN: integer): any
+---@type fun(self: SharedBuffer, y: integer): any
 SharedBuffer.Match = nil
 
 ---@type fun(self: SharedBuffer)

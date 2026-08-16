@@ -4,6 +4,7 @@
 
 ---@class TabList : TabWindow
 ---@field List Tab[]
+---@field PathBar PathBar
 local TabList = {}
 
 ---@type fun(self: TabList): integer
