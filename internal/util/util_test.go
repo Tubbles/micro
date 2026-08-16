@@ -1,6 +1,8 @@
 package util
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,4 +43,21 @@ func TestIntListOpt(t *testing.T) {
 	assert.Equal(t, []int{}, IntListOpt([]any{float64(0), float64(0)}))
 	assert.Nil(t, IntListOpt("80"))
 	assert.Nil(t, IntListOpt(nil))
+}
+
+func TestMarshalIndentNoEscape(t *testing.T) {
+	v := map[string]any{"x": "tab=>&<"}
+	b, err := MarshalIndentNoEscape(v)
+	assert.NoError(t, err)
+	assert.True(t, strings.Contains(string(b), "tab=>&<"))
+	assert.False(t, strings.Contains(string(b), "\\u003e"))
+	assert.False(t, strings.Contains(string(b), "\\u0026"))
+	assert.False(t, strings.Contains(string(b), "\\u003c"))
+
+	v2 := map[string]any{"a": "b", "n": float64(4)}
+	got, err := MarshalIndentNoEscape(v2)
+	assert.NoError(t, err)
+	want, err := json.MarshalIndent(v2, "", "    ")
+	assert.NoError(t, err)
+	assert.Equal(t, want, got)
 }
