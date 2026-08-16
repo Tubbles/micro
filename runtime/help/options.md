@@ -357,6 +357,19 @@ Here are the available options:
 
     default value: `false`
 
+* `pathbar`: show an always-visible one-row strip directly above the editor
+   area that spells out the active buffer's file path, relative to the current
+   working directory. The strip sits below the tab bar when more than one tab
+   is open, otherwise it sits at the top of the screen. When the active buffer
+   has no backing file (Help, Log, Scratch, Raw, Stdout, Info, and unsaved
+   no-name buffers), the buffer's display name is shown instead. Long paths
+   are truncated from the left with a leading `<` marker so the basename
+   stays on screen. Toggle with `> set pathbar on` / `> set pathbar off`.
+   See the `pathbar` colour group in `> help colors` for styling; if not
+   defined by a colour scheme, the `statusline` style is used as a fallback.
+
+    default value: `false`
+
 * `pathdisplay`: controls how each tab's title is rendered. This setting is
    `global only`. Possible values:
     * `full`: show the file's absolute path. This is the default and matches
