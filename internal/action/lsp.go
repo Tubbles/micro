@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/creachadair/jrpc2"
@@ -341,13 +342,31 @@ func referencePickerItems(locations []protocol.Location) []widget.PickerItem {
 	return items
 }
 
+// sortLocations orders locations by (URI, line, column) so reference
+// lists render in a stable, file-grouped order regardless of the
+// order the server produced them in.
+func sortLocations(locations []protocol.Location) {
+	sort.Slice(locations, func(i, j int) bool {
+		if locations[i].URI != locations[j].URI {
+			return locations[i].URI < locations[j].URI
+		}
+		if locations[i].Range.Start.Line != locations[j].Range.Start.Line {
+			return locations[i].Range.Start.Line < locations[j].Range.Start.Line
+		}
+		return locations[i].Range.Start.Character < locations[j].Range.Start.Character
+	})
+}
+
 // openReferencesPicker shows locations in a centered, query-filterable
 // picker (matching the file pickers' style), with a preview of the
-// highlighted hit in the lower half of the widget. currentURI is the
-// buffer the references request was sent from, needed by
-// jumpToLocation to tell whether a selected location is already the
-// open buffer.
+// highlighted hit in the lower half of the widget. Locations are
+// sorted (file, line, column) first: servers return them in
+// unspecified order, and an unsorted list reads as nondeterministic.
+// currentURI is the buffer the references request was sent from,
+// needed by jumpToLocation to tell whether a selected location is
+// already the open buffer.
 func (h *BufPane) openReferencesPicker(locations []protocol.Location, currentURI protocol.DocumentURI, encoding string) {
+	sortLocations(locations)
 	picker := widget.NewPicker(widget.PickerOptions{
 		Title:    "References",
 		Items:    referencePickerItems(locations),

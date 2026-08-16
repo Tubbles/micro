@@ -488,3 +488,26 @@ func TestApplyRenameEditContinuesPastOpenError(t *testing.T) {
 		t.Errorf("bufB.Bytes() = %q, want %q", got, "BAR\n")
 	}
 }
+
+func TestSortLocations(t *testing.T) {
+	locations := []protocol.Location{
+		{URI: "file:///b.go", Range: protocol.Range{Start: pos(3, 1)}},
+		{URI: "file:///a.go", Range: protocol.Range{Start: pos(9, 0)}},
+		{URI: "file:///a.go", Range: protocol.Range{Start: pos(2, 7)}},
+		{URI: "file:///a.go", Range: protocol.Range{Start: pos(2, 3)}},
+	}
+
+	sortLocations(locations)
+
+	want := []protocol.Location{
+		{URI: "file:///a.go", Range: protocol.Range{Start: pos(2, 3)}},
+		{URI: "file:///a.go", Range: protocol.Range{Start: pos(2, 7)}},
+		{URI: "file:///a.go", Range: protocol.Range{Start: pos(9, 0)}},
+		{URI: "file:///b.go", Range: protocol.Range{Start: pos(3, 1)}},
+	}
+	for i := range want {
+		if locations[i] != want[i] {
+			t.Errorf("locations[%d] = %+v, want %+v", i, locations[i], want[i])
+		}
+	}
+}

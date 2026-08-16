@@ -209,6 +209,9 @@ highlight, `<Esc>` to cancel). Each row shows the reference's file
 (relative to the current working directory when that is cheap to
 compute) and its 1-based line and column.
 
+Rows are sorted by file path, then line, then column, so the list
+order is stable across invocations.
+
 The lower half of the picker previews the highlighted reference: a
 syntax-highlighted window of its file with the hit line centered and
 highlighted, so a row can be judged without jumping to it. The
