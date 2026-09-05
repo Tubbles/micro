@@ -1,7 +1,7 @@
 package clipboard
 
 import (
-	"bytes"
+	"strings"
 )
 
 // For storing multi cursor clipboard contents
@@ -9,17 +9,14 @@ type multiClipboard map[Register][]string
 
 var multi multiClipboard
 
+// getAllText returns the text written to the system clipboard for a
+// register: one slot per cursor, joined with newlines, so that pasting
+// a multi-cursor copy with a single cursor yields one selection per
+// line instead of everything run together on one line. The same joined
+// form is what isValid compares against, so a paste with a matching
+// cursor count still gets the per-slot text via getText.
 func (c multiClipboard) getAllText(r Register) string {
-	content := c[r]
-	if content == nil {
-		return ""
-	}
-
-	buf := &bytes.Buffer{}
-	for _, s := range content {
-		buf.WriteString(s)
-	}
-	return buf.String()
+	return strings.Join(c[r], "\n")
 }
 
 func (c multiClipboard) getText(r Register, num int) string {
