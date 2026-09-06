@@ -2,6 +2,7 @@ package buffer
 
 import (
 	"bytes"
+	"strings"
 	"time"
 
 	"github.com/micro-editor/micro/v2/internal/config"
@@ -164,9 +165,18 @@ func NewEventHandler(buf *SharedBuffer, cursors []*Cursor) *EventHandler {
 // the buffer equal to that string
 // This means that we can transform the buffer into any string and still preserve undo/redo
 // through insert and delete events
+//
+// The diff runs against the line array's own form of the text (lines
+// joined by "\n", no carriage returns) rather than Bytes(), because
+// Bytes() adds a carriage return before every newline of a DOS buffer
+// and the walk below would count each one as a character the line array
+// does not hold, drifting one position per line. CRLF in the new text is
+// folded to LF for the same reason, which is also what loading a file
+// does with it.
 func (eh *EventHandler) ApplyDiff(new string) {
+	new = strings.ReplaceAll(new, "\r\n", "\n")
 	differ := dmp.New()
-	diff := differ.DiffMain(string(eh.buf.Bytes()), new, false)
+	diff := differ.DiffMain(string(eh.buf.joinedLines()), new, false)
 	loc := eh.buf.Start()
 	for _, d := range diff {
 		if d.Type == dmp.DiffDelete {
