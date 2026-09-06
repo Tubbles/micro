@@ -183,6 +183,11 @@ newline. Micro already does both of those itself at save time via the
 them risks double-applying or fighting a setting already chosen on
 purpose.
 
+The server's edits are applied as a character-level diff against the
+buffer rather than as range replacements, so the cursor stays where it
+was relative to the surrounding text even when the server answers with
+the whole document, and the result is one undo step.
+
 If the server advertises neither whole-document nor (with a selection
 active) range formatting, `LspFormat` shows a message in the InfoBar
 and does nothing.

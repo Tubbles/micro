@@ -657,7 +657,7 @@ func (h *BufPane) LspFormat() bool {
 			InfoBar.Message("lsp: no formatting changes")
 			return
 		}
-		applyTextEdits(h.Buf, edits, encoding)
+		applyFormattingEdits(h.Buf, edits, encoding)
 		h.Relocate()
 	})
 	return true

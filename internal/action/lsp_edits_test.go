@@ -3,6 +3,7 @@ package action
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	lua "github.com/yuin/gopher-lua"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
@@ -82,4 +83,81 @@ func TestApplyTextEditsEmpty(t *testing.T) {
 	if got := string(buf.Bytes()); got != "unchanged\n" {
 		t.Errorf("buf.Bytes() = %q, want unchanged", got)
 	}
+}
+
+// wholeDocumentEdit is the shape most formatters answer with: a single
+// edit whose range covers the entire original document.
+func wholeDocumentEdit(buf *buffer.Buffer, newText string) []protocol.TextEdit {
+	end := buf.End()
+	return []protocol.TextEdit{{
+		Range:   protocol.Range{Start: pos(0, 0), End: pos(uint32(end.Y), uint32(end.X))},
+		NewText: newText,
+	}}
+}
+
+func TestApplyFormattingEditsKeepsCursorOnItsLine(t *testing.T) {
+	buf := buffer.NewBufferFromString("func main() {\nfmt.Println(\"hi\")\nreturn\n}\n", "", buffer.BTDefault)
+	cursor := buf.GetActiveCursor()
+	cursor.GotoLoc(buffer.Loc{2, 2})
+
+	formatted := "func main() {\n\tfmt.Println(\"hi\")\n\treturn\n}\n"
+	applyFormattingEdits(buf, wholeDocumentEdit(buf, formatted), "utf-16")
+
+	assert.Equal(t, formatted, string(buf.Bytes()))
+	// Only the tab inserted on the cursor's own line moved it.
+	assert.Equal(t, buffer.Loc{3, 2}, cursor.Loc)
+}
+
+func TestApplyFormattingEditsShiftsCursorPastInsertedLines(t *testing.T) {
+	buf := buffer.NewBufferFromString("a\nb\nc\n", "", buffer.BTDefault)
+	cursor := buf.GetActiveCursor()
+	cursor.GotoLoc(buffer.Loc{1, 2})
+
+	applyFormattingEdits(buf, wholeDocumentEdit(buf, "a\n\n\nb\nc\n"), "utf-16")
+
+	assert.Equal(t, "a\n\n\nb\nc\n", string(buf.Bytes()))
+	assert.Equal(t, buffer.Loc{1, 4}, cursor.Loc)
+}
+
+func TestApplyFormattingEditsHandlesMultiByteText(t *testing.T) {
+	buf := buffer.NewBufferFromString("héllo wörld\n", "", buffer.BTDefault)
+	cursor := buf.GetActiveCursor()
+	cursor.GotoLoc(buffer.Loc{8, 0})
+
+	edits := []protocol.TextEdit{{
+		Range:   protocol.Range{Start: pos(0, 6), End: pos(0, 11)},
+		NewText: "wörld!",
+	}}
+	applyFormattingEdits(buf, edits, "utf-16")
+
+	assert.Equal(t, "héllo wörld!\n", string(buf.Bytes()))
+	assert.Equal(t, buffer.Loc{8, 0}, cursor.Loc)
+}
+
+func TestApplyFormattingEditsFoldsServerCRLFForDosBuffers(t *testing.T) {
+	buf := buffer.NewBufferFromString("a\r\nb\r\n", "", buffer.BTDefault)
+	if buf.Endings != buffer.FFDos {
+		t.Skip("DOS line endings were not detected from the string")
+	}
+	cursor := buf.GetActiveCursor()
+	cursor.GotoLoc(buffer.Loc{1, 1})
+
+	applyFormattingEdits(buf, wholeDocumentEdit(buf, "A\r\nb\r\n"), "utf-16")
+
+	assert.Equal(t, "A\r\nb\r\n", string(buf.Bytes()))
+	assert.Equal(t, "A", buf.Line(0))
+	assert.Equal(t, buffer.Loc{1, 1}, cursor.Loc)
+}
+
+func TestApplyFormattingEditsIsUndoable(t *testing.T) {
+	original := "x = 1\ny=2\n"
+	buf := buffer.NewBufferFromString(original, "", buffer.BTDefault)
+
+	applyFormattingEdits(buf, wholeDocumentEdit(buf, "x = 1\ny = 2\n"), "utf-16")
+	assert.Equal(t, "x = 1\ny = 2\n", string(buf.Bytes()))
+
+	for attempt := 0; attempt < 10 && string(buf.Bytes()) != original; attempt++ {
+		buf.Undo()
+	}
+	assert.Equal(t, original, string(buf.Bytes()))
 }
