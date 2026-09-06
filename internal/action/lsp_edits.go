@@ -4,12 +4,9 @@ import (
 	"sort"
 	"strings"
 
-	dmp "github.com/sergi/go-diff/diffmatchpatch"
-
 	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/lsp"
 	"github.com/micro-editor/micro/v2/internal/lsp/protocol"
-	"github.com/micro-editor/micro/v2/internal/util"
 )
 
 // applyTextEdits applies a list of LSP TextEdits to buf. Every edit's
@@ -38,9 +35,9 @@ func applyTextEdits(buf *buffer.Buffer, edits []protocol.TextEdit, encoding stri
 // whole document, and a range replace of that removes everything and
 // inserts the new text at the top: a cursor inside the removed range is
 // not moved by the removal but is pushed down by the insertion, so it
-// ends up clamped to the last line. A character-level diff only removes
-// and inserts what actually changed, so cursors ride along through the
-// untouched text the way they do for any other edit.
+// ends up clamped to the last line. ApplyDiff only removes and inserts
+// what actually changed, so cursors ride along through the untouched
+// text the way they do for any other edit.
 //
 // Completion and rename keep applyTextEdits: a completion edit ends at
 // the cursor, and a diff is free to put an insertion on either side of
@@ -50,17 +47,12 @@ func applyFormattingEdits(buf *buffer.Buffer, edits []protocol.TextEdit, encodin
 		return
 	}
 
-	original := lineArrayText(buf)
-	formatted := original
+	formatted := lineArrayText(buf)
 	for _, edit := range sortedDescending(edits) {
 		start, end := editLocs(buf, edit, encoding)
-		// The line array never stores a carriage return (Bytes() adds
-		// them back for DOS files on the way out), so fold the server's
-		// line endings to match before diffing.
-		replacement := strings.ReplaceAll(edit.NewText, "\r\n", "\n")
-		formatted = formatted[:byteOffset(buf, start)] + replacement + formatted[byteOffset(buf, end):]
+		formatted = formatted[:buffer.ByteOffset(start, buf)] + edit.NewText + formatted[buffer.ByteOffset(end, buf):]
 	}
-	applyDiff(buf, original, formatted)
+	buf.ApplyDiff(formatted)
 }
 
 // sortedDescending returns a copy of edits ordered bottom-most/right-most
@@ -84,42 +76,14 @@ func editLocs(buf *buffer.Buffer, edit protocol.TextEdit, encoding string) (buff
 
 // lineArrayText returns buf's text as the line array stores it: lines
 // joined by "\n", with no carriage returns regardless of file format.
+// That is the text buffer.ByteOffset indexes into and ApplyDiff diffs
+// against.
 func lineArrayText(buf *buffer.Buffer) string {
 	lines := make([]string, buf.LinesNum())
 	for index := range lines {
 		lines[index] = buf.Line(index)
 	}
 	return strings.Join(lines, "\n")
-}
-
-// byteOffset is loc's offset into lineArrayText(buf). buffer.ByteOffset
-// is not used because it slices the line by loc.X as if it were a byte
-// index, which is wrong after any multi-byte character.
-func byteOffset(buf *buffer.Buffer, loc buffer.Loc) int {
-	offset := 0
-	for line := 0; line < loc.Y; line++ {
-		offset += len(buf.LineBytes(line)) + 1
-	}
-	return offset + len(util.SliceStart(buf.LineBytes(loc.Y), loc.X))
-}
-
-// applyDiff turns buf's text, currently equal to old, into want through
-// the minimal character-level removals and insertions, each a regular
-// undoable text event that shifts cursors and anchors.
-func applyDiff(buf *buffer.Buffer, old, want string) {
-	loc := buf.Start()
-	for _, diff := range dmp.New().DiffMain(old, want, false) {
-		count := util.CharacterCountInString(diff.Text)
-		switch diff.Type {
-		case dmp.DiffDelete:
-			buf.Remove(loc, loc.Move(count, buf))
-		case dmp.DiffInsert:
-			buf.Insert(loc, diff.Text)
-			loc = loc.Move(count, buf)
-		default:
-			loc = loc.Move(count, buf)
-		}
-	}
 }
 
 // positionAfter reports whether a comes strictly after b in document
