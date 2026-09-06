@@ -344,6 +344,22 @@ The packages and their contents are listed below (in Go type signatures):
     - `Log(s string)`: writes a string to the log buffer.
     - `LogBuf() *Buffer`: returns the log buffer.
 
+    Buffers also expose anchors, regions whose bounds follow the text
+    through later edits (undo and redo included), so a plugin that finishes
+    work asynchronously can still find the region it started from:
+
+    - `buf:AddAnchor(start, end Loc) *Anchor`: start tracking a region.
+    - `buf:RemoveAnchor(anchor *Anchor)`: stop tracking it.
+    - `anchor:Start() Loc`, `anchor:End() Loc`: the current bounds.
+    - `anchor:Text() []byte`: the text currently inside the bounds, or nil
+       when the bounds no longer lie inside the buffer.
+
+    Text removed across a bound collapses that bound to the start of the
+    removal, and edits that bypass the text-event hook (bulk replace) leave
+    an anchor stale, so compare `anchor:Text()` with the text captured when
+    the anchor was made before acting on it. The `kroken` plugin is a
+    worked example.
+
     Relevant links:
     [Message](https://pkg.go.dev/github.com/micro-editor/micro/v2/internal/buffer#Message)
     [Loc](https://pkg.go.dev/github.com/micro-editor/micro/v2/internal/buffer#Loc)

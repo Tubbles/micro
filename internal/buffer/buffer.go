@@ -121,6 +121,9 @@ type SharedBuffer struct {
 
 	// Hash of the original buffer -- empty if fastdirty is on
 	origHash [md5.Size]byte
+
+	// Regions that follow the text through edits, see anchor.go
+	anchors []*Anchor
 }
 
 func (b *SharedBuffer) insert(pos Loc, value []byte) {

@@ -7,7 +7,13 @@ import (
 
 // InBounds returns whether the given location is a valid character position in the given buffer
 func InBounds(pos Loc, buf *Buffer) bool {
-	if pos.Y < 0 || pos.Y >= len(buf.lines) || pos.X < 0 || pos.X > util.CharacterCount(buf.LineBytes(pos.Y)) {
+	return locInBounds(pos, buf.LineArray)
+}
+
+// locInBounds is InBounds for callers that only hold the LineArray, such as
+// anchors, which live on the SharedBuffer.
+func locInBounds(pos Loc, la *LineArray) bool {
+	if pos.Y < 0 || pos.Y >= len(la.lines) || pos.X < 0 || pos.X > util.CharacterCount(la.LineBytes(pos.Y)) {
 		return false
 	}
 
