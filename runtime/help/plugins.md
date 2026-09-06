@@ -509,9 +509,11 @@ The following plugins come pre-installed with micro:
 * `diff`: integrates the `diffgutter` option with Git. If you are in a Git
    directory, the diff gutter will show changes with respect to the most
    recent Git commit rather than the diff since opening the file.
+* `kroken`: sends the selection to the kroken LLM harness in the
+   background and pastes the result over it when the run finishes.
 
-See `> help linter`, `> help comment`, and `> help status` for additional
-documentation specific to those plugins.
+See `> help linter`, `> help comment`, `> help status`, and `> help kroken`
+for additional documentation specific to those plugins.
 
 These are good examples for many use-cases if you are looking to write
 your own plugins.
