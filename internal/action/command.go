@@ -67,6 +67,7 @@ func InitCommands() {
 		"retab":       {(*BufPane).RetabCmd, nil},
 		"raw":         {(*BufPane).RawCmd, nil},
 		"textfilter":  {(*BufPane).TextFilterCmd, nil},
+		"lsp":         {(*BufPane).LspCmd, nil},
 	}
 }
 

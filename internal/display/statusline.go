@@ -59,6 +59,24 @@ var statusInfo = map[string]func(*buffer.Buffer) string{
 	"percentage": func(b *buffer.Buffer) string {
 		return strconv.Itoa((b.GetActiveCursor().Y + 1) * 100 / b.LinesNum())
 	},
+	"lsp": func(b *buffer.Buffer) string {
+		errors, warnings := 0, 0
+		for _, m := range b.Messages {
+			if !strings.HasPrefix(m.Owner, "lsp:") {
+				continue
+			}
+			switch m.Kind {
+			case buffer.MTError:
+				errors++
+			case buffer.MTWarning:
+				warnings++
+			}
+		}
+		if errors == 0 && warnings == 0 {
+			return ""
+		}
+		return fmt.Sprintf("E:%d W:%d", errors, warnings)
+	},
 }
 
 func SetStatusInfoFnLua(fn string) {
