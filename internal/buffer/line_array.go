@@ -201,6 +201,21 @@ func (la *LineArray) Bytes() []byte {
 	return b.Bytes()
 }
 
+// joinedLines returns the lines joined by "\n" regardless of the file
+// format, which is the text exactly as the line array stores it. Bytes()
+// is the on-disk form and adds a carriage return per line for DOS files.
+func (la *LineArray) joinedLines() []byte {
+	b := new(bytes.Buffer)
+	b.Grow(int(la.initsize + 4096))
+	for i, l := range la.lines {
+		b.Write(l.data)
+		if i != len(la.lines)-1 {
+			b.WriteByte('\n')
+		}
+	}
+	return b.Bytes()
+}
+
 // newlineBelow adds a newline below the given line number
 func (la *LineArray) newlineBelow(y int) {
 	la.lines = append(la.lines, Line{

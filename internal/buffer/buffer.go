@@ -747,6 +747,7 @@ func (b *Buffer) ReOpen() error {
 		return err
 	}
 	b.EventHandler.ApplyDiff(txt)
+	b.redetectLineEndings(txt)
 
 	err = b.UpdateModTime()
 	if !b.Settings["fastdirty"].(bool) {
@@ -759,6 +760,26 @@ func (b *Buffer) ReOpen() error {
 	b.isModified = false
 	b.RelocateCursors()
 	return err
+}
+
+// redetectLineEndings mirrors what loading a non-empty file does: the
+// convention found in the text wins, and the fileformat setting follows.
+// ApplyDiff folds CRLF away, so without this a file rewritten on disk
+// with the other convention would be saved back with the old one. Like
+// NewLineArray, the first line ending decides; text without one keeps
+// the current format.
+func (b *Buffer) redetectLineEndings(text string) {
+	newline := strings.IndexByte(text, '\n')
+	if newline < 0 {
+		return
+	}
+	if newline > 0 && text[newline-1] == '\r' {
+		b.Endings = FFDos
+		b.Settings["fileformat"] = "dos"
+	} else {
+		b.Endings = FFUnix
+		b.Settings["fileformat"] = "unix"
+	}
 }
 
 // RelocateCursors relocates all cursors (makes sure they are in the buffer)
