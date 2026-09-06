@@ -341,6 +341,8 @@ Here are the available options:
 
 * `reload`: controls the reload behavior of the current buffer in case the file
    has changed. The available options are `prompt`, `auto` & `disabled`.
+   A reload detects the file's line endings again, like opening does, so a
+   file rewritten with the other convention is saved back that way.
 
    default value: `prompt`
 
