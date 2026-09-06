@@ -55,6 +55,12 @@ type Client struct {
 func NewClient(name string, def ServerDefinition, root string) (*Client, error) {
 	cmd := exec.Command(def.Command, def.Args...)
 	cmd.Dir = root
+	// Servers report crashes, tracing, and misconfiguration on stderr.
+	// Mirror it into the log buffer line by line; exec's copier feeds
+	// the writer and Wait in Shutdown drains it before returning.
+	cmd.Stderr = &serverStderr{emit: func(line string) {
+		post(func() { logServerLine(name, line) })
+	}}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

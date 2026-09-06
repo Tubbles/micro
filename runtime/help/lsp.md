@@ -54,6 +54,11 @@ One running server process is shared by every buffer with the same
 (server name, workspace root) pair, so opening several files from the
 same project reuses one connection.
 
+Whatever a server prints on its stderr (crash traces, tracing output,
+complaints about its configuration) goes to micro's log buffer one line
+at a time, prefixed `[lsp:<name>]`. Open it with `> log`. Lines are
+dropped rather than stalling the server when the editor is busy.
+
 # Commands
 
 * `> lsp status`: opens a log-buffer report of every running server
