@@ -77,7 +77,16 @@ func JobSpawn(cmdName string, cmdArgs []string, onStdout, onStderr, onExit func(
 
 	go func() {
 		// Run the process in the background and create the onExit callback
-		proc.Run()
+		err := proc.Run()
+		if err != nil && proc.ProcessState == nil && onStderr != nil {
+			// The process never started (executable not found, permission
+			// denied, ...), so nothing has reached stderr and the exit
+			// callback alone could not tell this apart from a run that
+			// produced no output. Hand the reason to the stderr callback,
+			// queued like any other chunk so it runs on the main thread
+			// before the exit callback.
+			Jobs <- JobFunction{onStderr, err.Error() + "\n", userargs}
+		}
 		if onExit != nil {
 			jobFunc := JobFunction{onExit, outbuf.String(), userargs}
 			Jobs <- jobFunc

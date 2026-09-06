@@ -79,6 +79,7 @@ func openWithSelection(t *testing.T, content string, start, end buffer.Loc) *buf
 }
 
 func runKrokenCommand() {
+	action.InfoBar.HasError = false
 	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
 	injectString("kroken")
 	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
@@ -128,7 +129,6 @@ func TestKrokenFailureLeavesBufferUntouched(t *testing.T) {
 
 	buf := openWithSelection(t, "one\ntwo\n", buffer.Loc{0, 0}, buffer.Loc{0, 1})
 	runKrokenCommand()
-	action.InfoBar.HasError = false
 
 	pumpJobsUntil(t, func() bool { return action.InfoBar.HasError })
 	assert.Equal(t, "one\ntwo\n", string(buf.Bytes()))
@@ -145,7 +145,6 @@ func TestKrokenRefusesWhenSelectionChanged(t *testing.T) {
 
 	buf := openWithSelection(t, "one\ntwo\nthree\n", buffer.Loc{0, 1}, buffer.Loc{0, 2})
 	runKrokenCommand()
-	action.InfoBar.HasError = false
 
 	buf.Insert(buffer.Loc{1, 1}, "X")
 	if err := os.WriteFile(goFile, nil, 0644); err != nil {
@@ -155,4 +154,16 @@ func TestKrokenRefusesWhenSelectionChanged(t *testing.T) {
 	pumpJobsUntil(t, func() bool { return action.InfoBar.HasError })
 	assert.Equal(t, "one\ntXwo\nthree\n", string(buf.Bytes()))
 	assert.Contains(t, action.InfoBar.Msg, "selection changed")
+}
+
+func TestKrokenMissingExecutableIsReported(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	buf := openWithSelection(t, "one\ntwo\n", buffer.Loc{0, 0}, buffer.Loc{0, 1})
+	runKrokenCommand()
+
+	pumpJobsUntil(t, func() bool { return action.InfoBar.HasError })
+	assert.Equal(t, "one\ntwo\n", string(buf.Bytes()))
+	assert.Equal(t, "kroken: could not start kroken, see > log", action.InfoBar.Msg)
+	assert.Contains(t, string(buffer.LogBuf.Bytes()), "[kroken] exec: \"kroken\": executable file not found")
 }
