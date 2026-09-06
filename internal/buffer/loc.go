@@ -140,9 +140,10 @@ func ByteOffset(pos Loc, buf *Buffer) int {
 	loc := 0
 	for i := 0; i < y; i++ {
 		// + 1 for the newline
-		loc += len(buf.Line(i)) + 1
+		loc += len(buf.LineBytes(i)) + 1
 	}
-	loc += len(buf.Line(y)[:x])
+	// pos.X counts characters, so take that many characters' worth of bytes
+	loc += len(util.SliceStart(buf.LineBytes(y), x))
 	return loc
 }
 
