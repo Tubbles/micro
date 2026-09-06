@@ -714,7 +714,8 @@ them. The option is a boolean with the same name as the plugin itself.
 By default, the following plugins are provided, each with an option to enable
 or disable them:
 
-* `autoclose`: automatically closes brackets, quotes, etc...
+* `autoclose`: automatically closes brackets, quotes, etc., and wraps the
+   selection in the pair when an opening character is typed over it
 * `comment`: provides automatic commenting for a number of languages
 * `ftoptions`: alters some default options depending on the filetype
 * `linter`: provides extensible linting for many languages

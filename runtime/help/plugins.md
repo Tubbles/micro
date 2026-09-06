@@ -555,6 +555,18 @@ The following functions from the go-humanize package are also available:
 [The Lua standard library](https://www.lua.org/manual/5.1/manual.html#5) is also
 available to plugins, though it is rather small.
 
+## Lua interpreter caveats
+
+The bundled gopher-lua miscompiles the idiomatic swap on locals:
+
+```lua
+local a, b = 1, 2
+a, b = b, a   -- leaves a == 2 and b == 2
+```
+
+Swap through a temporary (`local t = a; a = b; b = t`) instead. The
+`autoclose` plugin does this when it orders a backwards selection.
+
 ## Adding help files, syntax files, or colorschemes in your plugin
 
 You can use the `AddRuntimeFile(name string, type config.RTFiletype,
@@ -579,7 +591,8 @@ runtime.
 
 The following plugins come pre-installed with micro:
 
-* `autoclose`: automatically closes brackets, quotes, etc...
+* `autoclose`: automatically closes brackets, quotes, etc., and wraps the
+   selection in the pair when an opening character is typed over it
 * `comment`: provides automatic commenting for a number of languages
 * `ftoptions`: alters some default options (notably indentation) depending on
    the filetype

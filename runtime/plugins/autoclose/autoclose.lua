@@ -2,6 +2,7 @@ VERSION = "1.0.0"
 
 local uutil = import("micro/util")
 local utf8 = import("utf8")
+local buffer = import("micro/buffer")
 local autoclosePairs = {"\"\"", "''", "``", "()", "{}", "[]"}
 local autoNewlinePairs = {"()", "{}", "[]"}
 
@@ -71,5 +72,58 @@ function preBackspace(bp)
         end
     end
 
+    return true
+end
+
+-- surroundSelection wraps the cursor's selection in open/close and keeps
+-- exactly the original text selected, so typing another opener nests.
+-- The two inserts shift the cursor and selection the way typing would,
+-- which drags the closer into the selection; hence the explicit reset.
+function surroundSelection(bp, open, close)
+    local first = -bp.Cursor.CurSelection[1]
+    local second = -bp.Cursor.CurSelection[2]
+    if first:GreaterThan(second) then
+        -- Not "first, second = second, first": the bundled gopher-lua
+        -- miscompiles that swap on locals and leaves both equal.
+        local earlier = second
+        second = first
+        first = earlier
+    end
+    local cursorAtEnd = bp.Cursor.X == second.X and bp.Cursor.Y == second.Y
+
+    bp.Buf:Insert(second, close)
+    bp.Buf:Insert(first, open)
+
+    local newFirst = buffer.Loc(first.X + 1, first.Y)
+    local newSecond = buffer.Loc(second.X, second.Y)
+    if second.Y == first.Y then
+        newSecond = buffer.Loc(second.X + 1, second.Y)
+    end
+    bp.Cursor:SetSelectionStart(newFirst)
+    bp.Cursor:SetSelectionEnd(newSecond)
+    local cursorLoc = newFirst
+    if cursorAtEnd then
+        cursorLoc = newSecond
+    end
+    bp.Cursor.X = cursorLoc.X
+    bp.Cursor.Y = cursorLoc.Y
+    bp.Cursor:StoreVisualX()
+    bp:Relocate()
+end
+
+-- Typing an opening character while text is selected wraps the
+-- selection in the pair instead of replacing it. DoRuneInsert calls
+-- preRune once per cursor, so every cursor with a selection gets its
+-- own pair. Returning false skips the normal insert (and onRune).
+function preRune(bp, r)
+    if not bp.Cursor:HasSelection() then
+        return true
+    end
+    for i = 1, #autoclosePairs do
+        if r == charAt(autoclosePairs[i], 1) then
+            surroundSelection(bp, charAt(autoclosePairs[i], 1), charAt(autoclosePairs[i], 2))
+            return false
+        end
+    end
     return true
 end
