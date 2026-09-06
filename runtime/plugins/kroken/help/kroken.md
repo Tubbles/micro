@@ -55,5 +55,8 @@ to check that the setup works.
   kroken prints on its stderr, when logging is enabled, still holds the
   result.
 * The replacement is a single undo step.
+* The command line of every run and everything kroken prints on stderr
+  go to micro's log buffer, prefixed `[kroken]`. Open it with `> log`
+  when the info bar's one-liner is not enough.
 * kroken hands Claude Code the file on disk, not the buffer. Save first
   when the surrounding context matters.

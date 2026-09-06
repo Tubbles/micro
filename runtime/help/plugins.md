@@ -278,7 +278,11 @@ The packages and their contents are listed below (in Go type signatures):
                 *exec.Cmd`:
        same as `JobStart`, except doesn't run the command through the shell
        and instead takes as inputs the list of arguments. Returns the started
-       command.
+       command. If the process cannot be started at all (for example the
+       executable is not found), the reason is delivered to the stderr
+       callback as a single line before the exit callback runs; the exit
+       callback alone cannot tell that apart from a run that produced no
+       output.
 
     - `JobStop(cmd *exec.Cmd)`: kills a job.
     - `JobSend(cmd *exec.Cmd, data string)`: sends some data to a job's stdin.
