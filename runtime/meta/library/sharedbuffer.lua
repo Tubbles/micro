@@ -20,6 +20,9 @@
 ---@field Type BufType
 local SharedBuffer = {}
 
+---@type fun(self: SharedBuffer, start: Loc, end_: Loc): Anchor
+SharedBuffer.AddAnchor = nil
+
 ---@type fun(self: SharedBuffer, fsize: integer): boolean, boolean
 SharedBuffer.ApplyBackup = nil
 
@@ -55,6 +58,9 @@ SharedBuffer.MarkModified = nil
 
 ---@type fun(self: SharedBuffer, y: integer): any
 SharedBuffer.Match = nil
+
+---@type fun(self: SharedBuffer, anchor: Anchor)
+SharedBuffer.RemoveAnchor = nil
 
 ---@type fun(self: SharedBuffer)
 SharedBuffer.RemoveBackup = nil

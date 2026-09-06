@@ -20,6 +20,9 @@
 ---@field YNResp boolean
 local InfoBuf = {}
 
+---@type fun(self: InfoBuf, start: Loc, end_: Loc): Anchor
+InfoBuf.AddAnchor = nil
+
 ---@type fun(self: InfoBuf, c: Cursor)
 InfoBuf.AddCursor = nil
 
@@ -226,6 +229,9 @@ InfoBuf.RelocateCursors = nil
 
 ---@type fun(self: InfoBuf, start: Loc, end_: Loc)
 InfoBuf.Remove = nil
+
+---@type fun(self: InfoBuf, anchor: Anchor)
+InfoBuf.RemoveAnchor = nil
 
 ---@type fun(self: InfoBuf)
 InfoBuf.RemoveBackup = nil

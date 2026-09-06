@@ -16,6 +16,9 @@
 ---@field StartCursor Loc
 local Buffer = {}
 
+---@type fun(self: Buffer, start: Loc, end_: Loc): Anchor
+Buffer.AddAnchor = nil
+
 ---@type fun(self: Buffer, c: Cursor)
 Buffer.AddCursor = nil
 
@@ -195,6 +198,9 @@ Buffer.RelocateCursors = nil
 
 ---@type fun(self: Buffer, start: Loc, end_: Loc)
 Buffer.Remove = nil
+
+---@type fun(self: Buffer, anchor: Anchor)
+Buffer.RemoveAnchor = nil
 
 ---@type fun(self: Buffer)
 Buffer.RemoveBackup = nil

@@ -9,6 +9,9 @@ local InfoPane = {}
 ---@type fun(self: InfoPane)
 InfoPane.AbortCommand = nil
 
+---@type fun(self: InfoPane, start: Loc, end_: Loc): Anchor
+InfoPane.AddAnchor = nil
+
 ---@type fun(self: InfoPane, c: Cursor)
 InfoPane.AddCursor = nil
 
@@ -695,6 +698,9 @@ InfoPane.Remove = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.RemoveAllMultiCursors = nil
+
+---@type fun(self: InfoPane, anchor: Anchor)
+InfoPane.RemoveAnchor = nil
 
 ---@type fun(self: InfoPane)
 InfoPane.RemoveBackup = nil
