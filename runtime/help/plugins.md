@@ -344,6 +344,22 @@ The packages and their contents are listed below (in Go type signatures):
     - `Log(s string)`: writes a string to the log buffer.
     - `LogBuf() *Buffer`: returns the log buffer.
 
+    Buffers also expose anchors, regions whose bounds follow the text
+    through later edits (undo and redo included), so a plugin that finishes
+    work asynchronously can still find the region it started from:
+
+    - `buf:AddAnchor(start, end Loc) *Anchor`: start tracking a region.
+    - `buf:RemoveAnchor(anchor *Anchor)`: stop tracking it.
+    - `anchor:Start() Loc`, `anchor:End() Loc`: the current bounds.
+    - `anchor:Text() []byte`: the text currently inside the bounds, or nil
+       when the bounds no longer lie inside the buffer.
+
+    Text removed across a bound collapses that bound to the start of the
+    removal, and edits that bypass the text-event hook (bulk replace) leave
+    an anchor stale, so compare `anchor:Text()` with the text captured when
+    the anchor was made before acting on it. The `kroken` plugin is a
+    worked example.
+
     Relevant links:
     [Message](https://pkg.go.dev/github.com/micro-editor/micro/v2/internal/buffer#Message)
     [Loc](https://pkg.go.dev/github.com/micro-editor/micro/v2/internal/buffer#Loc)
@@ -571,9 +587,11 @@ The following plugins come pre-installed with micro:
 * `diff`: integrates the `diffgutter` option with Git. If you are in a Git
    directory, the diff gutter will show changes with respect to the most
    recent Git commit rather than the diff since opening the file.
+* `kroken`: sends the selection to the kroken LLM harness in the
+   background and pastes the result over it when the run finishes.
 
-See `> help linter`, `> help comment`, and `> help status` for additional
-documentation specific to those plugins.
+See `> help linter`, `> help comment`, `> help status`, and `> help kroken`
+for additional documentation specific to those plugins.
 
 These are good examples for many use-cases if you are looking to write
 your own plugins.
