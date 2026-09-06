@@ -1,6 +1,7 @@
 VERSION = "1.0.0"
 
 local micro = import("micro")
+local buffer = import("micro/buffer")
 local config = import("micro/config")
 local shell = import("micro/shell")
 local util = import("micro/util")
@@ -27,6 +28,30 @@ local function lineWithPrefix(text, prefix, fallback)
     return fallback
 end
 
+-- Everything kroken prints on stderr also goes to micro's log buffer
+-- (> log), prefixed, so the pane reads like kroken's terminal output.
+-- Chunks arrive at arbitrary boundaries, so only complete lines are
+-- written and the rest waits for the next chunk.
+local function logStderr(run, chunk)
+    run.stderr = run.stderr .. chunk
+    run.pendingLine = run.pendingLine .. chunk
+    while true do
+        local newline = run.pendingLine:find("\n", 1, true)
+        if newline == nil then
+            return
+        end
+        buffer.Log("[kroken] " .. run.pendingLine:sub(1, newline))
+        run.pendingLine = run.pendingLine:sub(newline + 1)
+    end
+end
+
+local function flushStderr(run)
+    if run.pendingLine ~= "" then
+        buffer.Log("[kroken] " .. run.pendingLine .. "\n")
+        run.pendingLine = ""
+    end
+end
+
 -- Runs on the main thread once the kroken process has exited. Micro's
 -- job API hands the exit callback stdout and stderr mixed together, so
 -- the two streams are collected separately by the stream callbacks and
@@ -34,14 +59,16 @@ end
 local function onExit(run)
     os.remove(run.selectionFile)
     run.buf:RemoveAnchor(run.anchor)
+    flushStderr(run)
 
     local processState = run.job.ProcessState
     if processState == nil then
-        micro.InfoBar():Error("kroken: could not start kroken, is it on your PATH?")
+        micro.InfoBar():Error("kroken: could not start kroken, see > log")
         return
     end
     local exitCode = processState:ExitCode()
     if exitCode ~= 0 then
+        buffer.Log("[kroken] exit status " .. exitCode .. "\n")
         micro.InfoBar():Error(lineWithPrefix(run.stderr, "kroken:", "kroken: exited with status " .. exitCode))
         return
     end
@@ -92,6 +119,7 @@ function complete(bp, arguments)
     for index = 1, #arguments do
         table.insert(commandArguments, arguments[index])
     end
+    buffer.Log("[kroken] kroken " .. table.concat(commandArguments, " ") .. "\n")
 
     -- Every run owns its state, so any number of runs can overlap.
     local run = {
@@ -101,10 +129,11 @@ function complete(bp, arguments)
         selectionFile = selectionFile,
         stdout = "",
         stderr = "",
+        pendingLine = "",
     }
     run.job = shell.JobSpawn("kroken", commandArguments,
         function(chunk) run.stdout = run.stdout .. chunk end,
-        function(chunk) run.stderr = run.stderr .. chunk end,
+        function(chunk) logStderr(run, chunk) end,
         function() onExit(run) end)
     micro.InfoBar():Message("kroken: running")
 end

@@ -117,6 +117,9 @@ func TestKrokenReplacesSelectionAfterEditsAbove(t *testing.T) {
 	assert.Equal(t, "zero\none\nBEGIN[two\nthree\n]ENDfour\n", string(buf.Bytes()))
 	assert.False(t, action.InfoBar.HasError)
 	assert.Equal(t, "kroken: done in 0.0 s, 1 turns, $0.0000", action.InfoBar.Msg)
+	log := string(buffer.LogBuf.Bytes())
+	assert.Contains(t, log, "[kroken] kroken complete --file ")
+	assert.Contains(t, log, "[kroken] kroken: done in 0.0 s, 1 turns, $0.0000\n")
 }
 
 func TestKrokenFailureLeavesBufferUntouched(t *testing.T) {
@@ -130,6 +133,9 @@ func TestKrokenFailureLeavesBufferUntouched(t *testing.T) {
 	pumpJobsUntil(t, func() bool { return action.InfoBar.HasError })
 	assert.Equal(t, "one\ntwo\n", string(buf.Bytes()))
 	assert.Equal(t, "kroken: claude failed (test): boom", action.InfoBar.Msg)
+	log := string(buffer.LogBuf.Bytes())
+	assert.Contains(t, log, "[kroken] kroken: claude failed (test): boom\n")
+	assert.Contains(t, log, "[kroken] exit status 1\n")
 }
 
 func TestKrokenRefusesWhenSelectionChanged(t *testing.T) {
