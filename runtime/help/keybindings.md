@@ -311,6 +311,10 @@ Escape
 Quit
 QuitAll
 ForceQuit
+CloseAllTabs
+CloseOtherTabs
+CloseTabsToTheRight
+CloseTabsToTheLeft
 AddTab
 PreviousTab
 NextTab
@@ -345,6 +349,15 @@ None
 
 The `StartOfTextToggle` and `SelectToStartOfTextToggle` actions toggle between
 jumping to the start of the text (first) and start of the line.
+
+The `CloseOtherTabs`, `CloseTabsToTheRight` and `CloseTabsToTheLeft` actions
+close every tab except the current one, every tab after it, or every tab
+before it. `CloseAllTabs` closes every tab and leaves a single fresh empty
+buffer, so micro stays open (`QuitAll` is the action that exits). Each buffer
+with unsaved changes gets the same save prompt `Quit` shows, one at a time;
+answering `esc` keeps that tab and every tab that was still to be closed.
+None of these are bound by default; add entries in `bindings.json` to use
+them.
 
 The `CutLine` action cuts the current line and adds it to the previously cut
 lines in the clipboard since the last paste (rather than just replaces the
