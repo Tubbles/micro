@@ -10,10 +10,12 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-// paletteKind discriminates the four categories the command palette
+// paletteKind discriminates the five categories the command palette
 // surfaces: built-in buffer actions, commands, Lua plugin functions,
-// and one-argument-level command invocations (D-20/D-21, e.g.
-// "help options").
+// one-argument-level command invocations (D-20/D-21, e.g.
+// "help options"), and key bindings whose target is none of the
+// above (a command with its own arguments, a command-edit: prefix,
+// or an action chain).
 type paletteKind int
 
 const (
@@ -21,6 +23,7 @@ const (
 	paletteCommand
 	paletteLua
 	paletteCommandArg
+	paletteBinding
 )
 
 // paletteEntry is one row in the command palette. Bindings is the
@@ -36,7 +39,8 @@ type paletteEntry struct {
 
 // actionString is the form a key binding would use to invoke this
 // entry. Used both as the reverse-binding lookup key and as the
-// dispatch shape consumed by BufMapEvent's parser.
+// dispatch shape consumed by BufMapEvent's parser. A paletteBinding
+// entry's Name already is that form, verbatim from bindings.json.
 func (e paletteEntry) actionString() string {
 	switch e.Kind {
 	case paletteCommand, paletteCommandArg:
@@ -63,50 +67,135 @@ func paletteEntryByKindName(entries []paletteEntry, k paletteKind, name string) 
 
 // buildPaletteEntries produces the full list of palette entries,
 // sorted within each kind. The reverse-binding map is built once and
-// shared across all three enumeration steps.
+// shared across all enumeration steps. The binding kind lists what is
+// left over once the other kinds have claimed their targets, so those
+// lists are built whenever bindings are enabled even if their own
+// setting hides them from the palette; the command list is the only
+// one that costs anything (it drives every completer once).
 func buildPaletteEntries() []paletteEntry {
 	rev := buildBindingReverseMap()
-	var out []paletteEntry
+	showActions := isPaletteEnabled("commandpalette.actions")
+	showCommands := isPaletteEnabled("commandpalette.commands")
+	showLua := isPaletteEnabled("commandpalette.lua")
+	showBindings := isPaletteEnabled("commandpalette.bindings")
 
-	if isPaletteEnabled("commandpalette.actions") {
-		var names []string
-		for name := range BufKeyActions {
-			if _, isMouse := BufMouseActions[name]; isMouse {
+	actions := buildActionPaletteEntries(rev)
+	var cmds []paletteEntry
+	if showCommands || showBindings {
+		cmds = buildCommandPaletteEntries(rev)
+	}
+	luas := buildLuaPaletteEntries(rev)
+
+	var out []paletteEntry
+	if showActions {
+		out = append(out, actions...)
+	}
+	if showCommands {
+		out = append(out, cmds...)
+	}
+	if showLua {
+		out = append(out, luas...)
+	}
+	if showBindings {
+		out = append(out, buildBindingPaletteEntries(rev, actions, cmds, luas)...)
+	}
+	return out
+}
+
+// buildActionPaletteEntries lists every key action (mouse actions
+// have no keystroke shape to dispatch from the palette).
+func buildActionPaletteEntries(rev map[string][]string) []paletteEntry {
+	var names []string
+	for name := range BufKeyActions {
+		if _, isMouse := BufMouseActions[name]; isMouse {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]paletteEntry, 0, len(names))
+	for _, name := range names {
+		out = append(out, paletteEntry{
+			Kind:     paletteAction,
+			Name:     name,
+			Bindings: rev[name],
+		})
+	}
+	return out
+}
+
+// buildCommandPaletteEntries lists every registered command followed
+// by the one-argument-level entries its completer can enumerate.
+func buildCommandPaletteEntries(rev map[string][]string) []paletteEntry {
+	var names []string
+	for name := range commands {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]paletteEntry, 0, len(names))
+	for _, name := range names {
+		out = append(out, paletteEntry{
+			Kind:     paletteCommand,
+			Name:     name,
+			Bindings: rev["command:"+name],
+		})
+	}
+	return append(out, buildCommandArgPaletteEntries(rev)...)
+}
+
+// buildBindingPaletteEntries surfaces the bindings whose target is not
+// itself a palette entry: a command carrying arguments the completer
+// enumeration cannot produce ("command:tab ~/notes.md"), a
+// command-edit: prefix, or an action chain ("Save,Quit"). Each distinct
+// target becomes one row labelled with the target verbatim, so a search
+// for a key combo finds it like any other entry. A target only gets a
+// row if it resolves as an action chain, which drops mouse actions (the
+// palette has no mouse event to run them with) and targets that never
+// resolved when bindings.json was loaded. Targets bound only to mouse
+// events are skipped for the same reason.
+func buildBindingPaletteEntries(rev map[string][]string, claimedBy ...[]paletteEntry) []paletteEntry {
+	claimed := map[string]bool{}
+	for _, list := range claimedBy {
+		for _, e := range list {
+			claimed[e.actionString()] = true
+		}
+	}
+
+	var targets []string
+	for target := range rev {
+		if claimed[target] || !paletteFreeTextResolvesAsActionChain(target) {
+			continue
+		}
+		if len(keyEventsOnly(rev[target])) > 0 {
+			targets = append(targets, target)
+		}
+	}
+	sort.Strings(targets)
+
+	out := make([]paletteEntry, 0, len(targets))
+	for _, target := range targets {
+		out = append(out, paletteEntry{
+			Kind:     paletteBinding,
+			Name:     target,
+			Bindings: keyEventsOnly(rev[target]),
+		})
+	}
+	return out
+}
+
+// keyEventsOnly drops mouse event names from a list of binding event
+// names, keeping the order.
+func keyEventsOnly(events []string) []string {
+	var keys []string
+	for _, ev := range events {
+		if e, err := findEvent(ev); err == nil {
+			if _, isMouse := e.(MouseEvent); isMouse {
 				continue
 			}
-			names = append(names, name)
 		}
-		sort.Strings(names)
-		for _, name := range names {
-			out = append(out, paletteEntry{
-				Kind:     paletteAction,
-				Name:     name,
-				Bindings: rev[name],
-			})
-		}
+		keys = append(keys, ev)
 	}
-
-	if isPaletteEnabled("commandpalette.commands") {
-		var names []string
-		for name := range commands {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			out = append(out, paletteEntry{
-				Kind:     paletteCommand,
-				Name:     name,
-				Bindings: rev["command:"+name],
-			})
-		}
-		out = append(out, buildCommandArgPaletteEntries(rev)...)
-	}
-
-	if isPaletteEnabled("commandpalette.lua") {
-		out = append(out, buildLuaPaletteEntries(rev)...)
-	}
-
-	return out
+	return keys
 }
 
 // buildBindingReverseMap walks the buffer bindings and returns a map
@@ -190,6 +279,8 @@ func paletteKindTag(k paletteKind) string {
 		return "lua    "
 	case paletteCommandArg:
 		return "arg    "
+	case paletteBinding:
+		return "bind   "
 	}
 	return ""
 }
@@ -205,6 +296,8 @@ func historyKindTag(k historyKind) string {
 		return "cmd    "
 	case historyLua:
 		return "lua    "
+	case historyBinding:
+		return "bind   "
 	case historyFreeText:
 		return "text   "
 	}
@@ -253,6 +346,10 @@ func historyItemLabel(atlas []paletteEntry, hist historyEntry) string {
 		}
 	case historyLua:
 		if e, ok := paletteEntryByKindName(atlas, paletteLua, hist.Name); ok {
+			return paletteItemLabel(e)
+		}
+	case historyBinding:
+		if e, ok := paletteEntryByKindName(atlas, paletteBinding, hist.Name); ok {
 			return paletteItemLabel(e)
 		}
 	}
@@ -309,6 +406,8 @@ func historyToPaletteKind(k historyKind) paletteKind {
 		return paletteCommand
 	case historyLua:
 		return paletteLua
+	case historyBinding:
+		return paletteBinding
 	}
 	return paletteAction
 }
@@ -532,6 +631,11 @@ func executePaletteEntry(h *BufPane, e paletteEntry) {
 		// historyCommand entry on.
 		recordHistory(historyEntry{Kind: historyFreeText, Name: e.Name})
 		h.HandleCommand(e.Name)
+	case paletteBinding:
+		// The target is a bindings.json action string, so it runs the
+		// way the keystroke would: as an action chain.
+		recordHistory(historyEntry{Kind: historyBinding, Name: e.Name})
+		runFreeTextActionChain(h, e.Name)
 	case paletteLua:
 		a := LuaAction(e.Name, KeyEvent{})
 		fn, ok := a.(BufKeyAction)

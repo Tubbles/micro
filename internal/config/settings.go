@@ -115,6 +115,7 @@ var DefaultGlobalOnlySettings = map[string]any{
 	"clipboard":                  "external",
 	"colorscheme":                "default",
 	"commandpalette.actions":     true,
+	"commandpalette.bindings":    true,
 	"commandpalette.commands":    true,
 	"commandpalette.historysize": float64(20),
 	"commandpalette.lua":         true,
