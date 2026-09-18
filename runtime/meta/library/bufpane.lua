@@ -738,6 +738,9 @@ BufPane.SubWordRight = nil
 ---@type fun(self: BufPane): boolean
 BufPane.Suspend = nil
 
+---@type fun(self: BufPane): boolean
+BufPane.SwitchToRecentBuffer = nil
+
 ---@type fun(self: BufPane): Tab
 BufPane.Tab = nil
 

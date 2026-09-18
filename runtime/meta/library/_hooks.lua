@@ -1266,6 +1266,14 @@ preSuspend = nil
 ---@type fun(bp: BufPane)
 onSuspend = nil
 
+---Called before the SwitchToRecentBuffer action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preSwitchToRecentBuffer = nil
+
+---Called after the SwitchToRecentBuffer action runs.
+---@type fun(bp: BufPane)
+onSwitchToRecentBuffer = nil
+
 ---Called before the ToggleDiffGutter action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 preToggleDiffGutter = nil

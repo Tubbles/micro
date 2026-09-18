@@ -156,6 +156,7 @@
 ---|"SubWordLeft"
 ---|"SubWordRight"
 ---|"Suspend"
+---|"SwitchToRecentBuffer"
 ---|"ToggleDiffGutter"
 ---|"ToggleHelp"
 ---|"ToggleHighlightSearch"

@@ -1023,6 +1023,9 @@ InfoPane.Substr = nil
 ---@type fun(self: InfoPane): boolean
 InfoPane.Suspend = nil
 
+---@type fun(self: InfoPane): boolean
+InfoPane.SwitchToRecentBuffer = nil
+
 ---@type fun(self: InfoPane): Tab
 InfoPane.Tab = nil
 
