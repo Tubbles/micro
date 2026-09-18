@@ -65,6 +65,17 @@ func (t *TabList) AddTab(p *Tab) {
 	t.UpdateNames()
 }
 
+// IndexOf returns tab's position in the list, or -1 when it is not
+// (or no longer) part of it.
+func (t *TabList) IndexOf(tab *Tab) int {
+	for index, candidate := range t.List {
+		if candidate == tab {
+			return index
+		}
+	}
+	return -1
+}
+
 // RemoveTab removes a tab with the given id from the TabList
 func (t *TabList) RemoveTab(id uint64) {
 	for i, p := range t.List {
