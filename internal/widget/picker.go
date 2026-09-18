@@ -86,9 +86,14 @@ type PickerOptions struct {
 	OnEsc func() bool
 	// OnTab fires when the user presses Tab. The picker itself has no
 	// notion of what Tab does; callers wire it to whatever in-picker
-	// state change makes sense (e.g. the command palette's mode
-	// toggle). Nil leaves Tab as a silent no-op.
+	// state change makes sense. Nil leaves Tab as a silent no-op.
 	OnTab func()
+	// Pinned is the number of leading Items that stay ahead of every
+	// other match while a query is active, in their own order, the way
+	// an editor command palette keeps "recently used" entries on top.
+	// Pinned items still have to match the query to be shown. Zero
+	// (the default) ranks every match by score alone.
+	Pinned int
 }
 
 // Picker is a generic list-of-rows overlay widget.
@@ -519,10 +524,27 @@ func (p *Picker) recomputeFilter() {
 		for i, it := range p.opts.Items {
 			sources[i] = it.Label
 		}
-		p.matches = matchQuery(parseQuery(p.query), sources)
+		p.matches = pinFirst(matchQuery(parseQuery(p.query), sources), p.opts.Pinned)
 	}
 	p.current = 0
 	p.top = 0
+}
+
+// pinFirst moves the matches whose item index is below pinned to the
+// front, in item order, and leaves the remaining matches in the score
+// order matchQuery produced.
+func pinFirst(matches []fuzzy.Match, pinned int) []fuzzy.Match {
+	if pinned <= 0 || len(matches) == 0 {
+		return matches
+	}
+	sort.SliceStable(matches, func(i, j int) bool {
+		pinnedI, pinnedJ := matches[i].Index < pinned, matches[j].Index < pinned
+		if pinnedI != pinnedJ {
+			return pinnedI
+		}
+		return pinnedI && matches[i].Index < matches[j].Index
+	})
+	return matches
 }
 
 // displayedLen is the row count that's currently visible —

@@ -100,8 +100,11 @@ quotes here but these are not necessary when entering the command in micro.
    binding whose target is none of those, with the keys bound to each
    entry shown alongside. Type to fuzzy-filter, `Up`/`Down` to move,
    `Enter` to run, `Esc` to cancel. The bindings column is part of the
-   search haystack, so a query like `ctrl-shift-x` filters down to
-   whatever is bound to that keystroke. A binding such as
+   search haystack, so a query like `shift-ctrl-x` filters down to
+   whatever is bound to that keystroke. Keys are shown the way micro
+   names them internally, modifiers in the order Shift, Alt, Meta,
+   Ctrl, each followed by a dash, so a binding written `CtrlShift-t` in
+   bindings.json appears as `Shift-Ctrl-t`. A binding such as
    `"CtrlShift-t": "command:tab ~/notes.md"`, a `command-edit:`
    binding, or an action chain like `"Ctrl-q": "Save,Quit"` has no
    action or command row to attach its key to, so it gets its own
@@ -115,13 +118,14 @@ quotes here but these are not necessary when entering the command in micro.
    highlighted a row, so a query like `ltm exec` can be sent verbatim
    instead of running whatever was highlighted (requires a CSI-u
    terminal such as kitty, or a multiplexer that forwards CSI-u;
-   legacy terminals collapse `Ctrl-Enter` to `Enter`). The picker has
-   two modes: Atlas (the full catalog) and History (the most-recent
-   items you dispatched through this palette in this session). `Tab`
-   toggles between them; the palette opens in History when history
-   is non-empty, else in Atlas. Re-running an item from History also
-   moves it back to the top. History is in-memory only and resets
-   when micro restarts. The four kinds of entries can be toggled
+   legacy terminals collapse `Ctrl-Enter` to `Enter`). The entries you
+   ran most recently through the palette sit at the top of the list,
+   most recent first, and stay ahead of other matches while you type,
+   so the last thing you ran is one `Enter` away whenever it matches
+   the query. A typed command line that matched no entry is remembered
+   the same way and shows up as a `text` row. This recent-first order
+   is in-memory only and resets when micro restarts. The four kinds of
+   entries can be toggled
    independently with `commandpalette.actions`,
    `commandpalette.commands`, `commandpalette.lua` and
    `commandpalette.bindings` (defaults all `true`). With
@@ -132,9 +136,10 @@ quotes here but these are not necessary when entering the command in micro.
    these runs the whole line through the command bar, exactly like
    picking a plain command entry does. Commands whose only argument is
    a filename, such as `open` and `vsplit`, are excluded from this
-   listing. `commandpalette.historysize` (default `20`) caps the
-   history; set it to `0` to disable history entirely (Tab becomes a
-   no-op and nothing is recorded). No default key binding ships;
+   listing. `commandpalette.historysize` (default `20`) caps how many
+   recent entries are kept at the top; set it to `0` to disable the
+   recent-first order entirely (nothing is recorded). No default key
+   binding ships;
    users who want a VSCode-style entry point can add
    `"CtrlShiftP": "command:commandpalette"` to bindings.json.
 

@@ -230,8 +230,13 @@ func TestPaletteItemLabel(t *testing.T) {
 		},
 		{
 			name: "binding label shows the target verbatim with its key",
-			e:    paletteEntry{Kind: paletteBinding, Name: "command:tab ~/notes.md", Bindings: []string{"CtrlShift-t"}},
-			want: "bind   command:tab ~/notes.md [CtrlShift-t]",
+			e:    paletteEntry{Kind: paletteBinding, Name: "command:tab ~/notes.md", Bindings: []string{"Shift-Ctrl-t"}},
+			want: "bind   command:tab ~/notes.md [Shift-Ctrl-t]",
+		},
+		{
+			name: "free-text label uses the text tag",
+			e:    paletteEntry{Kind: paletteFreeText, Name: "saveas /tmp/x"},
+			want: "text   saveas /tmp/x",
 		},
 	}
 	for _, c := range cases {
