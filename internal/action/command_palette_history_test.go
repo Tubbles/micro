@@ -87,37 +87,57 @@ func TestHistoryDifferentKindsAreDistinct(t *testing.T) {
 	}
 }
 
-func TestHistoryItemLabelReusesAtlasLabel(t *testing.T) {
+// TestOrderRecentFirstPromotesHistory checks the atlas ordering the
+// palette opens with: recent rows first in most-recent-first order,
+// the rest in atlas order, ghosts dropped, typed command lines shown
+// as text rows unless the atlas enumerates that exact line.
+func TestOrderRecentFirstPromotesHistory(t *testing.T) {
 	atlas := []paletteEntry{
-		{Kind: paletteAction, Name: "Save", Bindings: []string{"Ctrl-S"}},
+		{Kind: paletteAction, Name: "Quit"},
+		{Kind: paletteAction, Name: "Save", Bindings: []string{"Ctrl-s"}},
 		{Kind: paletteCommand, Name: "saveas"},
+		{Kind: paletteCommandArg, Name: "help options"},
+		{Kind: paletteLua, Name: "comment.comment"},
 	}
-	if got := historyItemLabel(atlas, historyEntry{Kind: historyAction, Name: "Save"}); got != "action Save [Ctrl-S]" {
-		t.Fatalf("known action: got %q, want %q", got, "action Save [Ctrl-S]")
+	hist := []historyEntry{
+		{Kind: historyFreeText, Name: "saveas /tmp/x"},
+		{Kind: historyAction, Name: "Save"},
+		{Kind: historyFreeText, Name: "help options"},
+		{Kind: historyLua, Name: "gone.plugin"},
+		{Kind: historyCommand, Name: "saveas"},
 	}
-	if got := historyItemLabel(atlas, historyEntry{Kind: historyCommand, Name: "saveas"}); got != "cmd    saveas" {
-		t.Fatalf("known command: got %q", got)
+
+	ordered, recent := orderRecentFirst(atlas, hist)
+
+	want := []paletteEntry{
+		{Kind: paletteFreeText, Name: "saveas /tmp/x"},
+		{Kind: paletteAction, Name: "Save", Bindings: []string{"Ctrl-s"}},
+		{Kind: paletteCommandArg, Name: "help options"},
+		{Kind: paletteCommand, Name: "saveas"},
+		{Kind: paletteAction, Name: "Quit"},
+		{Kind: paletteLua, Name: "comment.comment"},
 	}
-	if got := historyItemLabel(atlas, historyEntry{Kind: historyAction, Name: "Ghost"}); got != "action Ghost" {
-		t.Fatalf("missing action falls back: got %q, want \"action Ghost\"", got)
+	if recent != 4 {
+		t.Fatalf("recent count = %d, want 4", recent)
 	}
-	if got := historyItemLabel(atlas, historyEntry{Kind: historyFreeText, Name: "saveas /tmp/x"}); got != "text   saveas /tmp/x" {
-		t.Fatalf("free-text: got %q", got)
+	if len(ordered) != len(want) {
+		t.Fatalf("ordered = %+v, want %+v", ordered, want)
+	}
+	for i := range want {
+		if ordered[i].Kind != want[i].Kind || ordered[i].Name != want[i].Name {
+			t.Errorf("row %d = %+v, want %+v", i, ordered[i], want[i])
+		}
+	}
+	if len(ordered[1].Bindings) != 1 {
+		t.Errorf("a promoted row must keep its bindings column: %+v", ordered[1])
 	}
 }
 
-func TestPaletteHintReflectsHistoryAvailability(t *testing.T) {
-	atlasHint := paletteHint(paletteModeAtlas, 0)
-	if atlasHint != "<Up>/<Down> move - <Enter> run match - <Ctrl-Enter> run as command - <Esc> cancel" {
-		t.Fatalf("size 0 hint must omit Tab: got %q", atlasHint)
-	}
-	atlasHintWithHist := paletteHint(paletteModeAtlas, 20)
-	if atlasHintWithHist[:5] != "<Tab>" {
-		t.Fatalf("size 20 atlas hint must start with Tab: got %q", atlasHintWithHist)
-	}
-	historyHint := paletteHint(paletteModeHistory, 20)
-	if historyHint[:12] != "<Tab> Atlas " {
-		t.Fatalf("history hint must lead with Tab Atlas: got %q", historyHint)
+func TestOrderRecentFirstWithoutHistoryKeepsAtlas(t *testing.T) {
+	atlas := []paletteEntry{{Kind: paletteAction, Name: "Quit"}, {Kind: paletteAction, Name: "Save"}}
+	ordered, recent := orderRecentFirst(atlas, nil)
+	if recent != 0 || len(ordered) != 2 || ordered[0].Name != "Quit" {
+		t.Fatalf("ordered = %+v recent = %d, want atlas order and 0", ordered, recent)
 	}
 }
 

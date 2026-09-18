@@ -1812,3 +1812,25 @@ func TestPickerLiveQueryModeFiresCallbackNotFilter(t *testing.T) {
 		t.Errorf("displayedLen = %d, want 1 (the refreshed row)", got)
 	}
 }
+
+// TestPickerPinnedItemsStayAheadOfBetterMatches checks that the first
+// Pinned items keep their order ahead of higher-scoring matches, and
+// that a pinned item still has to match to be shown at all.
+func TestPickerPinnedItemsStayAheadOfBetterMatches(t *testing.T) {
+	mockScreenSize(t)
+	items := []PickerItem{{Label: "xyz zeta"}, {Label: "omega"}, {Label: "alpha"}, {Label: "zeta"}}
+	h := newPickerHarnessOpts(items, true)
+	h.p.opts.Pinned = 2
+
+	h.p.HandleEvent(runeKey('z'))
+
+	if got := len(h.p.matches); got != 2 {
+		t.Fatalf("filter z: got %d matches, want 2", got)
+	}
+	if h.p.matches[0].Index != 0 {
+		t.Fatalf("pinned weak match must come first: got item %d", h.p.matches[0].Index)
+	}
+	if h.p.matches[1].Index != 3 {
+		t.Fatalf("unpinned strong match must follow: got item %d", h.p.matches[1].Index)
+	}
+}
