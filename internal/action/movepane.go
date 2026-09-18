@@ -34,20 +34,22 @@ func nextLeafSplit(srcTab *Tab, currentID uint64, dir int) bool {
 }
 
 // movePaneInTabList shifts the active pane one slot forward (dir=+1) or
-// backward (dir=-1) through the global pane sequence: every tab's leaves
-// taken in tree-order, concatenated. Three cases drive the behavior.
+// backward (dir=-1) through the sequence of positions a pane can take:
+// every tab's leaves in tree order, with a stop between tabs where the
+// pane stands in a tab of its own. Three cases drive the behavior.
 //
 //   - Adjacent slot is in the same tab: swap visual positions by
 //     exchanging split IDs. Slice index of the active pane doesn't
 //     change; only which leaf node the pane draws into.
-//   - Adjacent slot is in a neighboring tab: detach from src, attach
-//     into dst via VSplit on dst's leftmost (or rightmost) leaf. If src
-//     loses its last pane, src tab is dropped from Tabs.List.
-//   - Adjacent slot would be past the global edge: open a fresh tab
-//     beyond the last (or before the first) and put the pane there.
-//     Skipped if src has only this one pane, since the result would be
-//     the same shape with the same content.
+//   - At the edge of a tab that holds other panes: detach from src and
+//     promote into a fresh tab inserted right after (or before) src.
+//   - Alone in its tab: detach and attach into the neighboring tab via
+//     VSplit on its leftmost (or rightmost) leaf, dropping the emptied
+//     src tab. Alone at the end of the tab list, nothing to cross into:
+//     no-op.
 //
+// So repeating the action walks a pane through every position:
+// rightmost in A, own tab between A and C, leftmost in C, and so on.
 // Returns true if the editor state changed.
 func movePaneInTabList(srcTab *Tab, srcPaneIdx, dir int) bool {
 	if srcTab == nil || srcPaneIdx < 0 || srcPaneIdx >= len(srcTab.Panes) {
@@ -78,17 +80,17 @@ func movePaneInTabList(srcTab *Tab, srcPaneIdx, dir int) bool {
 		return true
 	}
 
+	if len(srcTab.Panes) > 1 {
+		movePaneToNewAdjacentTab(p, srcTab, dir)
+		return true
+	}
+
 	dstTabIdx := srcTabIdx + dir
 	if dstTabIdx >= 0 && dstTabIdx < len(Tabs.List) {
 		movePaneIntoExistingTab(p, srcTab, Tabs.List[dstTabIdx], dir)
 		return true
 	}
-
-	if len(srcTab.Panes) == 1 {
-		return false
-	}
-	movePaneToNewEdgeTab(p, srcTab, dir)
-	return true
+	return false
 }
 
 func tabsIndexOf(t *Tab) int {
@@ -168,10 +170,10 @@ func movePaneIntoExistingTab(p Pane, src, dst *Tab, dir int) {
 	finalizeAfterMove(src, dst, len(dst.Panes)-1)
 }
 
-// movePaneToNewEdgeTab detaches p from src and wraps it in a fresh tab
-// inserted immediately after src (dir=+1) or before src (dir=-1) in
+// movePaneToNewAdjacentTab detaches p from src and wraps it in a fresh
+// tab inserted immediately after src (dir=+1) or before src (dir=-1) in
 // Tabs.List. The new tab becomes active.
-func movePaneToNewEdgeTab(p Pane, src *Tab, dir int) {
+func movePaneToNewAdjacentTab(p Pane, src *Tab, dir int) {
 	detachPaneFromTab(p, src)
 
 	w, h := screen.Screen.Size()
