@@ -12,6 +12,10 @@ micro \- A modern and intuitive terminal-based text editor
 .RI [ OPTION ]...\&
 .RI [ FILE [: LINE [: COL ]]]...\&
 \& (only if the `parsecursor` option is enabled)
+.br
+.B micro
+.RI [ OPTION ]...\&
+.RI DIR
 .SH DESCRIPTION
 Micro is a terminal-based text editor that aims to be easy to use and intuitive, while also taking advantage of the full capabilities
 of modern terminals. It comes as one single, batteries-included, static binary with no dependencies.
@@ -44,6 +48,11 @@ Specify a line and column to start the cursor at when opening a buffer
 .RI +/ REGEX
 .RS 4
 Specify a regex to search for when opening a buffer
+.RE
+.PP
+.RI DIR
+.RS 4
+Open DIR as a dir-backed workspace (see the `workspaces` help topic, `> help workspaces`). DIR must be the only positional argument.
 .RE
 .PP
 .B \-options

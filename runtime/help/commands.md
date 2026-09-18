@@ -67,19 +67,24 @@ quotes here but these are not necessary when entering the command in micro.
 
 * `set 'option' 'value'`: sets the option to value. See the `options` help
    topic for a list of options you can set. This will modify your
-   `settings.json` with the new value.
+   `settings.json` with the new value. If value equals the option's default,
+   the entry is removed from `settings.json` instead. `set` always writes to
+   `settings.json`, never to `settings.local.json` (see the `options` help
+   topic for details on `settings.local.json`).
 
 * `setlocal 'option' 'value'`: sets the option to value locally (only in the
    current buffer). This will *not* modify `settings.json`.
 
 * `toggle 'option'`: toggles the option. Only works with options that accept
-   exactly two values. This will modify your `settings.json` with the new value.
+   exactly two values. This will modify your `settings.json` with the new
+   value (or remove the entry if the new value is the default).
 
 * `togglelocal 'option'`: toggles the option locally (only in the
    current buffer). Only works with options that accept exactly two values.
    This will *not* modify `settings.json`.
 
-* `reset 'option'`: resets the given option to its default value.
+* `reset 'option'`: resets the given option to its default value. This will
+   also remove the entry from `settings.json`.
 
 * `show 'option'`: shows the current value of the given option.
 
@@ -133,11 +138,22 @@ quotes here but these are not necessary when entering the command in micro.
    `deinit()` function (if it exists), and then loaded again by calling the
    `preinit()`, `init()` and `postinit()` functions (if they exist).
 
-* `cd 'path'`: Change the working directory to the given `path`.
+* `cd 'path'`: Change the working directory to the given `path`. This is the
+   plain chdir tool; it does not touch what is open beyond re-displaying
+   buffer paths relative to the new directory. See `> help workspaces` for
+   `opendir`, which is the full workspace switch.
 
 * `pwd`: Print the current working directory.
 
 * `open 'filename'`: Open a file in the current buffer.
+
+* `opendir 'path'`: Switch to the dir-backed workspace rooted at `path`,
+   saving the current workspace (if any), prompting to save modified
+   buffers, and replaying `path`'s previously saved layout if one exists.
+   See `> help workspaces`.
+
+* `workspaces`: Open a picker listing recently opened dir-backed workspaces,
+   most recent first. Selecting one switches to it. See `> help workspaces`.
 
 * `reopen`: Reopens the current file from disk.
 

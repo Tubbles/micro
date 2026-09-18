@@ -71,6 +71,10 @@ func startup(args []string) (vt.MockTerm, error) {
 	if err != nil {
 		return nil, err
 	}
+	err = config.ReadLocalSettings()
+	if err != nil {
+		return nil, err
+	}
 	err = config.InitGlobalSettings()
 	if err != nil {
 		return nil, err

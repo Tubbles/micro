@@ -162,6 +162,28 @@ Here are the available options:
 
     default value: `unix` on Unix systems, `dos` on Windows
 
+* `filemanager.showhidden`: when `true`, the file-explorer picker
+   (opened via the `FileExplorerAtCwd` and `FileExplorerAtFile` actions)
+   includes dotfiles and dot-directories in the listing. When `false`,
+   entries whose name begins with `.` are filtered out. The setting is
+   read each time the picker opens; pressing `Ctrl-h` while the picker
+   is open toggles visibility for that session without changing the
+   stored option.
+
+    default value: `false`
+
+* `filemanager.showignored`: when `true`, the file-explorer picker
+   includes the `.git` directory and entries matched by `.gitignore`
+   in the listing. When `false`, those entries are filtered out. The
+   gitignore matcher is anchored at the nearest enclosing git root,
+   so ancestor `.gitignore` files apply when navigating into a subtree
+   of a project; outside a git repo only the literal `.git` skip
+   applies. The setting is read each time the picker opens; pressing
+   `Ctrl-i` while the picker is open toggles visibility for that
+   session without changing the stored option.
+
+    default value: `false`
+
 * `filetype`: sets the filetype for the current buffer. Set this option to
    `off` to completely disable filetype detection.
 
@@ -704,3 +726,92 @@ You can also omit the `glob:` prefix before globs:
 
 But it is generally more recommended to use the `glob:` prefix, as it avoids
 potential conflicts with option names.
+
+## Local settings overrides
+
+Alongside `settings.json`, micro reads an optional second configuration file
+at `$XDG_CONFIG_HOME/micro/settings.local.json` (typically
+`~/.config/micro/settings.local.json`). Any setting present in
+`settings.local.json` overrides the same setting in `settings.json`. The
+intent is to keep `settings.json` clean enough to check into version
+control or sync between machines, while keeping machine-specific tweaks
+(colorscheme tuned to the local monitor, paths that differ per host,
+font-dependent options) in `settings.local.json`.
+
+The editor never writes to `settings.local.json`. The `set`, `reset` and
+`toggle` commands always persist to `settings.json`. If you want to change
+an override permanently, edit `settings.local.json` by hand.
+
+The same `ft:<filetype>` and `glob:<pattern>` nested-map syntax that
+`settings.json` supports also works in `settings.local.json`. Where both
+files have an entry for the same `ft:` or `glob:` key, individual sub-keys
+deep-merge: the local file's value wins on collision, and sub-keys present
+only in `settings.json` are preserved. Example with `settings.json`:
+
+```json
+{
+    "ft:go": {
+        "tabsize": 8,
+        "ruler": true
+    }
+}
+```
+
+and `settings.local.json`:
+
+```json
+{
+    "ft:go": {
+        "tabsize": 2
+    }
+}
+```
+
+The effective per-buffer settings for a Go file are `tabsize: 2` (local
+wins) and `ruler: true` (from `settings.json`, not overridden locally).
+
+`settings.json` itself is now written verbatim by the editor. Hand-edits
+you make to it, including entries whose value matches the default, are
+preserved across saves. An entry is only removed from `settings.json` when
+you explicitly reset it from the editor with `set <option> <default-value>`
+or `reset <option>`.
+
+## Workspace settings
+
+When a dir-backed workspace is open (see `> help workspaces`), two more
+settings files are read from inside the workspace directory itself:
+`${dir}/.ide/micro/settings.json` and `${dir}/.ide/micro/settings.local.json`.
+They use the exact same format as `settings.json` and `settings.local.json`,
+including the `ft:<filetype>` and `glob:<pattern>` nested-map syntax.
+
+These two files sit above your own `settings.json` and `settings.local.json`
+in precedence, and below each other the same way the user-level pair does.
+The full order, lowest to highest, is:
+
+1. built-in defaults
+2. `settings.json`
+3. `settings.local.json`
+4. the workspace's `settings.json`
+5. the workspace's `settings.local.json`
+6. command-line flags
+7. per-buffer `ft:`/`glob:`/editorconfig matches
+8. `setlocal`
+
+A workspace's settings win over your machine-local overrides, the same way
+VS Code's workspace settings win over its user settings. This lets a project
+pin an option (a required `tabsize`, a linter setting) that applies no
+matter which machine or user settings you bring to it, while `setlocal`
+still always has the final say for the buffer you are in.
+
+`${dir}/.ide/micro/settings.json` is meant to be checked into the project's
+own version control, the same way `settings.json` is meant to be checked
+into your dotfiles. `${dir}/.ide/micro/settings.local.json` is the
+project-scoped equivalent of your own `settings.local.json`: a place for a
+contributor's personal tweaks to a shared project that should not be
+committed.
+
+Use `> setworkspace <option> <value>` to set an option in the workspace's
+own `settings.json`, the same way `> set` targets your own `settings.json`.
+It is only valid while a dir-backed workspace is open. Like `settings.json`
+itself, the workspace's settings files are validated on load; an invalid
+value is reported and replaced with the default rather than applied.

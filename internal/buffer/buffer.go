@@ -502,8 +502,15 @@ func NewBuffer(r io.Reader, size int64, path string, btype BufType, cmd Command)
 
 // CloseOpenBuffers removes all open buffers
 func CloseOpenBuffers() {
-	for i, buf := range OpenBuffers {
+	// Fini() calls Shared(), which scans the whole OpenBuffers slice.
+	// Nil out entries only after every buffer has been Fini()'d: doing
+	// it interleaved (nil this entry, then Fini the next) had Shared()
+	// dereference an already-nilled earlier entry as soon as 2+
+	// buffers were open.
+	for _, buf := range OpenBuffers {
 		buf.Fini()
+	}
+	for i := range OpenBuffers {
 		OpenBuffers[i] = nil
 	}
 	OpenBuffers = OpenBuffers[:0]

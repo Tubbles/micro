@@ -203,6 +203,24 @@ Coming soon!
 It is also possible to disable any of the default key bindings by use of the
 `None` action in the user's `bindings.json` file.
 
+## Local machine overrides
+
+Alongside `bindings.json`, micro reads an optional second bindings file at
+`$XDG_CONFIG_HOME/micro/bindings.local.json` (typically
+`~/.config/micro/bindings.local.json`). It uses the same syntax as
+`bindings.json`, including pane type maps, and any key bound in
+`bindings.local.json` overrides the same key in `bindings.json`. The intent
+is to keep `bindings.json` clean enough to check into version control or
+sync between machines, while keeping machine-specific bindings (keys that
+only one terminal delivers, hardware-specific keyboards) in
+`bindings.local.json`.
+
+The editor never writes to `bindings.local.json`. The `> bind` and
+`> unbind` commands always persist to `bindings.json`, so a binding saved
+there stays shadowed by a conflicting local override on the next start or
+`> reload`. If you want to change an override permanently, edit
+`bindings.local.json` by hand.
+
 ## Bindable actions and bindable keys
 
 The list of default keybindings contains most of the possible actions and keys
@@ -284,6 +302,11 @@ Paste
 PastePrimary
 SelectAll
 OpenFile
+FileExplorerAtCwd
+FileExplorerAtFile
+OpenFilePickerAtCwd
+OpenFilePickerAtFile
+WorkspacePicker
 Start
 End
 PageUp
@@ -363,6 +386,47 @@ whose pane has been closed are skipped silently. `PushJump` records the
 current cursor as a manual breadcrumb for the same list. None of these are
 bound by default; add entries in `bindings.json` to use them.
 
+The `FileExplorerAtCwd` and `FileExplorerAtFile` actions open a centred
+picker showing the directory listing. `FileExplorerAtCwd` starts at the
+current working directory; `FileExplorerAtFile` starts at the directory of
+the active buffer's file (falling back to the current working directory
+when the buffer has no file path). Use `Up`/`Down`/`PageUp`/`PageDown`/
+`Home`/`End` or the mouse wheel to move the highlight, `Enter` or
+double-click to activate, `Esc` or click outside the picker to cancel.
+A `../` entry navigates to the parent directory unless already at a
+filesystem root. Selecting a file opens it: if it is already open in some
+pane, focus jumps there; otherwise, if the invoking pane holds an unused
+scratch buffer (no file path and unmodified), the file replaces it in
+place; otherwise it opens in a new tab. The `filemanager.showhidden`
+option controls whether dotfiles appear in the listing by default;
+pressing `Ctrl-h` while the picker is open toggles visibility for that
+session. The `filemanager.showignored` option controls whether the
+`.git` directory and entries matched by `.gitignore` appear; pressing
+`Ctrl-i` toggles that visibility. The toggles are independent. The
+gitignore matcher is anchored at the nearest enclosing git root, so
+ancestor `.gitignore` files apply when navigating into a subtree of
+a project; outside a git repo only the literal `.git` skip applies.
+Neither action is bound by default; add entries in `bindings.json`
+to use them.
+
+The `OpenFilePickerAtCwd` and `OpenFilePickerAtFile` actions open a
+centred picker showing files recursively under a starting directory,
+filterable by the typed query (fuzzy match). `OpenFilePickerAtCwd`
+starts at the current working directory; `OpenFilePickerAtFile`
+starts at the directory of the active buffer's file (falling back to
+the current working directory when the buffer has no file path).
+The walker collects every non-ignored entry under the start directory
+so the typed filter operates across the full subtree. The same
+hidden / ignored toggles apply: `Ctrl-h` flips the
+`filemanager.showhidden` axis and `Ctrl-i` flips
+`filemanager.showignored` for the session, both rebuilding the list
+in place. `Enter` opens the highlighted file with the same precedence
+as the file-explorer picker (focus existing pane, swap unused scratch
+in place, otherwise open a new tab); typing a path that matches no
+entry and pressing `Enter` opens that path verbatim. `Esc` cancels.
+Symlinks are skipped to avoid cycles. Neither action is bound by
+default; add entries in `bindings.json` to use them.
+
 `SwitchToRecentBuffer`, `CycleBuffersForward` and `CycleBuffersBackward` move
 between buffers in most-recently-used order, counting every open buffer
 across all panes and tabs.
@@ -405,6 +469,15 @@ not forward key-release events), the release of Ctrl does not arrive at all,
 so there is nothing to bind it to. `SwitchToRecentBuffer` is the answer to
 that: the common case, flipping between the last two buffers, stays a single
 keypress, and the list is there for when you want to look further back.
+
+The `WorkspacePicker` action opens a centred picker listing recently
+opened dir-backed workspaces, most recent first, filterable by the
+typed query. `Enter` switches to the highlighted workspace, the same
+full switch `> opendir` performs (saving the current workspace,
+prompting to save modified buffers, then replaying the target's saved
+layout). `Esc` cancels. See `> help workspaces`. Not bound by
+default; add an entry in `bindings.json` to use it, or run
+`> workspaces`.
 
 The `CutLine` action cuts the current line and adds it to the previously cut
 lines in the clipboard since the last paste (rather than just replaces the
