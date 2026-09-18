@@ -913,6 +913,8 @@ var BufKeyActions = map[string]BufKeyAction{
 	"LspFormat":                 (*BufPane).LspFormat,
 	"LspRename":                 (*BufPane).LspRename,
 	"LspReferences":             (*BufPane).LspReferences,
+	"LspStatus":                 (*BufPane).LspStatus,
+	"LspRestart":                (*BufPane).LspRestart,
 
 	// This was changed to InsertNewline but I don't want to break backwards compatibility
 	"InsertEnter": (*BufPane).InsertNewline,

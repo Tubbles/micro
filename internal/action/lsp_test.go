@@ -511,3 +511,11 @@ func TestSortLocations(t *testing.T) {
 		}
 	}
 }
+
+func TestLspServerActionsRegistered(t *testing.T) {
+	for _, name := range []string{"LspStatus", "LspRestart"} {
+		if BufKeyActions[name] == nil {
+			t.Errorf("BufKeyActions[%q] = nil, want an action", name)
+		}
+	}
+}
