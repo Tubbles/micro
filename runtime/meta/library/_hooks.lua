@@ -690,6 +690,22 @@ preLspRename = nil
 ---@type fun(bp: BufPane)
 onLspRename = nil
 
+---Called before the LspRestart action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preLspRestart = nil
+
+---Called after the LspRestart action runs.
+---@type fun(bp: BufPane)
+onLspRestart = nil
+
+---Called before the LspStatus action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preLspStatus = nil
+
+---Called after the LspStatus action runs.
+---@type fun(bp: BufPane)
+onLspStatus = nil
+
 ---Called before the MoveLinesDown action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 preMoveLinesDown = nil
@@ -1265,6 +1281,14 @@ preSuspend = nil
 ---Called after the Suspend action runs.
 ---@type fun(bp: BufPane)
 onSuspend = nil
+
+---Called before the SwitchToRecentBuffer action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preSwitchToRecentBuffer = nil
+
+---Called after the SwitchToRecentBuffer action runs.
+---@type fun(bp: BufPane)
+onSwitchToRecentBuffer = nil
 
 ---Called before the ToggleDiffGutter action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?

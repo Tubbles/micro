@@ -351,6 +351,12 @@ BufPane.LspReferences = nil
 ---@type fun(self: BufPane): boolean
 BufPane.LspRename = nil
 
+---@type fun(self: BufPane): boolean
+BufPane.LspRestart = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.LspStatus = nil
+
 ---@type fun(self: BufPane, args: string[])
 BufPane.MemUsageCmd = nil
 
@@ -737,6 +743,9 @@ BufPane.SubWordRight = nil
 
 ---@type fun(self: BufPane): boolean
 BufPane.Suspend = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.SwitchToRecentBuffer = nil
 
 ---@type fun(self: BufPane): Tab
 BufPane.Tab = nil
