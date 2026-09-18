@@ -46,6 +46,18 @@ BufPane.ClearStatus = nil
 BufPane.Close = nil
 
 ---@type fun(self: BufPane): boolean
+BufPane.CloseAllTabs = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.CloseOtherTabs = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.CloseTabsToTheLeft = nil
+
+---@type fun(self: BufPane): boolean
+BufPane.CloseTabsToTheRight = nil
+
+---@type fun(self: BufPane): boolean
 BufPane.CommandMode = nil
 
 ---@type fun(self: BufPane)

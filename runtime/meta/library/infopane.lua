@@ -90,6 +90,18 @@ InfoPane.ClearStatus = nil
 ---@type fun(self: InfoPane)
 InfoPane.Close = nil
 
+---@type fun(self: InfoPane): boolean
+InfoPane.CloseAllTabs = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.CloseOtherTabs = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.CloseTabsToTheLeft = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.CloseTabsToTheRight = nil
+
 ---@type fun(self: InfoPane)
 InfoPane.CommandComplete = nil
 

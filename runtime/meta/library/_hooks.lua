@@ -90,6 +90,38 @@ preClearStatus = nil
 ---@type fun(bp: BufPane)
 onClearStatus = nil
 
+---Called before the CloseAllTabs action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preCloseAllTabs = nil
+
+---Called after the CloseAllTabs action runs.
+---@type fun(bp: BufPane)
+onCloseAllTabs = nil
+
+---Called before the CloseOtherTabs action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preCloseOtherTabs = nil
+
+---Called after the CloseOtherTabs action runs.
+---@type fun(bp: BufPane)
+onCloseOtherTabs = nil
+
+---Called before the CloseTabsToTheLeft action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preCloseTabsToTheLeft = nil
+
+---Called after the CloseTabsToTheLeft action runs.
+---@type fun(bp: BufPane)
+onCloseTabsToTheLeft = nil
+
+---Called before the CloseTabsToTheRight action runs. Return false to cancel.
+---@type fun(bp: BufPane): boolean?
+preCloseTabsToTheRight = nil
+
+---Called after the CloseTabsToTheRight action runs.
+---@type fun(bp: BufPane)
+onCloseTabsToTheRight = nil
+
 ---Called before the CommandMode action runs. Return false to cancel.
 ---@type fun(bp: BufPane): boolean?
 preCommandMode = nil

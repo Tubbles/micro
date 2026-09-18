@@ -22,6 +22,9 @@ TabList.Display = nil
 ---@type fun(self: TabList, event: any)
 TabList.HandleEvent = nil
 
+---@type fun(self: TabList, tab: Tab): integer
+TabList.IndexOf = nil
+
 ---@type fun(self: TabList, vloc: Loc): integer
 TabList.LocFromVisual = nil
 
