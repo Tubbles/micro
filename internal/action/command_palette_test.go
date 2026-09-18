@@ -3,6 +3,7 @@ package action
 import (
 	"testing"
 
+	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/config"
 )
 
@@ -11,7 +12,7 @@ func setupPaletteTest(t *testing.T) {
 	if config.GlobalSettings == nil {
 		config.GlobalSettings = config.DefaultAllSettings()
 	}
-	for _, k := range []string{"commandpalette.actions", "commandpalette.commands", "commandpalette.lua"} {
+	for _, k := range []string{"commandpalette.actions", "commandpalette.commands", "commandpalette.lua", "commandpalette.bindings"} {
 		if _, ok := config.GlobalSettings[k]; !ok {
 			config.GlobalSettings[k] = true
 		}
@@ -20,10 +21,12 @@ func setupPaletteTest(t *testing.T) {
 		"commandpalette.actions":  config.GlobalSettings["commandpalette.actions"],
 		"commandpalette.commands": config.GlobalSettings["commandpalette.commands"],
 		"commandpalette.lua":      config.GlobalSettings["commandpalette.lua"],
+		"commandpalette.bindings": config.GlobalSettings["commandpalette.bindings"],
 	}
 	config.GlobalSettings["commandpalette.actions"] = true
 	config.GlobalSettings["commandpalette.commands"] = true
 	config.GlobalSettings["commandpalette.lua"] = true
+	config.GlobalSettings["commandpalette.bindings"] = true
 	t.Cleanup(func() {
 		for k, v := range prev {
 			config.GlobalSettings[k] = v
@@ -225,6 +228,11 @@ func TestPaletteItemLabel(t *testing.T) {
 			e:    paletteEntry{Kind: paletteLua, Name: "linter.checkAll"},
 			want: "lua    linter.checkAll",
 		},
+		{
+			name: "binding label shows the target verbatim with its key",
+			e:    paletteEntry{Kind: paletteBinding, Name: "command:tab ~/notes.md", Bindings: []string{"CtrlShift-t"}},
+			want: "bind   command:tab ~/notes.md [CtrlShift-t]",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -266,5 +274,105 @@ func TestPaletteEntriesAreSortedWithinKind(t *testing.T) {
 			}
 			lastLua = e.Name
 		}
+	}
+}
+
+// bindForTest binds ev to action in config.Bindings["buffer"] for the
+// duration of the test, restoring whatever was there before.
+func bindForTest(t *testing.T, ev, action string) {
+	t.Helper()
+	prev, had := config.Bindings["buffer"][ev]
+	config.Bindings["buffer"][ev] = action
+	t.Cleanup(func() {
+		if had {
+			config.Bindings["buffer"][ev] = prev
+		} else {
+			delete(config.Bindings["buffer"], ev)
+		}
+	})
+}
+
+func TestPaletteBindingEntriesSurfaceUnclaimedTargets(t *testing.T) {
+	setupPaletteTest(t)
+	bindForTest(t, "Ctrl-Alt-w", "command:tab ~/notes.md")
+	bindForTest(t, "Ctrl-Alt-z", "Save,Quit")
+	bindForTest(t, "Ctrl-Alt-x", "DuplicateLine")
+	bindForTest(t, "Ctrl-Alt-y", "command:save")
+
+	entries := buildPaletteEntries()
+
+	tab := findPaletteEntry(entries, paletteBinding, "command:tab ~/notes.md")
+	if !paletteContainsBinding(tab, "Ctrl-Alt-w") {
+		t.Errorf("command:tab binding row missing or without its key: %+v", tab)
+	}
+	chain := findPaletteEntry(entries, paletteBinding, "Save,Quit")
+	if !paletteContainsBinding(chain, "Ctrl-Alt-z") {
+		t.Errorf("chain binding row missing or without its key: %+v", chain)
+	}
+	if findPaletteEntry(entries, paletteBinding, "DuplicateLine") != nil {
+		t.Errorf("an action target must stay on its action row, not get a binding row")
+	}
+	if findPaletteEntry(entries, paletteBinding, "command:save") != nil {
+		t.Errorf("a command target must stay on its command row, not get a binding row")
+	}
+}
+
+func TestPaletteBindingEntriesSkipMouseAndUnresolvable(t *testing.T) {
+	setupPaletteTest(t)
+	bindForTest(t, "Ctrl-MouseLeft", "command:tab ~/from-mouse.md")
+	bindForTest(t, "Ctrl-Alt-v", "MousePress")
+	bindForTest(t, "Ctrl-Alt-u", "NoSuchActionAnywhere")
+
+	entries := buildPaletteEntries()
+
+	if findPaletteEntry(entries, paletteBinding, "command:tab ~/from-mouse.md") != nil {
+		t.Errorf("a target bound only to a mouse event must not get a binding row")
+	}
+	if findPaletteEntry(entries, paletteBinding, "MousePress") != nil {
+		t.Errorf("a mouse action target must not get a binding row")
+	}
+	if findPaletteEntry(entries, paletteBinding, "NoSuchActionAnywhere") != nil {
+		t.Errorf("a target that does not resolve must not get a binding row")
+	}
+}
+
+func TestPaletteSettingsGateBindings(t *testing.T) {
+	setupPaletteTest(t)
+	bindForTest(t, "Ctrl-Alt-w", "command:tab ~/notes.md")
+	config.GlobalSettings["commandpalette.bindings"] = false
+
+	entries := buildPaletteEntries()
+	for _, e := range entries {
+		if e.Kind == paletteBinding {
+			t.Errorf("binding entry %q present despite commandpalette.bindings=false", e.Name)
+		}
+	}
+}
+
+func TestPaletteBindingEntriesIgnoreOtherGates(t *testing.T) {
+	setupPaletteTest(t)
+	bindForTest(t, "Ctrl-Alt-x", "DuplicateLine")
+	config.GlobalSettings["commandpalette.actions"] = false
+
+	entries := buildPaletteEntries()
+	if findPaletteEntry(entries, paletteBinding, "DuplicateLine") != nil {
+		t.Errorf("hiding action rows must not turn their bindings into binding rows")
+	}
+}
+
+func TestExecutePaletteEntryRunsBindingTarget(t *testing.T) {
+	h := setupRunActionTest(t)
+	setupPaletteTest(t)
+	clearHistory()
+	t.Cleanup(clearHistory)
+
+	executePaletteEntry(h, paletteEntry{Kind: paletteBinding, Name: "CursorEnd"})
+
+	if h.Cursor.Loc != (buffer.Loc{X: 11, Y: 0}) {
+		t.Errorf("Cursor.Loc = %v, want {11 0} after CursorEnd", h.Cursor.Loc)
+	}
+	hist := recentHistory()
+	if len(hist) != 1 || hist[0] != (historyEntry{Kind: historyBinding, Name: "CursorEnd"}) {
+		t.Errorf("history = %+v, want one historyBinding CursorEnd entry", hist)
 	}
 }

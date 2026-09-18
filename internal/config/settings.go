@@ -130,6 +130,7 @@ var DefaultGlobalOnlySettings = map[string]any{
 	"colorscheme.light":          "",
 	"colorscheme.follow-system":  false,
 	"commandpalette.actions":     true,
+	"commandpalette.bindings":    true,
 	"commandpalette.commands":    true,
 	"commandpalette.historysize": float64(20),
 	"commandpalette.lua":         true,

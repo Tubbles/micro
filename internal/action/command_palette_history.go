@@ -6,10 +6,10 @@ import (
 	"github.com/micro-editor/micro/v2/internal/config"
 )
 
-// historyKind discriminates the four ways a palette dispatch can be
-// shaped. The first three mirror paletteKind so a history entry can
-// re-enter executePaletteEntry. historyFreeText covers what the user
-// typed verbatim through the picker's OnSubmit path (e.g.
+// historyKind discriminates the five ways a palette dispatch can be
+// shaped. All but historyFreeText mirror a paletteKind so a history
+// entry can re-enter executePaletteEntry. historyFreeText covers what
+// the user typed verbatim through the picker's OnSubmit path (e.g.
 // "saveas foo.txt"): no matching paletteEntry exists, so re-dispatch
 // goes back through HandleCommand.
 type historyKind int
@@ -19,6 +19,7 @@ const (
 	historyCommand
 	historyLua
 	historyFreeText
+	historyBinding
 )
 
 // historyEntry is one row in the per-session history. Identity for

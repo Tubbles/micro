@@ -107,13 +107,17 @@ quotes here but these are not necessary when entering the command in micro.
    this way because they require a mouse event payload.
 
 * `commandpalette`: opens a searchable picker that lists every buffer
-   action, every command, and every Lua plugin function, with
-   the keys bound to each entry shown alongside. Type to fuzzy-filter,
-   `Up`/`Down` to move, `Enter` to run, `Esc` to cancel. The bindings
-   column is part of the search haystack, so a query like
-   `ctrl-shift-x` filters down to whatever is bound to that keystroke
-   (assuming the binding is a single token; chain-bound entries do
-   not surface their bindings in v1). If the typed query matches no
+   action, every command, every Lua plugin function, and every key
+   binding whose target is none of those, with the keys bound to each
+   entry shown alongside. Type to fuzzy-filter, `Up`/`Down` to move,
+   `Enter` to run, `Esc` to cancel. The bindings column is part of the
+   search haystack, so a query like `ctrl-shift-x` filters down to
+   whatever is bound to that keystroke. A binding such as
+   `"CtrlShift-t": "command:tab ~/notes.md"`, a `command-edit:`
+   binding, or an action chain like `"Ctrl-q": "Save,Quit"` has no
+   action or command row to attach its key to, so it gets its own
+   `bind` row labelled with the target verbatim, and selecting it runs
+   the target exactly as the keystroke would. If the typed query matches no
    entry, `Enter` instead runs the query as a command line, exactly as
    if you had typed it after `Ctrl-E`. That lets the palette double as
    a free-text command bar for cases that need arguments, e.g.
@@ -128,10 +132,11 @@ quotes here but these are not necessary when entering the command in micro.
    toggles between them; the palette opens in History when history
    is non-empty, else in Atlas. Re-running an item from History also
    moves it back to the top. History is in-memory only and resets
-   when micro restarts. The three kinds of entries can be toggled
+   when micro restarts. The four kinds of entries can be toggled
    independently with `commandpalette.actions`,
-   `commandpalette.commands` and `commandpalette.lua` (defaults all
-   `true`). With `commandpalette.commands` on, the palette also lists
+   `commandpalette.commands`, `commandpalette.lua` and
+   `commandpalette.bindings` (defaults all `true`). With
+   `commandpalette.commands` on, the palette also lists
    one argument level for commands whose completer can enumerate a
    fixed set of candidates, as separate filterable entries such as
    `help options`, `set tabsize` or `plugin install`. Selecting one of
