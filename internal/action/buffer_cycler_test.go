@@ -12,10 +12,11 @@ import (
 )
 
 // Opening the real picker (openBufferCycler) needs screen.Screen for
-// widgetOverlayRect, which is nil in these unit tests, so these tests
-// exercise the screen-independent pieces it's built from instead:
-// buildCyclerItems, cyclerBoundKeyNames, newCyclerPicker, and
-// commitBufferCycler.
+// halfScreenOverlayRect, which is nil in these unit tests, so these
+// tests exercise the screen-independent pieces it's built from instead:
+// buildCyclerItems, cyclerBoundKeyNames, newCyclerPicker,
+// centeredHalfRect, and commitBufferCycler. SwitchToRecentBuffer needs
+// no screen at all, so it is tested directly.
 
 func TestCyclerBoundKeyNames_InvertsBindingsMap(t *testing.T) {
 	prev := config.Bindings["buffer"]
@@ -70,17 +71,26 @@ func TestBuildCyclerItems_MRUOrderAndLabels(t *testing.T) {
 	}
 }
 
-func TestNewCyclerPicker_PreselectsIndexOne(t *testing.T) {
+func TestNewCyclerPicker_PreselectsRequestedRow(t *testing.T) {
 	items := []cyclerItem{{id: 1, label: "a"}, {id: 2, label: "b"}, {id: 3, label: "c"}}
-	p := newCyclerPicker(items, nil, nil, widget.ScreenRect{X: 0, Y: 0, W: 40, H: 10}, func(int) {})
+
+	// CycleBuffersForward's row: the previous buffer.
+	p := newCyclerPicker(items, nil, nil, 1, widget.ScreenRect{X: 0, Y: 0, W: 40, H: 10}, func(int) {})
 	if p.Current() != 1 {
 		t.Fatalf("Current() = %d, want 1 (preselect the previous buffer)", p.Current())
+	}
+
+	// CycleBuffersBackward's row: the current buffer, so the first
+	// backward step wraps onto the least recently used one.
+	p = newCyclerPicker(items, nil, nil, 0, widget.ScreenRect{X: 0, Y: 0, W: 40, H: 10}, func(int) {})
+	if p.Current() != 0 {
+		t.Fatalf("Current() = %d, want 0 (preselect the current buffer)", p.Current())
 	}
 }
 
 func TestNewCyclerPicker_PreselectClampsWithFewerThanTwoItems(t *testing.T) {
 	items := []cyclerItem{{id: 1, label: "a"}}
-	p := newCyclerPicker(items, nil, nil, widget.ScreenRect{X: 0, Y: 0, W: 40, H: 10}, func(int) {})
+	p := newCyclerPicker(items, nil, nil, 1, widget.ScreenRect{X: 0, Y: 0, W: 40, H: 10}, func(int) {})
 	if p.Current() != 0 {
 		t.Fatalf("Current() = %d, want 0 (graceful clamp with a single item)", p.Current())
 	}
@@ -95,10 +105,14 @@ func TestNewCyclerPicker_OnKeyWrapsUsingBoundNames(t *testing.T) {
 	// name-matching path rather than a hand-picked literal.
 	fwdKey := tcell.NewEventKey(tcell.KeyTab, "", tcell.ModCtrl)
 	bwdKey := tcell.NewEventKey(tcell.KeyTab, "", tcell.ModCtrl|tcell.ModShift)
-	forward := []string{keyEvent(fwdKey).Name()}
+	// The key bound to SwitchToRecentBuffer keeps stepping down once
+	// the list is open, so openBufferCycler folds its names into the
+	// forward set.
+	recentKey := tcell.NewEventKey(tcell.KeyTab, "", tcell.ModAlt)
+	forward := []string{keyEvent(fwdKey).Name(), keyEvent(recentKey).Name()}
 	backward := []string{keyEvent(bwdKey).Name()}
 
-	p := newCyclerPicker(items, forward, backward, widget.ScreenRect{X: 0, Y: 0, W: 40, H: 10}, func(int) {})
+	p := newCyclerPicker(items, forward, backward, 1, widget.ScreenRect{X: 0, Y: 0, W: 40, H: 10}, func(int) {})
 
 	// Current starts at 1 (preselect). Forward wraps 1 -> 2 -> 0.
 	p.HandleEvent(fwdKey)
@@ -114,13 +128,18 @@ func TestNewCyclerPicker_OnKeyWrapsUsingBoundNames(t *testing.T) {
 	if p.Current() != 2 {
 		t.Fatalf("backward past start: current=%d, want 2 (wrap)", p.Current())
 	}
+
+	p.HandleEvent(recentKey)
+	if p.Current() != 0 {
+		t.Fatalf("after SwitchToRecentBuffer key: current=%d, want 0 (forward, wrap)", p.Current())
+	}
 }
 
 func TestNewCyclerPicker_OnSelectReceivesItemsIndex(t *testing.T) {
 	items := []cyclerItem{{id: 10, label: "a"}, {id: 20, label: "b"}}
 	var gotIndex int
 	var calls int
-	p := newCyclerPicker(items, nil, nil, widget.ScreenRect{X: 0, Y: 0, W: 40, H: 10},
+	p := newCyclerPicker(items, nil, nil, 1, widget.ScreenRect{X: 0, Y: 0, W: 40, H: 10},
 		func(index int) { calls++; gotIndex = index })
 
 	p.HandleEvent(tcell.NewEventKey(tcell.KeyEnter, "", tcell.ModNone))
@@ -206,5 +225,87 @@ func TestCommitBufferCycler_SelfSelectRecordsNoJump(t *testing.T) {
 
 	if len(jl.entries) != 0 {
 		t.Fatalf("self-select must not record a jump, got %d entries", len(jl.entries))
+	}
+}
+
+func TestSwitchToRecentBuffer_SwitchesToPreviousPaneAndRecordsJump(t *testing.T) {
+	panes, restoreTabs := makeTestTabs(t, 3)
+	defer restoreTabs()
+	prevMRU := MRU
+	MRU = &MRUList{}
+	defer func() { MRU = prevMRU }()
+
+	// Leaves the MRU order as panes[0], panes[1], panes[2]. These focus
+	// moves push jumps of their own, so the test jump list only goes in
+	// afterwards and sees nothing but the switch under test.
+	Tabs.SetActive(2)
+	Tabs.SetActive(1)
+	Tabs.SetActive(0)
+
+	jl := newTestList(10)
+	prevJumps := Jumps
+	Jumps = jl
+	defer func() { Jumps = prevJumps }()
+
+	origin := panes[0]
+	if !origin.SwitchToRecentBuffer() {
+		t.Fatal("SwitchToRecentBuffer() = false, want true with three live panes")
+	}
+	if Tabs.Active() != 1 {
+		t.Fatalf("Tabs.Active() = %d, want 1 (the most recently focused other pane)", Tabs.Active())
+	}
+	got, _ := snapshot(jl)
+	if len(got) != 1 || got[0][0] != int(origin.ID()) {
+		t.Fatalf("Jumps entries = %v, want a single entry for origin pane %d", got, origin.ID())
+	}
+}
+
+func TestSwitchToRecentBuffer_SinglePaneIsNoOp(t *testing.T) {
+	panes, restoreTabs := makeTestTabs(t, 1)
+	defer restoreTabs()
+	prevMRU := MRU
+	MRU = &MRUList{}
+	defer func() { MRU = prevMRU }()
+	jl := newTestList(10)
+	prevJumps := Jumps
+	Jumps = jl
+	defer func() { Jumps = prevJumps }()
+
+	Tabs.SetActive(0)
+
+	if panes[0].SwitchToRecentBuffer() {
+		t.Fatal("SwitchToRecentBuffer() = true, want false with a single live pane")
+	}
+	if Tabs.Active() != 0 {
+		t.Fatalf("Tabs.Active() = %d, want 0 (focus unchanged)", Tabs.Active())
+	}
+	if len(jl.entries) != 0 {
+		t.Fatalf("a no-op switch must not record a jump, got %d entries", len(jl.entries))
+	}
+}
+
+func TestCenteredHalfRect_CentersHalfSizeInEditorArea(t *testing.T) {
+	// 80x24 screen with the tab bar shown and a one-row info bar: a
+	// 40x12 window, horizontally centered and vertically centered in
+	// the 22 rows between the two bars.
+	got := centeredHalfRect(80, 24, 1, 1)
+	want := widget.ScreenRect{X: 20, Y: 6, W: 40, H: 12}
+	if got != want {
+		t.Fatalf("centeredHalfRect(80, 24, 1, 1) = %+v, want %+v", got, want)
+	}
+}
+
+func TestCenteredHalfRect_ClampsOnTinyScreens(t *testing.T) {
+	// Screens with no room left after their own chrome. The picker
+	// draws straight from these numbers, so an empty rect is fine but a
+	// negative or out-of-screen one is not.
+	for _, size := range [][4]int{{0, 0, 0, 0}, {1, 1, 1, 1}, {3, 2, 1, 1}} {
+		got := centeredHalfRect(size[0], size[1], size[2], size[3])
+		if got.X < 0 || got.Y < 0 || got.W < 0 || got.H < 0 {
+			t.Fatalf("centeredHalfRect%v = %+v, want a non-negative rect", size, got)
+		}
+		if got.W > size[0] || got.H > size[1] {
+			t.Fatalf("centeredHalfRect%v = %+v, want a rect within the screen", size, got)
+		}
 	}
 }
