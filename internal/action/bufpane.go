@@ -910,6 +910,7 @@ var BufKeyActions = map[string]BufKeyAction{
 	"LastSplit":                 (*BufPane).LastSplit,
 	"CycleBuffersForward":       (*BufPane).CycleBuffersForward,
 	"CycleBuffersBackward":      (*BufPane).CycleBuffersBackward,
+	"SwitchToRecentBuffer":      (*BufPane).SwitchToRecentBuffer,
 	"Unsplit":                   (*BufPane).Unsplit,
 	"VSplit":                    (*BufPane).VSplitAction,
 	"HSplit":                    (*BufPane).HSplitAction,

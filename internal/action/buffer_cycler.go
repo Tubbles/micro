@@ -51,10 +51,12 @@ func cyclerBoundKeyNames(action string) []string {
 // already-resolved data, independent of Tabs/findPaneByID, so it is
 // unit-testable without a live screen. forwardNames/backwardNames are
 // the bound key names from cyclerBoundKeyNames; onSelect receives the
-// index into items. Selection starts at index 1 (the previous buffer)
-// so a single press-then-commit is an alt-tab toggle; Picker.SetCurrent
-// clamps gracefully when there are fewer than 2 items.
-func newCyclerPicker(items []cyclerItem, forwardNames, backwardNames []string, rect widget.ScreenRect, onSelect func(index int)) *widget.Picker {
+// index into items. preselect is the initially highlighted row: index 1
+// (the previous buffer) makes a single press-then-commit an alt-tab
+// toggle, index 0 (the current buffer) leaves the list unmoved so the
+// first backward step lands on the oldest entry. Picker.SetCurrent
+// clamps gracefully when there are fewer items than that.
+func newCyclerPicker(items []cyclerItem, forwardNames, backwardNames []string, preselect int, rect widget.ScreenRect, onSelect func(index int)) *widget.Picker {
 	pickerItems := make([]widget.PickerItem, len(items))
 	for i, it := range items {
 		pickerItems[i] = widget.PickerItem{Label: it.label}
@@ -94,7 +96,7 @@ func newCyclerPicker(items []cyclerItem, forwardNames, backwardNames []string, r
 		// commit (OnSelect) ever moves focus. "Return focus to
 		// origin" on cancel is therefore already true by construction.
 	})
-	p.SetCurrent(1)
+	p.SetCurrent(preselect)
 	return p
 }
 
@@ -133,18 +135,21 @@ func commitBufferCycler(targetID, originID uint64, originBuf *buffer.SharedBuffe
 }
 
 // openBufferCycler is the shared body of CycleBuffersForward and
-// CycleBuffersBackward.
-func (h *BufPane) openBufferCycler() bool {
+// CycleBuffersBackward, differing only in which row starts highlighted.
+// SwitchToRecentBuffer's keys join the forward set: it is the action a
+// user is most likely to be holding when they decide they want the list
+// after all, so it has to keep stepping down once the list is up.
+func (h *BufPane) openBufferCycler(preselect int) bool {
 	items := buildCyclerItems()
 
 	originID := h.ID()
 	originBuf := h.Buf.SharedBuffer
 	originLoc := h.Cursor.Loc
 
-	forward := cyclerBoundKeyNames("CycleBuffersForward")
+	forward := append(cyclerBoundKeyNames("CycleBuffersForward"), cyclerBoundKeyNames("SwitchToRecentBuffer")...)
 	backward := cyclerBoundKeyNames("CycleBuffersBackward")
 
-	p := newCyclerPicker(items, forward, backward, widgetOverlayRect(),
+	p := newCyclerPicker(items, forward, backward, preselect, halfScreenOverlayRect(),
 		func(index int) {
 			widget.CloseActive()
 			if index < 0 || index >= len(items) {
@@ -157,22 +162,37 @@ func (h *BufPane) openBufferCycler() bool {
 	return true
 }
 
-// CycleBuffersForward opens the MRU buffer-cycler picker positioned
-// over the editor area, preselecting the previous buffer so a single
-// press-then-Enter is an alt-tab toggle. No default binding; see
-// runtime/help/keybindings.md for the suggested Ctrl-Tab binding and
-// its zellij release-commit caveat (D-27: v1 is press-based, not
-// release-to-commit, because a modifier release can't reach micro
-// inside zellij).
-func (h *BufPane) CycleBuffersForward() bool {
-	return h.openBufferCycler()
+// SwitchToRecentBuffer switches straight to the most recently focused
+// other pane, no picker. It commits the same row the cycler picker
+// preselects, through the same commitBufferCycler, so the jump list
+// entry is identical either way. Repeated presses toggle between the
+// two most recent panes: committing a switch re-touches the MRU order,
+// which puts the pane just left behind at index 1 again.
+//
+// This is the everyday half of the cycler (D-27): a modifier release
+// can't reach micro inside zellij, so there is no hold-and-tap gesture
+// to build on, and the list is only worth drawing when the user wants
+// to look past the previous buffer. No default binding; see
+// runtime/help/keybindings.md for the suggested Ctrl-Tab binding.
+func (h *BufPane) SwitchToRecentBuffer() bool {
+	items := buildCyclerItems()
+	if len(items) < 2 {
+		return false
+	}
+	commitBufferCycler(items[1].id, h.ID(), h.Buf.SharedBuffer, h.Cursor.Loc)
+	return true
 }
 
-// CycleBuffersBackward opens the same picker as CycleBuffersForward.
-// The two actions only differ once the picker is open, where each
-// bound key is captured directly by Picker.OnKey as next/prev
-// (bindings don't fire while a widget is active); as the action that
-// opens the picker, either one behaves identically.
+// CycleBuffersForward opens the MRU buffer-cycler picker centered over
+// the editor area, preselecting the previous buffer so a single
+// press-then-Enter is an alt-tab toggle.
+func (h *BufPane) CycleBuffersForward() bool {
+	return h.openBufferCycler(1)
+}
+
+// CycleBuffersBackward opens the same picker as CycleBuffersForward,
+// but highlighting the current buffer, so the first backward step from
+// there lands on the least recently used pane rather than skipping it.
 func (h *BufPane) CycleBuffersBackward() bool {
-	return h.openBufferCycler()
+	return h.openBufferCycler(0)
 }

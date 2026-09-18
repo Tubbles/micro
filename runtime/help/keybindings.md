@@ -322,6 +322,7 @@ FirstSplit
 LastSplit
 CycleBuffersForward
 CycleBuffersBackward
+SwitchToRecentBuffer
 Unsplit
 VSplit
 HSplit
@@ -362,33 +363,48 @@ whose pane has been closed are skipped silently. `PushJump` records the
 current cursor as a manual breadcrumb for the same list. None of these are
 bound by default; add entries in `bindings.json` to use them.
 
-`CycleBuffersForward` and `CycleBuffersBackward` open a most-recently-used
-buffer switcher: a list of every open buffer across all panes and tabs,
-ordered most-recently-focused first, with the previous buffer preselected so
-a single press of either action followed by Enter is an alt-tab style
-toggle. While the list is open, pressing whichever key is bound to either
-action moves the selection forward or backward and wraps around at either
-end; the arrow keys, Page Up/Down, and typing to fuzzy-filter the list also
-work. Enter or clicking a row switches to that buffer and records where you
-were as a jump (so `JumpBack` returns to it); Esc cancels and leaves you on
-the buffer you started from. Neither action is bound by default. A typical
-setup binds them to `Ctrl-Tab` and `Ctrl-Shift-Tab`:
+`SwitchToRecentBuffer`, `CycleBuffersForward` and `CycleBuffersBackward` move
+between buffers in most-recently-used order, counting every open buffer
+across all panes and tabs.
+
+`SwitchToRecentBuffer` switches to the previous buffer straight away, with no
+window and nothing to confirm. Press it again to come back, since switching
+makes the buffer you just left the most recent one again. With only one
+buffer open it does nothing.
+
+`CycleBuffersForward` and `CycleBuffersBackward` instead open the list, as a
+window half the width and height of the screen, centered over the editor
+area. Forward starts with the previous buffer highlighted, so a single press
+followed by Enter is an alt-tab style toggle. Backward starts on the current
+buffer, so the first step up lands on the buffer you have not touched in the
+longest time. While the list is open, the keys bound to `SwitchToRecentBuffer`
+and `CycleBuffersForward` move the highlight down, the key bound to
+`CycleBuffersBackward` moves it up, and both wrap around at either end; the
+arrow keys, Page Up/Down, and typing to fuzzy-filter the list also work.
+Enter or clicking a row switches to that buffer and records where you were as
+a jump (so `JumpBack` returns to it); Esc cancels and leaves you on the buffer
+you started from.
+
+None of the three is bound by default. A typical setup:
 
 ```
 {
-    "Ctrl-Tab":       "CycleBuffersForward",
+    "Ctrl-Tab":       "SwitchToRecentBuffer",
     "Ctrl-Shift-Tab": "CycleBuffersBackward"
 }
 ```
 
-Important: this is a press-and-commit cycler, not a release-to-commit one.
-Holding a modifier down and tapping the other key repeatedly, then
-releasing the modifier to land on a buffer, is how alt-tab works in most
-desktop window switchers, but micro cannot do that here. Inside zellij (or
-any multiplexer/terminal that does not forward key-release events), the
-release of Ctrl can never reach micro at all, so there is nothing to bind
-it to. You must press Enter (or click a row) to switch, same as any other
-picker in micro.
+With that pair, `Ctrl-Tab` flips to the previous buffer, `Ctrl-Shift-Tab`
+opens the list, and `Ctrl-Tab` then steps down it.
+
+Important: switching is always explicit, either an instant switch or Enter in
+the list. There is no hold-the-modifier-and-tap gesture that commits when you
+let go, the way most desktop window switchers work, because that release
+never reaches micro. Inside zellij (or any multiplexer or terminal that does
+not forward key-release events), the release of Ctrl does not arrive at all,
+so there is nothing to bind it to. `SwitchToRecentBuffer` is the answer to
+that: the common case, flipping between the last two buffers, stays a single
+keypress, and the list is there for when you want to look further back.
 
 The `CutLine` action cuts the current line and adds it to the previously cut
 lines in the clipboard since the last paste (rather than just replaces the
