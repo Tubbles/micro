@@ -1,6 +1,9 @@
 package action
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/Tubbles/tcell/v3"
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
@@ -14,17 +17,57 @@ type cyclerItem struct {
 	label string
 }
 
+// workspaceRelativePath returns buf's path relative to workspaceDir,
+// and true when it is the path to show for buf. It returns false when
+// no dir-backed workspace is active, when buf has no path, when buf is
+// not a BTDefault buffer by Kind (Help, Log and the other special
+// buffers keep their names; a readonly file still counts, since the
+// readonly setting only flips Type.Readonly), when the basename setting
+// is on (GetName then already shows a bare file name, and a relative
+// path would add components back), and when buf does not lie under
+// workspaceDir.
+func workspaceRelativePath(buf *buffer.Buffer, workspaceDir string) (string, bool) {
+	if workspaceDir == "" || buf.Path == "" || buf.Type.Kind != buffer.BTDefault.Kind {
+		return "", false
+	}
+	if basename, _ := buf.Settings["basename"].(bool); basename {
+		return "", false
+	}
+	relative, err := filepath.Rel(workspaceDir, buf.AbsPath)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+		return "", false
+	}
+	return relative, true
+}
+
+// cyclerLabel is the string the tab bar shows for bp, except that a
+// file inside the active workspace directory is shown relative to that
+// directory, so a list of project files does not repeat the workspace
+// directory on every row. The " +" modified marker BufPane.Name
+// appends is kept either way.
+func cyclerLabel(bp *BufPane, workspaceDir string) string {
+	relative, ok := workspaceRelativePath(bp.Buf, workspaceDir)
+	if !ok {
+		return bp.Name()
+	}
+	if bp.Buf.Modified() {
+		relative += " +"
+	}
+	return relative
+}
+
 // buildCyclerItems lists every live BufPane in MRU order (most
 // recently focused first). Label reuses BufPane.Name(), the exact
 // string TabList.UpdateNames feeds the tab bar (including the
 // trailing " +" it appends for a modified buffer), so a row's title
-// matches what the tab bar would show for that pane.
+// matches what the tab bar would show for that pane, except for the
+// workspace-relative case cyclerLabel describes.
 func buildCyclerItems() []cyclerItem {
 	ids := MRU.List(paneAlive)
 	items := make([]cyclerItem, 0, len(ids))
 	for _, id := range ids {
 		if _, _, bp := findPaneByID(id); bp != nil {
-			items = append(items, cyclerItem{id: id, label: bp.Name()})
+			items = append(items, cyclerItem{id: id, label: cyclerLabel(bp, currentWorkspaceDir)})
 		}
 	}
 	return items

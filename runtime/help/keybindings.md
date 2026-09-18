@@ -464,7 +464,9 @@ window half the width and height of the screen, centered over the editor
 area. Forward starts with the previous buffer highlighted, so a single press
 followed by Enter is an alt-tab style toggle. Backward starts on the current
 buffer, so the first step up lands on the buffer you have not touched in the
-longest time. While the list is open, the keys bound to `SwitchToRecentBuffer`
+longest time. Each row is named the way the tab bar names that buffer, except
+that a file inside the opened workspace directory is listed relative to that
+directory. While the list is open, the keys bound to `SwitchToRecentBuffer`
 and `CycleBuffersForward` move the highlight down, the key bound to
 `CycleBuffersBackward` moves it up, and both wrap around at either end; the
 arrow keys, Page Up/Down, and typing to fuzzy-filter the list also work.

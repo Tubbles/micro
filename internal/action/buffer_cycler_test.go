@@ -1,6 +1,8 @@
 package action
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -8,6 +10,7 @@ import (
 
 	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/config"
+	"github.com/micro-editor/micro/v2/internal/util"
 	"github.com/micro-editor/micro/v2/internal/widget"
 )
 
@@ -68,6 +71,105 @@ func TestBuildCyclerItems_MRUOrderAndLabels(t *testing.T) {
 	// verbatim rather than deriving its own marker.
 	if !strings.HasSuffix(items[1].label, " +") {
 		t.Fatalf("items[1].label = %q, want modified-marker suffix %q", items[1].label, " +")
+	}
+}
+
+func TestWorkspaceRelativePath_RelativeOnlyForFilesInsideTheWorkspace(t *testing.T) {
+	// t.TempDir() can itself sit behind a symlink, so resolve it the way
+	// NewBuffer resolves a buffer's AbsPath and compare like with like.
+	root := util.ResolvePath(t.TempDir())
+	workspaceDir := filepath.Join(root, "ws")
+
+	// Every case gets a path of its own: NewBuffer shares one
+	// SharedBuffer (Settings included) between buffers with the same
+	// absolute path, so a reused path would leak the basename case's
+	// setting into the other buffers.
+	newPathBuffer := func(btype buffer.BufType, elements ...string) *buffer.Buffer {
+		t.Helper()
+		path := filepath.Join(append([]string{root}, elements...)...)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll(%q) = %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatalf("WriteFile(%q) = %v", path, err)
+		}
+		return buffer.NewBufferFromString("", path, btype)
+	}
+
+	nested := newPathBuffer(buffer.BTDefault, "ws", "sub", "file.go")
+	outside := newPathBuffer(buffer.BTDefault, "other", "file.go")
+	namePrefixed := newPathBuffer(buffer.BTDefault, "ws2", "file.go")
+	withBasename := newPathBuffer(buffer.BTDefault, "ws", "basename.go")
+	withBasename.Settings["basename"] = true
+	help := newPathBuffer(buffer.BTHelp, "ws", "help.go")
+	readonly := newPathBuffer(buffer.BTDefault, "ws", "readonly.go")
+	readonly.Type.Readonly = true // what NewBuffer does for the readonly setting
+	pathless := buffer.NewBufferFromString("", "", buffer.BTDefault)
+
+	tests := []struct {
+		name         string
+		buf          *buffer.Buffer
+		workspaceDir string
+		want         string
+		wantOK       bool
+	}{
+		{"no active workspace", nested, "", "", false},
+		{"path-less buffer", pathless, workspaceDir, "", false},
+		{"file inside the workspace", nested, workspaceDir, filepath.Join("sub", "file.go"), true},
+		{"file outside the workspace", outside, workspaceDir, "", false},
+		{"directory whose name starts with the workspace name", namePrefixed, workspaceDir, "", false},
+		{"basename setting on", withBasename, workspaceDir, "", false},
+		{"non-default buffer type", help, workspaceDir, "", false},
+		{"readonly file inside the workspace", readonly, workspaceDir, "readonly.go", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := workspaceRelativePath(tt.buf, tt.workspaceDir)
+			if got != tt.want || ok != tt.wantOK {
+				t.Fatalf("workspaceRelativePath(%q, %q) = (%q, %v), want (%q, %v)",
+					tt.buf.AbsPath, tt.workspaceDir, got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestBuildCyclerItems_WorkspaceRelativeLabels(t *testing.T) {
+	panes, restoreTabs := makeTestTabs(t, 2)
+	defer restoreTabs()
+	prevMRU := MRU
+	MRU = &MRUList{}
+	defer func() { MRU = prevMRU }()
+
+	// withActiveWorkspace restores currentWorkspaceDir through t.Cleanup,
+	// so the "no workspace" leg below can clear it in place.
+	workspaceDir := withActiveWorkspace(t)
+	relative := filepath.Join("sub", "file.go")
+	panes[0].Buf.Path = filepath.Join(workspaceDir, relative)
+	panes[0].Buf.AbsPath = panes[0].Buf.Path
+	panes[0].Buf.Insert(buffer.Loc{X: 0, Y: 0}, "x") // dirty panes[0]
+
+	Tabs.SetActive(1)
+	Tabs.SetActive(0)
+
+	items := buildCyclerItems()
+	if len(items) != 2 {
+		t.Fatalf("items len = %d, want 2", len(items))
+	}
+	want := relative + " +"
+	if items[0].label != want {
+		t.Fatalf("items[0].label = %q, want %q (workspace-relative path plus the modified marker)", items[0].label, want)
+	}
+	// A buffer with no file keeps the tab bar's name for it.
+	if items[1].label != panes[1].Name() {
+		t.Fatalf("items[1].label = %q, want %q (unchanged)", items[1].label, panes[1].Name())
+	}
+
+	// With no workspace open the label is BufPane.Name() again, so the
+	// row shows the path the file was opened with.
+	currentWorkspaceDir = ""
+	items = buildCyclerItems()
+	if items[0].label != panes[0].Name() {
+		t.Fatalf("items[0].label = %q, want %q (no workspace, so the tab-bar name)", items[0].label, panes[0].Name())
 	}
 }
 
