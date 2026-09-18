@@ -980,6 +980,21 @@ func (h *BufPane) lspStatus() {
 	h.OpenLogBuf()
 }
 
+// LspStatus is the action form of the `> lsp status` subcommand: it
+// writes the same report to the log buffer and opens it.
+func (h *BufPane) LspStatus() bool {
+	h.lspStatus()
+	return true
+}
+
+// LspRestart is the action form of the `> lsp restart` subcommand with
+// no server argument: it restarts the server registered for the current
+// buffer's filetype.
+func (h *BufPane) LspRestart() bool {
+	h.lspRestart(nil)
+	return true
+}
+
 // LspCmd implements `> lsp status|start|stop|restart [server]`.
 func (h *BufPane) LspCmd(args []string) {
 	if len(args) == 0 {

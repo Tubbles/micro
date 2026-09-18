@@ -121,6 +121,13 @@ manage server processes, not which buffers are attached to them.
 * `LspReferences`: requests every reference to the symbol under the
    cursor and opens a picker listing them. See "References" below.
 
+* `LspStatus`: the action form of `> lsp status`, opening the same
+   log-buffer report of running servers and attached documents.
+
+* `LspRestart`: the action form of `> lsp restart` with no server
+   argument, restarting the server registered for the current buffer's
+   filetype. See the `> lsp restart` entry above for its caveats.
+
 None of these actions has a default keybinding. Bind them the same way
 as any other action, for example:
 
@@ -131,6 +138,8 @@ as any other action, for example:
 > bind Alt-f LspFormat
 > bind Alt-r LspRename
 > bind Alt-u LspReferences
+> bind Alt-s LspStatus
+> bind Alt-e LspRestart
 ```
 
 # Completion
