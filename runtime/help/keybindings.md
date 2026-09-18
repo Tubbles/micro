@@ -359,19 +359,24 @@ rewrite the clipboard every time, you can use `CopyLine,DeleteLine` action
 instead of `CutLine`.
 
 The `MovePaneToNext` and `MovePaneToPrevious` actions shift the active pane
-one slot through the global pane sequence formed by every tab's leaves taken
-in tree (display) order. Three cases drive the behavior:
+one slot through the sequence of positions a pane can take: every tab's
+leaves in tree (display) order, with a stop between tabs where the pane
+stands in a tab of its own. Three cases drive the behavior:
 
 - If there is an adjacent leaf in the same tab, the pane swaps visual
   positions with it (the pane stays active in the same slice slot, but
   draws into the swapped leaf).
-- If the active pane is at the edge of its tab and an adjacent tab exists,
-  the pane is detached and re-attached as a vsplit on the adjacent tab's
-  edge leaf. If the source tab loses its last pane, it is removed.
-- If the active pane is at the global edge and its tab has more than one
-  pane, a fresh tab is created beyond the edge and the pane is moved into
-  it. When the source tab has only one pane (the active one), the action
-  is a no-op since the result would be the same shape.
+- If the active pane is at the edge of its tab and the tab holds other
+  panes, the pane is promoted into a fresh tab inserted right next to its
+  current one.
+- If the active pane is alone in its tab and an adjacent tab exists, the
+  pane is detached and re-attached as a vsplit on the adjacent tab's edge
+  leaf, and the emptied tab is removed. Alone at the end of the tab list,
+  the action is a no-op.
+
+So pressing `MovePaneToNext` repeatedly walks a pane from the right edge of
+tab A into a tab of its own between A and C, then to the left edge of C,
+across C, and into a new tab after C.
 
 The buffer (cursor, undo history, unsaved edits, viewport) and, for
 terminal panes, the running pty are preserved across moves.
