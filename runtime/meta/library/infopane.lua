@@ -516,6 +516,12 @@ InfoPane.LspReferences = nil
 ---@type fun(self: InfoPane): boolean
 InfoPane.LspRename = nil
 
+---@type fun(self: InfoPane): boolean
+InfoPane.LspRestart = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.LspStatus = nil
+
 ---@type fun(self: InfoPane, start: integer, end_: integer)
 InfoPane.MarkModified = nil
 
@@ -1022,6 +1028,9 @@ InfoPane.Substr = nil
 
 ---@type fun(self: InfoPane): boolean
 InfoPane.Suspend = nil
+
+---@type fun(self: InfoPane): boolean
+InfoPane.SwitchToRecentBuffer = nil
 
 ---@type fun(self: InfoPane): Tab
 InfoPane.Tab = nil
