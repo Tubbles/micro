@@ -413,7 +413,8 @@ The `FileExplorerAtCwd` and `FileExplorerAtFile` actions open a centred
 picker showing the directory listing. `FileExplorerAtCwd` starts at the
 current working directory; `FileExplorerAtFile` starts at the directory of
 the active buffer's file (falling back to the current working directory
-when the buffer has no file path). Use `Up`/`Down`/`PageUp`/`PageDown`/
+when the buffer has no file path or its directory no longer exists).
+Use `Up`/`Down`/`PageUp`/`PageDown`/
 `Home`/`End` or the mouse wheel to move the highlight, `Enter` or
 double-click to activate, `Esc` or click outside the picker to cancel.
 A `../` entry navigates to the parent directory unless already at a
@@ -437,7 +438,8 @@ centred picker showing files recursively under a starting directory,
 filterable by the typed query (fuzzy match). `OpenFilePickerAtCwd`
 starts at the current working directory; `OpenFilePickerAtFile`
 starts at the directory of the active buffer's file (falling back to
-the current working directory when the buffer has no file path).
+the current working directory when the buffer has no file path or its
+directory no longer exists).
 The walker collects every non-ignored entry under the start directory
 so the typed filter operates across the full subtree. The same
 hidden / ignored toggles apply: `Ctrl-h` flips the

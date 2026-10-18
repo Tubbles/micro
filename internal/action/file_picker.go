@@ -156,9 +156,10 @@ func (h *BufPane) OpenFilePickerAtCwd() bool {
 // OpenFilePickerAtFile opens the recursive file picker rooted at
 // the directory of the active buffer's file. Falls back silently
 // to the current working directory when the buffer has no
-// associated file path. Gating on Buf.Path matches FileExplorerAtFile.
+// associated file path or that file's directory no longer exists.
+// The check is shared with FileExplorerAtFile (bufferDirectoryExists).
 func (h *BufPane) OpenFilePickerAtFile() bool {
-	if h.Buf.Path == "" {
+	if !bufferDirectoryExists(h.Buf) {
 		cwd, err := os.Getwd()
 		if err != nil {
 			InfoBar.Error(err)

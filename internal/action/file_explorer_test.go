@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/micro-editor/micro/v2/internal/buffer"
 )
 
 // makeFile creates an empty regular file at path.
@@ -131,6 +133,35 @@ func TestListDir_ErrorOnMissingDir(t *testing.T) {
 	_, err := listDir(filepath.Join(dir, "does-not-exist"), NewIgnoreFilter(dir, false, true))
 	if err == nil {
 		t.Fatal("expected error for missing directory")
+	}
+}
+
+// bufferWithPath builds a Buffer carrying only a file path, which is
+// all bufferDirectoryExists reads. NewBuffer is avoided because it
+// needs the Lua state and global settings initialised.
+func bufferWithPath(path string) *buffer.Buffer {
+	return &buffer.Buffer{SharedBuffer: &buffer.SharedBuffer{Path: path, AbsPath: path}}
+}
+
+func TestBufferDirectoryExists_PathlessPresentAndRemoved(t *testing.T) {
+	dir := t.TempDir()
+	pathless := &buffer.Buffer{SharedBuffer: &buffer.SharedBuffer{AbsPath: dir}}
+	if bufferDirectoryExists(pathless) {
+		t.Fatal("path-less buffer: expected false")
+	}
+
+	makeDir(t, filepath.Join(dir, "present"))
+	if !bufferDirectoryExists(bufferWithPath(filepath.Join(dir, "present", "file.md"))) {
+		t.Fatal("existing directory: expected true")
+	}
+
+	makeDir(t, filepath.Join(dir, "removed"))
+	removed := bufferWithPath(filepath.Join(dir, "removed", "file.md"))
+	if err := os.RemoveAll(filepath.Join(dir, "removed")); err != nil {
+		t.Fatal(err)
+	}
+	if bufferDirectoryExists(removed) {
+		t.Fatal("removed directory: expected false")
 	}
 }
 
