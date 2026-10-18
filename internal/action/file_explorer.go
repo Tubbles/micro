@@ -306,6 +306,26 @@ func newExplorerFilter(cur string, showHidden, showIgnored bool) *IgnoreFilter {
 	return NewIgnoreFilter(root, showHidden, showIgnored)
 }
 
+// bufferDirectoryExists reports whether buf has a file path whose
+// directory exists on disk. A buffer can outlive its directory: micro
+// keeps a buffer for a file that is missing on disk (opened that way,
+// deleted during the session, or restored from a saved session), and
+// the parent directory can be gone with it, so the AtFile pickers must
+// not assume the directory is listable.
+//
+// Gating on Buf.Path (the user-supplied filename) rather than
+// Buf.AbsPath is deliberate: NewBuffer feeds an empty path through
+// filepath.Abs, which returns the cwd, so AbsPath is never empty
+// even for a fresh scratch buffer. Using AbsPath here would make
+// both pickers open at filepath.Dir(cwd) instead of cwd.
+func bufferDirectoryExists(buf *buffer.Buffer) bool {
+	if buf.Path == "" {
+		return false
+	}
+	info, err := os.Stat(filepath.Dir(buf.AbsPath))
+	return err == nil && info.IsDir()
+}
+
 // FileExplorerAtCwd opens the file explorer rooted at the current
 // working directory. No row is preselected.
 func (h *BufPane) FileExplorerAtCwd() bool {
@@ -321,16 +341,11 @@ func (h *BufPane) FileExplorerAtCwd() bool {
 // FileExplorerAtFile opens the file explorer rooted at the
 // directory of the active buffer's file, with the buffer's filename
 // preselected so the user lands on the row they came from. When the
-// buffer has no associated file path, falls back silently to the
-// current working directory with no preselection.
-//
-// Gating on Buf.Path (the user-supplied filename) rather than
-// Buf.AbsPath is deliberate: NewBuffer feeds an empty path through
-// filepath.Abs, which returns the cwd, so AbsPath is never empty
-// even for a fresh scratch buffer. Using AbsPath here would make
-// the explorer open at filepath.Dir(cwd) instead of cwd.
+// buffer has no associated file path, or that file's directory no
+// longer exists, falls back silently to the current working
+// directory with no preselection (see bufferDirectoryExists).
 func (h *BufPane) FileExplorerAtFile() bool {
-	if h.Buf.Path == "" {
+	if !bufferDirectoryExists(h.Buf) {
 		cwd, err := os.Getwd()
 		if err != nil {
 			InfoBar.Error(err)
